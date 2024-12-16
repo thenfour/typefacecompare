@@ -1,4 +1,12 @@
-
+@font-face {
+  font-family: "TheSerif-Plain";
+  src: url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.eot");
+  src: url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.eot?#iefix")format("embedded-opentype"),
+  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.woff2")format("woff2"),
+  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.woff")format("woff"),
+  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.ttf")format("truetype"),
+  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.svg#TheSerif-Plain")format("svg");
+}
 
 html,
 body {
@@ -141,4 +149,14 @@ margin-top: 10px;
 
 .specimenConfigContainer {
   background-color: #efe;
+}
+
+.markdownEditor {
+  margin:10px;
+  padding:10px;
+  background-color: #fee;
+}
+
+.twoColumn {
+  display:flex;
 }
