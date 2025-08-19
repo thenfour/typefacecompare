@@ -1,10 +1,19 @@
 import Head from "next/head";
 import React, { useMemo, useState } from "react";
+import "../styles/PaletteLab.css";
 
 // --- Minimal OKLCH → sRGB + WCAG contrast utilities (no deps) -----------------
 // OKLCH and Oklab formulae per Björn Ottosson (2020)
 
 type RGB = { r: number; g: number; b: number }; // sRGB [0..1]
+
+type Variation = {
+    name: string;
+    deltaL: number;    // -1.0 to +1.0 (full range)
+    deltaC: number;    // -0.5 to +0.5 (full chroma range)
+    deltaH: number;    // -180° to +180° (full hue wheel)
+    enabled: boolean;
+};
 
 function clamp01(x: number) { return Math.max(0, Math.min(1, x)); }
 
@@ -147,6 +156,23 @@ function findClosestColor(targetIndex: number, palette: any[]): { index: number;
     return { index: closestIndex, distance: minDistance };
 }
 
+// Generate a variation of a color by modulating OKLCH values
+function generateVariation(baseL: number, baseC: number, baseH: number, variation: Variation): { hex: string; L: number; C: number; h: number; inGamut: boolean } {
+    const newL = Math.max(0, Math.min(1, baseL + variation.deltaL));
+    const newC = Math.max(0, Math.min(0.4, baseC + variation.deltaC)); // Cap chroma at reasonable max
+    let newH = (baseH + variation.deltaH) % 360;
+    if (newH < 0) newH += 360;
+
+    const result = gamutFitByChroma(newL, newC, newH);
+    return {
+        hex: result.hex,
+        L: newL,
+        C: result.C, // Use the gamut-fitted chroma
+        h: newH,
+        inGamut: result.inGamut
+    };
+}
+
 function gamutFitByChroma(L: number, C: number, hDeg: number, maxIter = 48) {
     // Reduce chroma until the color is in sRGB gamut
     let c = C;
@@ -196,52 +222,6 @@ function mulberry32(seed: number) {
     };
 }
 
-const CSS = `
-:root{--gap:16px}
-*{box-sizing:border-box}
-body{margin:0}
-.container{min-height:100vh;background:#f5f5f7;color:#111;padding:24px;display:flex;flex-direction:column;gap:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica Neue,Arial,Apple Color Emoji,Segoe UI Emoji}
-.title{font-size:20px;font-weight:600}
-.muted{color:#666}
-.small{font-size:12px}
-.grid{display:grid;gap:16px;grid-template-columns:1fr}
-@media(min-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:1280px){.grid{grid-template-columns:repeat(3,1fr)}}
-.panel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px}
-.compactPanel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px}
-.panelGroup{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:600px){.panelGroup{grid-template-columns:1fr}}
-.sliderRow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-.sliderRow:last-child{margin-bottom:0}
-.sliderLabel{font-size:13px;font-weight:600;min-width:140px;flex-shrink:0}
-.sliderValue{font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Liberation Mono,monospace;color:#444;min-width:60px;text-align:right;flex-shrink:0}
-.sliderInput{flex:1;margin:0 8px}
-.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.label{font-size:14px;font-weight:600}
-.value{font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Liberation Mono,monospace;color:#444}
-.range{width:100%}
-.input,.number{padding:6px 8px;border:1px solid #ccc;border-radius:6px;min-width:100px}
-.colorbox{width:44px;height:28px;border:1px solid #ccc;border-radius:4px}
-.btn{padding:6px 10px;border:1px solid #333;border-radius:6px;background:#f0f0f0;color:#111;cursor:pointer}
-.btn-dark{background:#111;color:#fff;border-color:#111}
-.btn:active{transform:translateY(1px)}
-.card{border:1px solid #ddd;border-radius:12px;overflow:hidden;background:#fff}
-.card.similar{border:2px solid #ff6b6b;box-shadow:0 2px 8px rgba(255,107,107,0.2)}
-.swatchHeader{height:80px;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
-.swatchComparison{display:flex;height:80px}
-.swatchMain{flex:2;display:flex;align-items:center;justify-content:space-between;padding:0 12px}
-.swatchClosest{flex:1;display:flex;align-items:center;justify-content:center;border-left:2px solid rgba(255,255,255,0.3);position:relative}
-.closestLabel{position:absolute;top:4px;left:4px;font-size:10px;background:rgba(0,0,0,0.5);color:white;padding:2px 4px;border-radius:3px}
-.pill{font-size:12px;padding:3px 6px;background:rgba(255,255,255,0.7);border-radius:6px}
-.cardMeta{display:flex;align-items:center;justify-content:space-between;padding:12px}
-.similarityInfo{font-size:11px;color:#666;margin-top:4px}
-.tooSimilar{color:#ff6b6b;font-weight:600}
-.code{margin-top:12px;font-size:12px;background:#fafafa;border:1px solid #eee;padding:12px;border-radius:8px;overflow:auto}
-.ok{color:#0a7f4f;font-weight:600}
-.warn{color:#b06000;font-weight:600}
-.footer{font-size:12px;color:#666}
-`;
-
 // --- UI -----------------------------------------------------------------------
 function PaletteLab() {
     const [count, setCount] = useState(5);
@@ -256,6 +236,16 @@ function PaletteLab() {
     const [seed, setSeed] = useState(12345);
     const [showSimilarColors, setShowSimilarColors] = useState(true);
     const [minColorDistance, setMinColorDistance] = useState(10);
+
+    // Variations
+    const [enableVariations, setEnableVariations] = useState(false);
+    const [numVariations, setNumVariations] = useState(2);
+    const [variations, setVariations] = useState<Variation[]>([
+        { name: "hover", deltaL: 0.05, deltaC: -0.02, deltaH: 0, enabled: true },
+        { name: "disabled", deltaL: 0.10, deltaC: -0.08, deltaH: 0, enabled: true },
+        { name: "accent", deltaL: 0, deltaC: 0.02, deltaH: 30, enabled: false },
+        { name: "dark", deltaL: -0.15, deltaC: 0, deltaH: 0, enabled: false },
+    ]);
 
     const labelRgb = useMemo(() => hexToRgb(labelHex), [labelHex]);
     const preferLight = useMemo(() => wcagContrast(hexToRgb("#ffffff"), labelRgb) > wcagContrast(hexToRgb("#000000"), labelRgb), [labelRgb]);
@@ -292,17 +282,36 @@ function PaletteLab() {
             baseColors = colors.map(({ h, Lfit, Cfit, hex }) => ({ h, L: Lfit, C: Cfit, hex, ratio: wcagContrast(hexToRgb(hex), labelRgb) }));
         }
 
-        // Add closest color information
+        // Add closest color information and variations
         return baseColors.map((color, index) => {
             const closest = findClosestColor(index, baseColors);
+
+            // Generate variations if enabled
+            let colorVariations: any[] = [];
+            if (enableVariations) {
+                const activeVariations = variations.slice(0, numVariations).filter(v => v.enabled);
+                colorVariations = activeVariations.map(variation => {
+                    const varColor = generateVariation(color.L, color.C, color.h, variation);
+                    return {
+                        name: variation.name,
+                        hex: varColor.hex,
+                        L: varColor.L,
+                        C: varColor.C,
+                        h: varColor.h,
+                        inGamut: varColor.inGamut
+                    };
+                });
+            }
+
             return {
                 ...color,
                 closestIndex: closest.index,
                 closestDistance: closest.distance,
-                isTooSimilar: closest.distance < minColorDistance // configurable threshold
+                isTooSimilar: closest.distance < minColorDistance,
+                variations: colorVariations
             };
         });
-    }, [count, L, C, hueSpan, hueOffset, jitter, targetContrast, labelRgb, seed, equalizeL, preferLight, minColorDistance]);
+    }, [count, L, C, hueSpan, hueOffset, jitter, targetContrast, labelRgb, seed, equalizeL, preferLight, minColorDistance, enableVariations, numVariations, variations]);
 
     const allMeet = palette.every((p) => p.ratio >= targetContrast);
     const tooSimilarCount = palette.filter((p) => p.isTooSimilar).length;
@@ -312,132 +321,302 @@ function PaletteLab() {
         navigator.clipboard?.writeText(list);
     }
 
+    function exportConfig() {
+        const config = {
+            count,
+            L,
+            C,
+            hueSpan,
+            hueOffset,
+            jitter,
+            targetContrast,
+            minColorDistance,
+            labelHex,
+            equalizeL,
+            showSimilarColors,
+            seed,
+            enableVariations,
+            numVariations,
+            variations
+        };
+        navigator.clipboard?.writeText(JSON.stringify(config, null, 2));
+    }
+
+    function importConfig() {
+        navigator.clipboard?.readText().then(text => {
+            try {
+                const config = JSON.parse(text);
+                // Validate and apply config
+                if (typeof config.count === 'number') setCount(config.count);
+                if (typeof config.L === 'number') setL(config.L);
+                if (typeof config.C === 'number') setC(config.C);
+                if (typeof config.hueSpan === 'number') setHueSpan(config.hueSpan);
+                if (typeof config.hueOffset === 'number') setHueOffset(config.hueOffset);
+                if (typeof config.jitter === 'number') setJitter(config.jitter);
+                if (typeof config.targetContrast === 'number') setTargetContrast(config.targetContrast);
+                if (typeof config.minColorDistance === 'number') setMinColorDistance(config.minColorDistance);
+                if (typeof config.labelHex === 'string') setLabelHex(config.labelHex);
+                if (typeof config.equalizeL === 'boolean') setEqualizeL(config.equalizeL);
+                if (typeof config.showSimilarColors === 'boolean') setShowSimilarColors(config.showSimilarColors);
+                if (typeof config.seed === 'number') setSeed(config.seed);
+                if (typeof config.enableVariations === 'boolean') setEnableVariations(config.enableVariations);
+                if (typeof config.numVariations === 'number') setNumVariations(config.numVariations);
+                if (Array.isArray(config.variations)) setVariations(config.variations);
+            } catch (e) {
+                alert('Invalid configuration JSON. Please check the clipboard content.');
+            }
+        }).catch(() => {
+            alert('Could not read from clipboard. Please ensure you have copied a valid configuration.');
+        });
+    }
+
     return (
-        <div className="container">
-            <style>{CSS}</style>
-            <h1 className="title">PaletteLab — OKLCH generator</h1>
-            <p className="muted small">Evenly-spaced hues with matched luminance, gamut-aware, and guaranteed contrast against a label color. Each color is shown with its closest match to help identify similar colors at a glance. Great for band handles, meters, and UI accents.</p>
+        <div className="palette-lab-container">
+            <h1 className="palette-lab-title">PaletteLab — OKLCH generator</h1>
+            <p className="palette-lab-muted palette-lab-small">Evenly-spaced hues with matched luminance, gamut-aware, and guaranteed contrast against a label color. Each color is shown with its closest match to help identify similar colors at a glance. Great for band handles, meters, and UI accents.</p>
 
             {/* Controls */}
-            <div className="grid">
+            <div className="palette-lab-grid">
                 {/* Color Parameters */}
-                <div className="compactPanel">
-                    <h3 className="label" style={{ marginBottom: 12 }}>Color Parameters</h3>
+                <div className="palette-lab-compact-panel">
+                    <h3 className="palette-lab-label" style={{ marginBottom: 12 }}>Color Parameters</h3>
                     <CompactSlider label="Target L (OKLCH)" value={L} min={0.6} max={0.9} step={0.005} onChange={setL} />
                     <CompactSlider label="Chroma (OKLCH)" value={C} min={0.04} max={0.24} step={0.002} onChange={setC} />
                 </div>
 
                 {/* Hue Distribution */}
-                <div className="compactPanel">
-                    <h3 className="label" style={{ marginBottom: 12 }}>Hue Distribution</h3>
+                <div className="palette-lab-compact-panel">
+                    <h3 className="palette-lab-label" style={{ marginBottom: 12 }}>Hue Distribution</h3>
                     <CompactSlider label="Hue Offset (°)" value={hueOffset} min={0} max={360} step={1} onChange={setHueOffset} />
                     <CompactSlider label="Hue Span (°)" value={hueSpan} min={120} max={360} step={1} onChange={setHueSpan} />
                     <CompactSlider label="Hue Jitter (°)" value={jitter} min={0} max={30} step={1} onChange={setJitter} />
                 </div>
 
                 {/* Quality & Validation */}
-                <div className="compactPanel">
-                    <h3 className="label" style={{ marginBottom: 12 }}>Quality & Validation</h3>
+                <div className="palette-lab-compact-panel">
+                    <h3 className="palette-lab-label" style={{ marginBottom: 12 }}>Quality & Validation</h3>
                     <CompactSlider label="Target Contrast" value={targetContrast} min={4} max={15} step={0.1} onChange={setTargetContrast} />
                     <CompactSlider label="Min Color Distance (ΔE)" value={minColorDistance} min={1} max={50} step={0.5} onChange={setMinColorDistance} />
-                    <label className="row small" style={{ marginTop: 8, justifyContent: 'flex-start' }}>
+                    <label className="palette-lab-row palette-lab-small" style={{ marginTop: 8, justifyContent: 'flex-start' }}>
                         <input type="checkbox" checked={showSimilarColors} onChange={(e) => setShowSimilarColors(e.target.checked)} style={{ marginRight: 8 }} />
                         Show color similarity comparison
                     </label>
                 </div>
 
                 {/* Generation Settings */}
-                <div className="compactPanel">
-                    <h3 className="label" style={{ marginBottom: 12 }}>Generation Settings</h3>
+                <div className="palette-lab-compact-panel">
+                    <h3 className="palette-lab-label" style={{ marginBottom: 12 }}>Generation Settings</h3>
                     <CompactSlider label="# Colors" value={count} min={3} max={12} step={1} onChange={setCount} />
-                    <div className="sliderRow">
-                        <label className="sliderLabel">Seed</label>
-                        <input type="number" className="number" style={{ flex: 1, margin: '0 8px' }} value={seed} onChange={(e) => setSeed(parseInt(e.target.value || "0", 10))} />
-                        <button className="btn btn-dark" onClick={() => setSeed(Math.floor(Math.random() * 1e9))}>Shuffle</button>
+                    <div className="palette-lab-slider-row">
+                        <label className="palette-lab-slider-label">Seed</label>
+                        <input type="number" className="palette-lab-number" style={{ flex: 1, margin: '0 8px' }} value={seed} onChange={(e) => setSeed(parseInt(e.target.value || "0", 10))} />
+                        <button className="palette-lab-btn palette-lab-btn-dark" onClick={() => setSeed(Math.floor(Math.random() * 1e9))}>Shuffle</button>
                     </div>
-                    <label className="row small" style={{ marginTop: 8, justifyContent: 'flex-start' }}>
+                    <label className="palette-lab-row palette-lab-small" style={{ marginTop: 8, justifyContent: 'flex-start' }}>
                         <input type="checkbox" checked={equalizeL} onChange={(e) => setEqualizeL(e.target.checked)} style={{ marginRight: 8 }} />
                         Equalize luminance across colors
                     </label>
                 </div>
 
                 {/* Label Color */}
-                <div className="compactPanel">
-                    <h3 className="label" style={{ marginBottom: 12 }}>Label / Text Color</h3>
-                    <div className="row" style={{ marginBottom: 8 }}>
-                        <input type="color" value={labelHex} onChange={(e) => setLabelHex(e.target.value)} className="colorbox" />
-                        <input className="input" style={{ flex: 1 }} value={labelHex} onChange={(e) => setLabelHex(e.target.value)} />
-                        <button onClick={() => setLabelHex("#000000")} className="btn btn-dark">Black</button>
-                        <button onClick={() => setLabelHex("#ffffff")} className="btn">White</button>
+                <div className="palette-lab-compact-panel">
+                    <h3 className="palette-lab-label" style={{ marginBottom: 12 }}>Label / Text Color</h3>
+                    <div className="palette-lab-row" style={{ marginBottom: 8 }}>
+                        <input type="color" value={labelHex} onChange={(e) => setLabelHex(e.target.value)} className="palette-lab-colorbox" />
+                        <input className="palette-lab-input" style={{ flex: 1 }} value={labelHex} onChange={(e) => setLabelHex(e.target.value)} />
+                        <button onClick={() => setLabelHex("#000000")} className="palette-lab-btn palette-lab-btn-dark">Black</button>
+                        <button onClick={() => setLabelHex("#ffffff")} className="palette-lab-btn">White</button>
                     </div>
-                    <div className="muted small">Target ≥ 7:1 for UI text; 10–12:1 looks crisp.</div>
+                    <div className="palette-lab-muted palette-lab-small">Target ≥ 7:1 for UI text; 10–12:1 looks crisp.</div>
+                </div>
+
+                {/* Variations */}
+                <div className="palette-lab-compact-panel">
+                    <h3 className="palette-lab-label" style={{ marginBottom: 12 }}>Color Variations</h3>
+                    <label className="palette-lab-row palette-lab-small" style={{ marginBottom: 12, justifyContent: 'flex-start' }}>
+                        <input type="checkbox" checked={enableVariations} onChange={(e) => setEnableVariations(e.target.checked)} style={{ marginRight: 8 }} />
+                        Enable color variations
+                    </label>
+
+                    {enableVariations && (
+                        <>
+                            <CompactSlider label="# Variations" value={numVariations} min={1} max={4} step={1} onChange={setNumVariations} />
+
+                            {variations.slice(0, numVariations).map((variation, i) => (
+                                <div key={i} style={{ marginTop: 12, padding: 12, background: '#f8f8f8', borderRadius: 6 }}>
+                                    <div className="palette-lab-slider-row">
+                                        <input
+                                            type="checkbox"
+                                            checked={variation.enabled}
+                                            onChange={(e) => {
+                                                const newVariations = [...variations];
+                                                newVariations[i].enabled = e.target.checked;
+                                                setVariations(newVariations);
+                                            }}
+                                            style={{ marginRight: 8 }}
+                                        />
+                                        <input
+                                            type="text"
+                                            value={variation.name}
+                                            onChange={(e) => {
+                                                const newVariations = [...variations];
+                                                newVariations[i].name = e.target.value;
+                                                setVariations(newVariations);
+                                            }}
+                                            style={{ flex: 1, padding: '4px 8px', border: '1px solid #ccc', borderRadius: 4 }}
+                                            placeholder={`Variation ${i + 1}`}
+                                        />
+                                    </div>
+
+                                    {variation.enabled && (
+                                        <>
+                                            <div className="palette-lab-slider-row" style={{ marginTop: 8 }}>
+                                                <label className="palette-lab-slider-label" style={{ minWidth: '60px' }}>ΔL</label>
+                                                <input
+                                                    type="range"
+                                                    min={-1}
+                                                    max={1}
+                                                    step={0.01}
+                                                    value={variation.deltaL}
+                                                    onChange={(e) => {
+                                                        const newVariations = [...variations];
+                                                        newVariations[i].deltaL = parseFloat(e.target.value);
+                                                        setVariations(newVariations);
+                                                    }}
+                                                    className="palette-lab-slider-input"
+                                                />
+                                                <span className="palette-lab-slider-value" style={{ minWidth: '50px' }}>{variation.deltaL.toFixed(2)}</span>
+                                            </div>
+
+                                            <div className="palette-lab-slider-row">
+                                                <label className="palette-lab-slider-label" style={{ minWidth: '60px' }}>ΔC</label>
+                                                <input
+                                                    type="range"
+                                                    min={-0.5}
+                                                    max={0.5}
+                                                    step={0.01}
+                                                    value={variation.deltaC}
+                                                    onChange={(e) => {
+                                                        const newVariations = [...variations];
+                                                        newVariations[i].deltaC = parseFloat(e.target.value);
+                                                        setVariations(newVariations);
+                                                    }}
+                                                    className="palette-lab-slider-input"
+                                                />
+                                                <span className="palette-lab-slider-value" style={{ minWidth: '50px' }}>{variation.deltaC.toFixed(2)}</span>
+                                            </div>
+
+                                            <div className="palette-lab-slider-row">
+                                                <label className="palette-lab-slider-label" style={{ minWidth: '60px' }}>ΔH</label>
+                                                <input
+                                                    type="range"
+                                                    min={-180}
+                                                    max={180}
+                                                    step={1}
+                                                    value={variation.deltaH}
+                                                    onChange={(e) => {
+                                                        const newVariations = [...variations];
+                                                        newVariations[i].deltaH = parseFloat(e.target.value);
+                                                        setVariations(newVariations);
+                                                    }}
+                                                    className="palette-lab-slider-input"
+                                                />
+                                                <span className="palette-lab-slider-value" style={{ minWidth: '50px' }}>{variation.deltaH.toFixed(0)}°</span>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            ))}
+                        </>
+                    )}
                 </div>
             </div>
 
             {/* Swatches */}
-            <div className="grid">
+            <div className="palette-lab-grid">
                 {palette.map((p, i) => {
                     const closestColor = p.closestIndex >= 0 ? palette[p.closestIndex] : null;
                     return (
-                        <div key={i} className={`card ${p.isTooSimilar ? 'similar' : ''}`}>
+                        <div key={i} className={`palette-lab-card ${p.isTooSimilar ? 'similar' : ''}`}>
                             {showSimilarColors ? (
-                                <div className="swatchComparison">
-                                    <div className="swatchMain" style={{ background: p.hex }}>
-                                        <span style={{ color: labelHex, fontWeight: 600 }}>{`Band ${i + 1}`}</span>
-                                        <span className="pill" style={{ color: "#111" }}>{p.hex}</span>
+                                <div className="palette-lab-swatch-comparison">
+
+                                    <div className="palette-lab-swatch-main" style={{ background: p.hex }}>
+                                        <div>
+                                            <span style={{ color: labelHex, fontWeight: 600 }}>{`Band ${i + 1}`}</span>
+                                            <span className="palette-lab-pill" style={{ color: "#111" }}>{p.hex}</span>
+
+                                            <div>
+                                                <div>contrast: {p.ratio.toFixed(1)}:1</div>
+                                                <div>h≈{Math.round(p.h)}° · L={p.L.toFixed(3)} · C={p.C.toFixed(3)}</div>
+                                            </div>
+
+
+                                            {/* Variations */}
+                                            {enableVariations && p.variations && p.variations.length > 0 && (
+                                                <div className="palette-lab-swatch-variations" style={{ paddingBottom: 20 }}>
+                                                    {p.variations.map((variation: any, vi: number) => (
+                                                        <div key={vi} className="palette-lab-variation-swatch" style={{ background: variation.hex }}>
+                                                            <span className="palette-lab-variation-label">{variation.name}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                     {closestColor && (
-                                        <div className="swatchClosest" style={{ background: closestColor.hex }}>
-                                            <span className="closestLabel">#{p.closestIndex + 1}</span>
+                                        <div className="palette-lab-swatch-closest" style={{ background: closestColor.hex }}>
+                                            <span className="palette-lab-closest-label">#{p.closestIndex + 1}</span>
+                                            {showSimilarColors && (
+                                                <div className="palette-lab-similarity-info">
+                                                    closest: Band #{p.closestIndex + 1}
+                                                    <div>ΔE={p.closestDistance.toFixed(1)}</div>
+                                                    {p.isTooSimilar && <span className="palette-lab-too-similar"> (too similar!)</span>}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
+
+
                                 </div>
                             ) : (
-                                <div className="swatchHeader" style={{ background: p.hex }}>
+                                <div className="palette-lab-swatch-header" style={{ background: p.hex }}>
                                     <span style={{ color: labelHex, fontWeight: 600 }}>{`Band ${i + 1}`}</span>
-                                    <span className="pill" style={{ color: "#111" }}>{p.hex}</span>
+                                    {p.hex}
+                                    <div>
+                                        <div>contrast: {p.ratio.toFixed(1)}:1</div>
+                                        <div>h≈{Math.round(p.h)}° · L={p.L.toFixed(3)} · C={p.C.toFixed(3)}</div>
+                                    </div>
                                 </div>
                             )}
-                            <div className="cardMeta">
-                                <div>
-                                    <div>contrast: <span className="value">{p.ratio.toFixed(1)}:1</span></div>
-                                    {showSimilarColors && (
-                                        <div className="similarityInfo">
-                                            closest: <span className="value">Band #{p.closestIndex + 1}</span>
-                                            {p.isTooSimilar && <span className="tooSimilar"> (too similar!)</span>}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="muted small">
-                                    <div>h≈{Math.round(p.h)}° · L={p.L.toFixed(3)} · C={p.C.toFixed(3)}</div>
-                                    {showSimilarColors && <div>ΔE={p.closestDistance.toFixed(1)}</div>}
-                                </div>
-                            </div>
+
                         </div>
                     );
                 })}
-            </div>
-
-            {/* Export */}
-            <div className="panel">
-                <div className="row">
-                    <div className="small">
-                        {allMeet ? <span className="ok">✓ All swatches meet target contrast</span> : <span className="warn">⚠ Some swatches miss target contrast</span>}
+            </div>            {/* Export */}
+            <div className="palette-lab-panel">
+                <div className="palette-lab-row">
+                    <div className="palette-lab-small">
+                        {allMeet ? <span className="palette-lab-ok">✓ All swatches meet target contrast</span> : <span className="palette-lab-warn">⚠ Some swatches miss target contrast</span>}
                         <br />
                         {tooSimilarCount === 0 ?
-                            <span className="ok">✓ No colors are too similar</span> :
-                            <span className="warn">⚠ {tooSimilarCount} color{tooSimilarCount > 1 ? 's' : ''} too similar (ΔE &lt; {minColorDistance})</span>
+                            <span className="palette-lab-ok">✓ No colors are too similar</span> :
+                            <span className="palette-lab-warn">⚠ {tooSimilarCount} color{tooSimilarCount > 1 ? 's' : ''} too similar (ΔE &lt; {minColorDistance})</span>
                         }
                     </div>
-                    <button onClick={copyHexes} className="btn btn-dark">Copy hex list</button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button onClick={copyHexes} className="palette-lab-btn palette-lab-btn-dark">Copy hex list</button>
+                        <button onClick={exportConfig} className="palette-lab-btn">Export config</button>
+                        <button onClick={importConfig} className="palette-lab-btn">Import config</button>
+                    </div>
                 </div>
-                <pre className="code">const bandColors = [
+                <pre className="palette-lab-code">const bandColors = [
                     ${palette.map(p => `  "${p.hex.replace('#', '')}"`).join(",")}
                     ];
                 </pre>
             </div>
 
-            <footer className="footer">
+            <footer className="palette-lab-footer">
                 Built for quick palette exploration. Uses OKLCH for perceptual controls; gamut-fitting reduces chroma to keep colors displayable. WCAG contrast is computed against your label color and (optionally) equalized across the set.
             </footer>
         </div>
@@ -446,22 +625,22 @@ function PaletteLab() {
 
 function Slider({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
     return (
-        <div className="panel">
-            <div className="row" style={{ marginBottom: 8 }}>
-                <label className="label">{label}</label>
-                <span className="value">{typeof value === 'number' ? value.toFixed(step < 1 ? 3 : 0) : String(value)}</span>
+        <div className="palette-lab-panel">
+            <div className="palette-lab-row" style={{ marginBottom: 8 }}>
+                <label className="palette-lab-label">{label}</label>
+                <span className="palette-lab-value">{typeof value === 'number' ? value.toFixed(step < 1 ? 3 : 0) : String(value)}</span>
             </div>
-            <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="range" />
+            <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="palette-lab-range" />
         </div>
     );
 }
 
 function CompactSlider({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
     return (
-        <div className="sliderRow">
-            <label className="sliderLabel">{label}</label>
-            <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="sliderInput" />
-            <span className="sliderValue">{typeof value === 'number' ? value.toFixed(step < 1 ? 3 : 0) : String(value)}</span>
+        <div className="palette-lab-slider-row">
+            <label className="palette-lab-slider-label">{label}</label>
+            <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="palette-lab-slider-input" />
+            <span className="palette-lab-slider-value">{typeof value === 'number' ? value.toFixed(step < 1 ? 3 : 0) : String(value)}</span>
         </div>
     );
 }
