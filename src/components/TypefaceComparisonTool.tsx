@@ -45,7 +45,8 @@ import { gDefaultTypefaceCompareConfig } from "./DefaultConfig";
 import ABCJSWrapper from "./ABCJSWrapper";
 import { ToggleButton } from "./ToggleButton";
 import * as ReactSmoothDnd /*{ Container, Draggable, DropResult }*/ from "react-smooth-dnd";
-import { Markdown, MarkdownEditor } from "./MarkdownWrapper";
+import { Markdown, MarkdownControl, MarkdownEditor } from "./MarkdownWrapper";
+import { useKeyCommand } from "./KeyCommand";
 
 
 
@@ -101,24 +102,29 @@ interface FontSpec {
     notes: string;
     tags: string;
     enabled: boolean;
+    starred: boolean;
 };
 
 interface FontConfigProps {
     value: FontSpec;
     onChanged: (v: FontSpec) => void;
+    initiallyOpen?: boolean;
 }
 
-const FontConfig = (props: FontConfigProps) => {
-    const [open, setOpen] = useState(false);
-    return <div className={`fontSpecEditor ${open ? "open"  : "closed"}`}>
+const FontConfig = ({ initiallyOpen = false, ...props }: FontConfigProps) => {
+    const [open, setOpen] = useState(initiallyOpen);
+    return <div className={`fontSpecEditor ${open ? "open" : "closed"}`}>
         <div><button onClick={() => setOpen(!open)}>{props.value.fontFamily}</button></div>
         {open && <div>
-        <div><input type="text" value={props.value.fontFamily} onChange={e => props.onChanged({ ...props.value, fontFamily: e.target.value })} />font family</div>
-        <div><input type="text" value={props.value.tags} onChange={e => props.onChanged({ ...props.value, tags: e.target.value })} />tags</div>
-        <div><input type="text" value={props.value.notes} onChange={e => props.onChanged({ ...props.value, notes: e.target.value })} />notes</div>
-        <div><label><input type="checkbox" checked={props.value.enabled} onChange={e => props.onChanged({ ...props.value, enabled: e.target.checked })} /> enabled</label></div>
-        <div><input type="range" step={0.01} min={0.1} max={2} value={props.value.sizeScale} onChange={e => props.onChanged({ ...props.value, sizeScale: e.target.valueAsNumber })} />Size mul: {props.value.sizeScale}</div>
-        <div><input type="range" step={0.01} min={0.1} max={2} value={props.value.weightScale} onChange={e => props.onChanged({ ...props.value, weightScale: e.target.valueAsNumber })} />Weight mul: {props.value.weightScale}</div>
+            <div><input type="text" value={props.value.fontFamily} onChange={e => props.onChanged({ ...props.value, fontFamily: e.target.value })} />font family</div>
+            <div><input type="text" value={props.value.tags} onChange={e => props.onChanged({ ...props.value, tags: e.target.value })} />tags</div>
+            <ToggleButton value={props.value.starred} onChange={e => props.onChanged({ ...props.value, starred: e })}>Starred?</ToggleButton>
+            <div>
+                <MarkdownControl initialValue={props.value.notes} onCancel={() => { }} onSave={x => props.onChanged({ ...props.value, notes: x })} />
+            </div>
+            {/* <div><label><input type="checkbox" checked={props.value.enabled} onChange={e => props.onChanged({ ...props.value, enabled: e.target.checked })} /> enabled</label></div> */}
+            <div><input type="range" step={0.01} min={0.1} max={2} value={props.value.sizeScale} onChange={e => props.onChanged({ ...props.value, sizeScale: e.target.valueAsNumber })} />Size mul: {props.value.sizeScale}</div>
+            <div><input type="range" step={0.01} min={0.1} max={2} value={props.value.weightScale} onChange={e => props.onChanged({ ...props.value, weightScale: e.target.valueAsNumber })} />Weight mul: {props.value.weightScale}</div>
         </div>}
     </div>;
 };
@@ -156,6 +162,10 @@ const SpecimenOneLiner = (props: SpecimenOneLinerProps) => {
         <div className={`draggable dragHandle`}>
             {gCharMap.Hamburger()}
         </div>
+        <span className={`CCButton star ${!!props.font.starred ? "enabled" : "disabled"}`} onClick={() => {
+                //props.onFontChanged({...props.font, starred: !props.font.starred});
+            }}>⭐</span>
+
         <div className="SpecimenOneLinerContent">
             <span className="SpecimenOneLinerText">{props.specimen.text}</span>
             {props.showFontName && <span className="SpecimenOneLinerFontName">{props.font.fontFamily}</span>}
@@ -183,7 +193,10 @@ export const SpecimenControl = (props: SpecimenControlProps) => {
         <div><input type="range" step={0.05} min={0.1} max={10} value={props.value.weightScale} onChange={e => props.onChanged({ ...props.value, weightScale: e.target.valueAsNumber })} /> Weight mul: {props.value.weightScale}</div>
         <div><input type="range" step={1} min={0} max={100} value={props.value.marginTop} onChange={e => props.onChanged({ ...props.value, marginTop: e.target.valueAsNumber })} />Margin top: {props.value.marginTop}</div>
         <div><input type="range" step={1} min={0} max={100} value={props.value.marginBottom} onChange={e => props.onChanged({ ...props.value, marginBottom: e.target.valueAsNumber })} />Margin bottom: {props.value.marginBottom}</div>
-        <div><label><input type="checkbox" checked={props.value.enabled} onChange={e => props.onChanged({ ...props.value, enabled: e.target.checked })} />Enabled?</label></div>
+        {/* <div><label><input type="checkbox" checked={props.value.enabled} onChange={e => props.onChanged({ ...props.value, enabled: e.target.checked })} />Enabled?</label></div> */}
+        <div>
+            <ToggleButton value={props.value.enabled} onChange={e => props.onChanged({ ...props.value, enabled: e })}>Enabled?</ToggleButton>
+        </div>
         {/*         
         <div>
             line height:
@@ -281,9 +294,11 @@ type SpecimenCardProps = {
     showChords: boolean;
     showNotation: boolean;
     showFontName: boolean;
+    onFontChanged: (x: FontSpec) => void;
 };
 
 export const SpecimenCard = (props: SpecimenCardProps) => {
+    const [fontConfigOpen, setFontConfigOpen] = useState<boolean>(false);
 
     const notation = props.showChords ? `
 X:1
@@ -298,7 +313,13 @@ CD | GABc | defg | ab |
 ` ;
 
     return <div className="specimenCard" style={{ fontFamily: props.font.fontFamily }}>
-        {props.showFontName && <div className="specimenCardFontName">{props.font.fontFamily}</div>}
+        {props.showFontName && <div className="specimenCardFontNameContainer">
+            <span className="specimenCardFontName">{props.font.fontFamily}</span>
+            <span className="CCButton" onClick={() => setFontConfigOpen(!fontConfigOpen)}>⚙️</span>
+            <span className={`CCButton star ${props.font.starred ? "enabled" : "disabled"}`} onClick={() => {
+                props.onFontChanged({...props.font, starred: !props.font.starred});
+            }}>⭐</span>
+            </div>}
         {props.specimens.filter(s => s.enabled).map((specimen, i) => <SpecimenCardSection key={i} font={props.font} fontSize={props.fontSize} fontWeight={props.fontWeight} specimen={specimen} />)}
 
         {props.showRehearsalMarks && <RehearsalMarksSpecimen />}
@@ -331,6 +352,9 @@ CD | GABc | defg | ab |
                 }
             }} />}
 
+        {fontConfigOpen && <FontConfig value={props.font} initiallyOpen={true} onChanged={(x) => {
+            props.onFontChanged(x);
+        }} />}
     </div>;
 };
 
@@ -383,7 +407,7 @@ export const TypefaceComparisonTool = () => {
     const [showFontConfig, setShowFontConfig] = useState<boolean>(false);
     const [showSpecimenConfig, setShowSpecimenConfig] = useState<boolean>(false);
     const [globalNotes, setGlobalNotes] = useState<string>("");
-    const [showingGlobalNotesEditor, setShowingGlobalNotesEditor] = useState<boolean>(false);
+    //const [showingGlobalNotesEditor, setShowingGlobalNotesEditor] = useState<boolean>(false);
     const [showFontNames, setShowFontNames] = useState<boolean>(true);
 
     const importConfig = (obj: any) => {
@@ -426,16 +450,41 @@ export const TypefaceComparisonTool = () => {
         importConfig(gDefaultTypefaceCompareConfig);
     }, []);
 
+    useKeyCommand({
+        keys: ["Alt", "9"],
+        onTrigger: () => {
+            setShowFontNames(!showFontNames);
+        },
+    });
+    useKeyCommand({
+        keys: ["Alt", "7"],
+        onTrigger: () => {
+            setShowFontConfig(!showFontConfig);
+        },
+    });
+    useKeyCommand({
+        keys: ["Alt", "8"],
+        onTrigger: () => {
+            setShowSpecimenConfig(!showSpecimenConfig);
+        },
+    });
+
+    useKeyCommand({
+        keys: ["Alt", "5"],
+        onTrigger: () => {
+            setShowCards(!showCards);
+        },
+    });
+    useKeyCommand({
+        keys: ["Alt", "6"],
+        onTrigger: () => {
+            setShowOneLiners(!showOneLiners);
+        },
+    });
+
     return <div>
 
-        <div>
-            {showingGlobalNotesEditor && <MarkdownEditor initialValue={globalNotes} onCancel={() => setShowingGlobalNotesEditor(false)} onSave={(x) => {
-                setGlobalNotes(x);
-                setShowingGlobalNotesEditor(false);
-            }} />}
-            {!showingGlobalNotesEditor && <button onClick={() => setShowingGlobalNotesEditor(true)}>Edit global notes</button>}
-        </div>
-        <div><Markdown markdown={globalNotes} /></div>
+        <MarkdownControl initialValue={globalNotes} onCancel={() => { }} onSave={x => setGlobalNotes(x)} />
 
         <button onClick={async () => {
             const text = JSON.stringify(exportConfig(), null, 3);
@@ -452,23 +501,23 @@ export const TypefaceComparisonTool = () => {
             <div><input type="range" step={1} min={8} max={60} value={fontSize} onChange={e => setFontSize(e.target.valueAsNumber)} />size abs:{fontSize}</div>
             <div><input type="range" step={10} min={100} max={900} value={fontWeight} onChange={e => setFontWeight(e.target.valueAsNumber)} />weight abs:{fontWeight}</div>
             <div>
-                <ToggleButton value={showCards} onChange={v => setShowCards(v)}>Show cards?</ToggleButton>
+                <ToggleButton value={showCards} onChange={v => setShowCards(v)}>Show cards? (alt+5)</ToggleButton>
                 <ToggleButton value={showRehearsalMarks} onChange={v => setShowRehearsalMarks(v)}>Show rehearsal marks</ToggleButton>
                 <ToggleButton value={showNotation} onChange={v => setShowNotation(v)}>Show notation?</ToggleButton>
                 <ToggleButton value={showChords} onChange={v => setShowChords(v)}>Show chords?</ToggleButton>
 
                 <span>--</span>
 
-                <ToggleButton value={showOneLiners} onChange={v => setShowOneLiners(v)}>Show one-liners?</ToggleButton>
+                <ToggleButton value={showOneLiners} onChange={v => setShowOneLiners(v)}>Show one-liners? (alt+6)</ToggleButton>
 
                 <span>--</span>
 
-                <ToggleButton value={showFontConfig} onChange={v => setShowFontConfig(v)}>Show font config</ToggleButton>
-                <ToggleButton value={showSpecimenConfig} onChange={v => setShowSpecimenConfig(v)}>Show specimen config</ToggleButton>
+                <ToggleButton value={showFontConfig} onChange={v => setShowFontConfig(v)}>Show font config (alt+7)</ToggleButton>
+                <ToggleButton value={showSpecimenConfig} onChange={v => setShowSpecimenConfig(v)}>Show specimen config (alt+8)</ToggleButton>
 
                 <span>--</span>
 
-                <ToggleButton value={showFontNames} onChange={v => setShowFontNames(v)}>Show font names</ToggleButton>
+                <ToggleButton value={showFontNames} onChange={v => setShowFontNames(v)}>Show font names (alt+9)</ToggleButton>
             </div>
 
         </div>
@@ -492,6 +541,7 @@ export const TypefaceComparisonTool = () => {
                     enabled: true,
                     notes: "",
                     tags: "",
+                    starred: false,
                 }, ...fonts])}>+ Add font</button>
             </div>
         }
@@ -527,6 +577,11 @@ export const TypefaceComparisonTool = () => {
                     showRehearsalMarks={showRehearsalMarks}
                     showChords={showChords}
                     showFontName={showFontNames}
+                    onFontChanged={(x) => {
+                        const newFonts = [...fonts];
+                        newFonts[i] = x;
+                        setFonts(newFonts);
+                    }}
                 />)}
             </div>
         }

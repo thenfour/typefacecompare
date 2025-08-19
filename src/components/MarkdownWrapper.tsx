@@ -46,3 +46,20 @@ export const MarkdownEditor = (props: MarkdownEditorProps) => {
         <button onClick={props.onCancel}>Cancel</button>
     </div>;
 };
+
+
+export const MarkdownControl = (props: MarkdownEditorProps) => {
+    const [open, setOpen] = useState<boolean>(false);
+    return <div>
+        {open && <MarkdownEditor initialValue={props.initialValue} onCancel={() => {
+            setOpen(false);
+            props.onCancel();
+        }} onSave={(x) => {
+            setOpen(false);
+            props.onSave(x);
+        }} />}
+        {!open && <button onClick={() => setOpen(true)}>Edit global notes</button>}
+        {!open && <Markdown markdown={props.initialValue} />}
+    </div>
+
+};
