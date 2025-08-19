@@ -208,6 +208,14 @@ body{margin:0}
 @media(min-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:1280px){.grid{grid-template-columns:repeat(3,1fr)}}
 .panel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px}
+.compactPanel{background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px}
+.panelGroup{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.panelGroup{grid-template-columns:1fr}}
+.sliderRow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.sliderRow:last-child{margin-bottom:0}
+.sliderLabel{font-size:13px;font-weight:600;min-width:140px;flex-shrink:0}
+.sliderValue{font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Liberation Mono,monospace;color:#444;min-width:60px;text-align:right;flex-shrink:0}
+.sliderInput{flex:1;margin:0 8px}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .label{font-size:14px;font-weight:600}
 .value{font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Liberation Mono,monospace;color:#444}
@@ -312,44 +320,57 @@ function PaletteLab() {
 
             {/* Controls */}
             <div className="grid">
-                <Slider label="# Colors" value={count} min={3} max={12} step={1} onChange={setCount} />
-                <Slider label="Target L (OKLCH)" value={L} min={0.6} max={0.9} step={0.005} onChange={setL} />
-                <Slider label="Chroma (OKLCH)" value={C} min={0.04} max={0.24} step={0.002} onChange={setC} />
-                <Slider label="Hue Offset (°)" value={hueOffset} min={0} max={360} step={1} onChange={setHueOffset} />
-                <Slider label="Hue Span (°)" value={hueSpan} min={120} max={360} step={1} onChange={setHueSpan} />
-                <Slider label="Hue Jitter (°)" value={jitter} min={0} max={30} step={1} onChange={setJitter} />
-                <Slider label="Target Contrast" value={targetContrast} min={4} max={15} step={0.1} onChange={setTargetContrast} />
-                <Slider label="Min Color Distance (ΔE)" value={minColorDistance} min={1} max={50} step={0.5} onChange={setMinColorDistance} />
-                <div className="panel">
-                    <label className="label">Similarity Display</label>
+                {/* Color Parameters */}
+                <div className="compactPanel">
+                    <h3 className="label" style={{ marginBottom: 12 }}>Color Parameters</h3>
+                    <CompactSlider label="Target L (OKLCH)" value={L} min={0.6} max={0.9} step={0.005} onChange={setL} />
+                    <CompactSlider label="Chroma (OKLCH)" value={C} min={0.04} max={0.24} step={0.002} onChange={setC} />
+                </div>
+
+                {/* Hue Distribution */}
+                <div className="compactPanel">
+                    <h3 className="label" style={{ marginBottom: 12 }}>Hue Distribution</h3>
+                    <CompactSlider label="Hue Offset (°)" value={hueOffset} min={0} max={360} step={1} onChange={setHueOffset} />
+                    <CompactSlider label="Hue Span (°)" value={hueSpan} min={120} max={360} step={1} onChange={setHueSpan} />
+                    <CompactSlider label="Hue Jitter (°)" value={jitter} min={0} max={30} step={1} onChange={setJitter} />
+                </div>
+
+                {/* Quality & Validation */}
+                <div className="compactPanel">
+                    <h3 className="label" style={{ marginBottom: 12 }}>Quality & Validation</h3>
+                    <CompactSlider label="Target Contrast" value={targetContrast} min={4} max={15} step={0.1} onChange={setTargetContrast} />
+                    <CompactSlider label="Min Color Distance (ΔE)" value={minColorDistance} min={1} max={50} step={0.5} onChange={setMinColorDistance} />
                     <label className="row small" style={{ marginTop: 8, justifyContent: 'flex-start' }}>
                         <input type="checkbox" checked={showSimilarColors} onChange={(e) => setShowSimilarColors(e.target.checked)} style={{ marginRight: 8 }} />
-                        Show closest color comparison
+                        Show color similarity comparison
                     </label>
-                    <div className="muted small" style={{ marginTop: 8 }}>Displays each color alongside its closest match to help identify similar colors. ΔE &lt; {minColorDistance} will be flagged as too similar.</div>
                 </div>
-                <div className="panel">
-                    <label className="label">Label / Text Color</label>
-                    <div className="row" style={{ marginTop: 8 }}>
-                        <input type="color" value={labelHex} onChange={(e) => setLabelHex(e.target.value)} className="colorbox" />
-                        <input className="input" value={labelHex} onChange={(e) => setLabelHex(e.target.value)} />
-                        <div className="row" style={{ justifyContent: 'flex-start' }}>
-                            <button onClick={() => setLabelHex("#000000")} className="btn btn-dark">Black</button>
-                            <button onClick={() => setLabelHex("#ffffff")} className="btn">White</button>
-                        </div>
-                    </div>
-                    <div className="muted small" style={{ marginTop: 8 }}>Tip: keep black for light swatches, white for dark. Target ≥ 7:1 for small UI text; 10–12:1 looks crisp.</div>
-                </div>
-                <div className="panel">
-                    <label className="label">Seed</label>
-                    <div className="row" style={{ marginTop: 8 }}>
-                        <input type="number" className="number" value={seed} onChange={(e) => setSeed(parseInt(e.target.value || "0", 10))} />
+
+                {/* Generation Settings */}
+                <div className="compactPanel">
+                    <h3 className="label" style={{ marginBottom: 12 }}>Generation Settings</h3>
+                    <CompactSlider label="# Colors" value={count} min={3} max={12} step={1} onChange={setCount} />
+                    <div className="sliderRow">
+                        <label className="sliderLabel">Seed</label>
+                        <input type="number" className="number" style={{ flex: 1, margin: '0 8px' }} value={seed} onChange={(e) => setSeed(parseInt(e.target.value || "0", 10))} />
                         <button className="btn btn-dark" onClick={() => setSeed(Math.floor(Math.random() * 1e9))}>Shuffle</button>
                     </div>
                     <label className="row small" style={{ marginTop: 8, justifyContent: 'flex-start' }}>
                         <input type="checkbox" checked={equalizeL} onChange={(e) => setEqualizeL(e.target.checked)} style={{ marginRight: 8 }} />
                         Equalize luminance across colors
                     </label>
+                </div>
+
+                {/* Label Color */}
+                <div className="compactPanel">
+                    <h3 className="label" style={{ marginBottom: 12 }}>Label / Text Color</h3>
+                    <div className="row" style={{ marginBottom: 8 }}>
+                        <input type="color" value={labelHex} onChange={(e) => setLabelHex(e.target.value)} className="colorbox" />
+                        <input className="input" style={{ flex: 1 }} value={labelHex} onChange={(e) => setLabelHex(e.target.value)} />
+                        <button onClick={() => setLabelHex("#000000")} className="btn btn-dark">Black</button>
+                        <button onClick={() => setLabelHex("#ffffff")} className="btn">White</button>
+                    </div>
+                    <div className="muted small">Target ≥ 7:1 for UI text; 10–12:1 looks crisp.</div>
                 </div>
             </div>
 
@@ -431,6 +452,16 @@ function Slider({ label, value, min, max, step, onChange }: { label: string; val
                 <span className="value">{typeof value === 'number' ? value.toFixed(step < 1 ? 3 : 0) : String(value)}</span>
             </div>
             <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="range" />
+        </div>
+    );
+}
+
+function CompactSlider({ label, value, min, max, step, onChange }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
+    return (
+        <div className="sliderRow">
+            <label className="sliderLabel">{label}</label>
+            <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="sliderInput" />
+            <span className="sliderValue">{typeof value === 'number' ? value.toFixed(step < 1 ? 3 : 0) : String(value)}</span>
         </div>
     );
 }
