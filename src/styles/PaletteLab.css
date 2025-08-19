@@ -101,6 +101,10 @@ body {
     margin: 0 8px;
 }
 
+input.palette-lab-slider-input {
+    width: 200px;
+}
+
 .palette-lab-row {
     display: flex;
     align-items: center;
@@ -258,4 +262,22 @@ body {
 .palette-lab-footer {
     font-size: 12px;
     color: #666;
+}
+
+/* Swatch Lists */
+.palette-lab-swatch-list {
+    display: flex;
+}
+
+.palette-lab-swatch-item {
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
 }

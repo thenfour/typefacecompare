@@ -156,7 +156,61 @@ function findClosestColor(targetIndex: number, palette: any[]): { index: number;
     return { index: closestIndex, distance: minDistance };
 }
 
-// Generate a variation of a color by modulating OKLCH values
+// Order palette to maximize contrast between adjacent colors using greedy algorithm
+function orderPaletteMaxContrast(palette: any[]): any[] {
+    if (palette.length <= 1) return [...palette];
+
+    const ordered = [palette[0]]; // Start with first color
+    const remaining = palette.slice(1);
+
+    while (remaining.length > 0) {
+        const lastColor = ordered[ordered.length - 1];
+        let maxDistance = -1;
+        let bestIndex = 0;
+
+        // Find the color with maximum distance to the last ordered color
+        for (let i = 0; i < remaining.length; i++) {
+            const distance = deltaE(hexToRgb(lastColor.hex), hexToRgb(remaining[i].hex));
+            if (distance > maxDistance) {
+                maxDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        ordered.push(remaining[bestIndex]);
+        remaining.splice(bestIndex, 1);
+    }
+
+    return ordered;
+}
+
+// Order palette to minimize contrast between adjacent colors using nearest neighbor
+function orderPaletteMinContrast(palette: any[]): any[] {
+    if (palette.length <= 1) return [...palette];
+
+    const ordered = [palette[0]]; // Start with first color
+    const remaining = palette.slice(1);
+
+    while (remaining.length > 0) {
+        const lastColor = ordered[ordered.length - 1];
+        let minDistance = Infinity;
+        let bestIndex = 0;
+
+        // Find the color with minimum distance to the last ordered color
+        for (let i = 0; i < remaining.length; i++) {
+            const distance = deltaE(hexToRgb(lastColor.hex), hexToRgb(remaining[i].hex));
+            if (distance < minDistance) {
+                minDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        ordered.push(remaining[bestIndex]);
+        remaining.splice(bestIndex, 1);
+    }
+
+    return ordered;
+}// Generate a variation of a color by modulating OKLCH values
 function generateVariation(baseL: number, baseC: number, baseH: number, variation: Variation): { hex: string; L: number; C: number; h: number; inGamut: boolean } {
     const newL = Math.max(0, Math.min(1, baseL + variation.deltaL));
     const newC = Math.max(0, Math.min(0.4, baseC + variation.deltaC)); // Cap chroma at reasonable max
@@ -369,6 +423,10 @@ function PaletteLab() {
             alert('Could not read from clipboard. Please ensure you have copied a valid configuration.');
         });
     }
+
+    // Calculate ordered palettes for swatch lists
+    const maxContrastPalette = orderPaletteMaxContrast(palette);
+    const minContrastPalette = orderPaletteMinContrast(palette);
 
     return (
         <div className="palette-lab-container">
@@ -610,10 +668,52 @@ function PaletteLab() {
                         <button onClick={importConfig} className="palette-lab-btn">Import config</button>
                     </div>
                 </div>
-                <pre className="palette-lab-code">const bandColors = [
-                    ${palette.map(p => `  "${p.hex.replace('#', '')}"`).join(",")}
-                    ];
-                </pre>
+            </div>
+
+            {/* Ordered Swatch Lists */}
+            <div className="palette-lab-panel">
+
+                <div>
+                    <div className="palette-lab-small" style={{ marginBottom: 8 }}>
+                        <strong>Minimum Adjacent Contrast:</strong> Colors ordered for smoothest visual transitions
+                    </div>
+                    <div className="palette-lab-swatch-list">
+                        {minContrastPalette.map((color, i) => (
+                            <div
+                                key={`min-${i}`}
+                                className="palette-lab-swatch-item"
+                                style={{
+                                    backgroundColor: color.hex,
+                                    color: labelHex
+                                }}
+                                title={`${color.hex} - Contrast: ${color.ratio.toFixed(1)}:1`}
+                            >
+                                {color.hex}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div >
+                    <div className="palette-lab-small" style={{ marginBottom: 8 }}>
+                        <strong>Maximum Adjacent Contrast:</strong> Colors ordered to maximize visual separation between neighbors
+                    </div>
+                    <div className="palette-lab-swatch-list">
+                        {maxContrastPalette.map((color, i) => (
+                            <div
+                                key={`max-${i}`}
+                                className="palette-lab-swatch-item"
+                                style={{
+                                    backgroundColor: color.hex,
+                                    color: labelHex
+                                }}
+                                title={`${color.hex} - Contrast: ${color.ratio.toFixed(1)}:1`}
+                            >
+                                {color.hex}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
             </div>
 
             <footer className="palette-lab-footer">
