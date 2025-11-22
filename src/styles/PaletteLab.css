@@ -1,5 +1,7 @@
 :root {
     --gap: 16px;
+    --ff-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, Liberation Mono, monospace;
+    --bg-color: white;
 }
 
 * {
@@ -30,6 +32,12 @@ body {
     display: flex;
     gap: 9px;
     flex-wrap: wrap;
+
+}
+
+.palette-lab-swatch-grid {
+    padding: 14px;
+    background-color: var(--bg-color);
 }
 
 @media (min-width: 900px) {
@@ -177,7 +185,7 @@ input.palette-lab-slider-input {
 
 .palette-lab-swatch-comparison {
     display: flex;
-    height: 80px;
+    min-height: 80px;
 }
 
 .palette-lab-swatch-main {
@@ -193,7 +201,7 @@ input.palette-lab-slider-input {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-left: 2px solid rgba(255, 255, 255, 0.3);
+    /* border-left: 2px solid rgba(255, 255, 255, 0.3); */
     position: relative;
 }
 
@@ -205,12 +213,17 @@ input.palette-lab-slider-input {
 }
 
 .palette-lab-variation-swatch {
-    width: 40px;
+    min-width: 40px;
     height: 24px;
-    border: 1px solid #ccc;
+    /* border: 1px solid #ccc; */
     border-radius: 4px;
     position: relative;
-    flex-shrink: 0;
+    padding: 6px 3px;
+    /* flex-shrink: 0; */
+    font-family: var(--ff-mono);
+    display: flex;
+    align-items: center;
+    font-size: 13px;
 }
 
 .palette-lab-variation-label {
@@ -226,10 +239,12 @@ input.palette-lab-slider-input {
 }
 
 .palette-lab-pill {
+    font-family: var(--ff-mono);
     font-size: 12px;
     padding: 3px 6px;
-    background: rgba(255, 255, 255, 0.7);
-    border-radius: 6px;
+    margin: 6px;
+    /* background: rgba(255, 255, 255, 0.7); */
+    /* border-radius: 6px; */
 }
 
 .palette-lab-similarity-info {}
@@ -275,8 +290,9 @@ input.palette-lab-slider-input {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 14px;
+    /* font-weight: 600; */
+    font-family: var(--ff-mono);
     cursor: pointer;
     flex-shrink: 0;
     text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
