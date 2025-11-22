@@ -19,7 +19,7 @@ body {
     padding: 24px;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 8px;
     font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, Apple Color Emoji, Segoe UI Emoji;
 }
 
@@ -53,7 +53,7 @@ body {
 }
 
 .palette-lab-panel {
-    background: #fff;
+    background: var(--bg-color);
     border: 1px solid #ddd;
     padding: 12px;
 }
@@ -61,7 +61,11 @@ body {
 .palette-lab-compact-panel {
     background: #fff;
     border: 1px solid #ddd;
-    padding: 16px;
+    padding: 6px;
+}
+
+.palette-lab-compact-panel h3 {
+    margin-top: 0;
 }
 
 .palette-lab-panel-group {
@@ -140,7 +144,7 @@ input.palette-lab-slider-input {
 .palette-lab-colorbox {
     width: 44px;
     height: 28px;
-    border: 1px solid #ccc;
+    border: 0;
     border-radius: 4px;
 }
 
@@ -164,7 +168,7 @@ input.palette-lab-slider-input {
 }
 
 .palette-lab-card {
-    border: 1px solid #ddd;
+
     border-radius: 6px;
     overflow: hidden;
     background: #fff;

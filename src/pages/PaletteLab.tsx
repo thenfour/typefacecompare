@@ -1,5 +1,5 @@
 import Head from "next/head";
-import React, { use, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { PaletteSwatchCard } from "../components/PaletteSwatchCard";
 import { BaseColor, PaletteSwatch, SwatchVariation, Variation } from "../types/palette";
 import "../styles/PaletteLab.css";
@@ -54,6 +54,7 @@ function PaletteLab() {
     const [jitter, setJitter] = useState(12);    // ± jitter in degrees
     const [targetContrast, setTargetContrast] = useState(10); // WCAG ratio
     const [labelHex, setLabelHex] = useState("#000000");
+    const [backgroundHex, setBackgroundHex] = useState("#ffffff");
     const [equalizeL, setEqualizeL] = useState(true);
     const [seed, setSeed] = useState(12345);
     const [showSimilarColors, setShowSimilarColors] = useState(true);
@@ -71,6 +72,12 @@ function PaletteLab() {
 
     const labelRgb = useMemo<RGB>(() => hexToRgb(labelHex), [labelHex]);
     const preferLight = useMemo(() => wcagContrast(hexToRgb("#ffffff"), labelRgb) > wcagContrast(hexToRgb("#000000"), labelRgb), [labelRgb]);
+
+    useEffect(() => {
+        if (typeof document !== "undefined") {
+            document.documentElement.style.setProperty("--bg-color", backgroundHex);
+        }
+    }, [backgroundHex]);
 
     const palette = useMemo<PaletteSwatch[]>(() => {
         const rng = mulberry32(seed);
@@ -150,6 +157,7 @@ function PaletteLab() {
             targetContrast,
             minColorDistance,
             labelHex,
+            backgroundHex,
             equalizeL,
             showSimilarColors,
             seed,
@@ -174,6 +182,7 @@ function PaletteLab() {
                 if (typeof config.targetContrast === 'number') setTargetContrast(config.targetContrast);
                 if (typeof config.minColorDistance === 'number') setMinColorDistance(config.minColorDistance);
                 if (typeof config.labelHex === 'string') setLabelHex(config.labelHex);
+                if (typeof config.backgroundHex === 'string') setBackgroundHex(config.backgroundHex);
                 if (typeof config.equalizeL === 'boolean') setEqualizeL(config.equalizeL);
                 if (typeof config.showSimilarColors === 'boolean') setShowSimilarColors(config.showSimilarColors);
                 if (typeof config.seed === 'number') setSeed(config.seed);
@@ -278,6 +287,12 @@ function PaletteLab() {
                         <button onClick={() => setLabelHex("#ffffff")} className="palette-lab-btn">White</button>
                     </div>
                     <div className="palette-lab-muted palette-lab-small">Target ≥ 7:1 for UI text; 10–12:1 looks crisp.</div>
+                    <div className="palette-lab-muted palette-lab-small" style={{ marginTop: 12 }}>Background (controls CSS var <code>--bg-color</code> for swatch previews)</div>
+                    <div className="palette-lab-row" style={{ marginTop: 4 }}>
+                        <input type="color" value={backgroundHex} onChange={(e) => setBackgroundHex(e.target.value)} className="palette-lab-colorbox" />
+                        <input className="palette-lab-input" style={{ flex: 1 }} value={backgroundHex} onChange={(e) => setBackgroundHex(e.target.value)} />
+                        <button onClick={() => setBackgroundHex("#ffffff")} className="palette-lab-btn">Reset</button>
+                    </div>
                 </div>
 
                 {/* Variations */}
