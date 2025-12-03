@@ -3,6 +3,11 @@ export type DitherType =
     | "bayer2"
     | "bayer4"
     | "bayer8"
+    | "bayer16"
+    | "cluster-dot4"
+    | "cluster-dot8"
+    | "scanline"
+    | "diag45"
     | "bw-noise"
     | "grayscale-noise"
     | "rgb-noise"
@@ -10,7 +15,15 @@ export type DitherType =
     | "blue-noise"
     | "voronoi-cluster"
     | "error-diffusion-kernel";
-export type BayerDitherType = "bayer2" | "bayer4" | "bayer8";
+export type OrderedMatrixDitherType =
+    | "bayer2"
+    | "bayer4"
+    | "bayer8"
+    | "bayer16"
+    | "cluster-dot4"
+    | "cluster-dot8"
+    | "scanline"
+    | "diag45";
 export type RandomNoiseDitherType = "bw-noise" | "grayscale-noise" | "rgb-noise" | "color-noise";
 export type ProceduralTileDitherType = "blue-noise" | "voronoi-cluster";
 export type ErrorDiffusionKernelId =
@@ -40,6 +53,11 @@ export const DITHER_LABELS: Record<DitherType, string> = {
     bayer2: "2×2 Bayer",
     bayer4: "4×4 Bayer",
     bayer8: "8×8 Bayer",
+    bayer16: "16×16 Bayer",
+    "cluster-dot4": "4×4 Clustered dot",
+    "cluster-dot8": "8×8 Clustered dot",
+    scanline: "Scanline (horizontal)",
+    diag45: "Diagonal hatch",
     "bw-noise": "Random B/W noise",
     "grayscale-noise": "Random grayscale noise",
     "rgb-noise": "Random RGB primary noise",
@@ -54,6 +72,11 @@ export const DITHER_DESCRIPTIONS: Record<DitherType, string> = {
     bayer2: "2×2 ordered thresholds",
     bayer4: "4×4 ordered thresholds",
     bayer8: "8×8 ordered thresholds",
+    bayer16: "16×16 ordered thresholds",
+    "cluster-dot4": "Tight 4×4 clustered halftone",
+    "cluster-dot8": "Larger 8×8 clustered halftone",
+    scanline: "Horizontal stripe thresholds",
+    diag45: "45° diagonal stripes",
     "bw-noise": "Binary noise per pixel",
     "grayscale-noise": "Monochrome random jitter",
     "rgb-noise": "Channel-wise binary noise",
@@ -68,6 +91,11 @@ export const DITHER_TYPE_ORDER: DitherType[] = [
     "bayer2",
     "bayer4",
     "bayer8",
+    "bayer16",
+    "cluster-dot4",
+    "cluster-dot8",
+    "scanline",
+    "diag45",
     "bw-noise",
     "grayscale-noise",
     "rgb-noise",
@@ -84,7 +112,16 @@ export interface ProceduralDitherOptions {
     };
 }
 
-const BAYER_DITHER_TYPES: BayerDitherType[] = ["bayer2", "bayer4", "bayer8"];
+const ORDERED_DITHER_TYPES: OrderedMatrixDitherType[] = [
+    "bayer2",
+    "bayer4",
+    "bayer8",
+    "bayer16",
+    "cluster-dot4",
+    "cluster-dot8",
+    "scanline",
+    "diag45",
+];
 const RANDOM_NOISE_TYPES: RandomNoiseDitherType[] = ["bw-noise", "grayscale-noise", "rgb-noise", "color-noise"];
 const PROCEDURAL_TILE_TYPES: ProceduralTileDitherType[] = ["blue-noise", "voronoi-cluster"];
 const SEEDED_DITHER_TYPES: DitherType[] = [...RANDOM_NOISE_TYPES, ...PROCEDURAL_TILE_TYPES];
@@ -219,28 +256,109 @@ export const VORONOI_TILE_SIZE = 64;
 export const DEFAULT_VORONOI_CELLS = 8;
 export const DEFAULT_VORONOI_JITTER = 0.85;
 
-const BAYER_MATRICES: Record<BayerDitherType, number[][]> = {
-    bayer2: [
-        [0, 2],
-        [3, 1],
-    ],
-    bayer4: [
-        [0, 12, 3, 15],
-        [8, 4, 11, 7],
-        [2, 14, 1, 13],
-        [10, 6, 9, 5],
-    ],
-    bayer8: [
-        [0, 32, 8, 40, 2, 34, 10, 42],
-        [48, 16, 56, 24, 50, 18, 58, 26],
-        [12, 44, 4, 36, 14, 46, 6, 38],
-        [60, 28, 52, 20, 62, 30, 54, 22],
-        [3, 35, 11, 43, 1, 33, 9, 41],
-        [51, 19, 59, 27, 49, 17, 57, 25],
-        [15, 47, 7, 39, 13, 45, 5, 37],
-        [63, 31, 55, 23, 61, 29, 53, 21],
-    ],
+const ORDERED_DITHER_MATRICES: Record<OrderedMatrixDitherType, number[][]> = {
+    bayer2: buildBayerMatrix(2),
+    bayer4: buildBayerMatrix(4),
+    bayer8: buildBayerMatrix(8),
+    bayer16: buildBayerMatrix(16),
+    "cluster-dot4": buildClusterDotMatrix(4),
+    "cluster-dot8": buildClusterDotMatrix(8),
+    scanline: buildScanlineMatrix(4),
+    diag45: buildDiagonalMatrix(8),
 };
+
+function buildBayerMatrix(size: number): number[][] {
+    if (size < 2 || (size & (size - 1)) !== 0) {
+        throw new Error(`Bayer matrix size must be a power of two (received ${size})`);
+    }
+    if (size === 2) {
+        return [
+            [0, 2],
+            [3, 1],
+        ];
+    }
+    const half = size / 2;
+    const prev = buildBayerMatrix(half);
+    const result = Array.from({ length: size }, () => new Array<number>(size).fill(0));
+    for (let y = 0; y < half; y++) {
+        for (let x = 0; x < half; x++) {
+            const baseVal = prev[y][x] * 4;
+            result[y][x] = baseVal;
+            result[y][x + half] = baseVal + 2;
+            result[y + half][x] = baseVal + 3;
+            result[y + half][x + half] = baseVal + 1;
+        }
+    }
+    return result;
+}
+
+function buildClusterDotMatrix(size: number): number[][] {
+    if (size < 2) {
+        throw new Error(`Clustered-dot matrix size must be at least 2 (received ${size})`);
+    }
+    const cx = (size - 1) / 2;
+    const cy = (size - 1) / 2;
+    return buildRankedMatrix(size, (x, y) => {
+        const dx = x - cx;
+        const dy = y - cy;
+        const distSq = dx * dx + dy * dy;
+        const angle = Math.atan2(dy, dx);
+        const angleNorm = Number.isFinite(angle) ? (angle + Math.PI) / (2 * Math.PI) : 0;
+        return distSq + angleNorm * 0.001;
+    });
+}
+
+function buildRankedMatrix(size: number, scoreFn: (x: number, y: number) => number): number[][] {
+    const matrix = Array.from({ length: size }, () => new Array<number>(size).fill(0));
+    const cells: Array<{ x: number; y: number; score: number }> = [];
+    const epsilon = 1 / (size * size * 10);
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            const score = scoreFn(x, y) + (x + y * size) * epsilon;
+            cells.push({ x, y, score });
+        }
+    }
+    cells.sort((a, b) => a.score - b.score);
+    cells.forEach((cell, index) => {
+        matrix[cell.y][cell.x] = index;
+    });
+    return matrix;
+}
+
+function buildScanlineMatrix(size: number) {
+    return buildRankedMatrix(size, (_x, y) => y);
+}
+
+function buildShadeBandsMatrix(size: number, bands: number) {
+    const maxDiag = Math.max(1, 2 * (size - 1));
+    return buildRankedMatrix(size, (x, y) => {
+        const normalized = (x + y) / maxDiag;
+        const band = Math.floor(normalized * bands);
+        return band + normalized * 0.01;
+    });
+}
+
+function buildDiagonalMatrix(size: number) {
+    return buildRankedMatrix(size, (x, y) => x + y);
+}
+
+function buildHexPackedMatrix(size: number) {
+    if (size < 2) {
+        throw new Error(`Hex packed matrix size must be at least 2 (received ${size})`);
+    }
+    const cx = (size - 1) / 2;
+    const cy = (size - 1) / 2;
+    const hexHeight = Math.sqrt(3) / 2;
+    return buildRankedMatrix(size, (x, y) => {
+        const offsetX = (y % 2 === 0 ? 0 : 0.5);
+        const q = x - cx + offsetX;
+        const r = (y - cy) * hexHeight;
+        const dist = Math.sqrt(q * q + r * r);
+        const angle = Math.atan2(r, q);
+        const angleNorm = Number.isFinite(angle) ? (angle + Math.PI) / (2 * Math.PI) : 0;
+        return dist + angleNorm * 0.01;
+    });
+}
 
 export function applyDitherJitter(
     rgb255: { r: number; g: number; b: number },
@@ -254,8 +372,8 @@ export function applyDitherJitter(
     if (type === "none" || strength <= 0) {
         return rgb255;
     }
-    if (isBayerDitherType(type)) {
-        const matrix = BAYER_MATRICES[type];
+    if (isOrderedMatrixDitherType(type)) {
+        const matrix = ORDERED_DITHER_MATRICES[type];
         const size = matrix.length;
         const denominator = size * size;
         const matrixSrcValue = matrix[y % size][x % size];
@@ -540,8 +658,8 @@ function rankThresholds(scores: Float32Array) {
     return thresholds;
 }
 
-function isBayerDitherType(type: DitherType): type is BayerDitherType {
-    return BAYER_DITHER_TYPES.includes(type as BayerDitherType);
+function isOrderedMatrixDitherType(type: DitherType): type is OrderedMatrixDitherType {
+    return ORDERED_DITHER_TYPES.includes(type as OrderedMatrixDitherType);
 }
 
 function isRandomNoiseType(type: DitherType): type is RandomNoiseDitherType {
