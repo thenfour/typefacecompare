@@ -10,7 +10,7 @@ const getDevicePixelRatio = () => {
 };
 
 export function useDevicePixelRatio(pollInterval = 500) {
-    const [ratio, setRatio] = useState(() => getDevicePixelRatio());
+    const [ratio, setRatio] = useState(DEFAULT_RATIO);
     const ratioRef = useRef(ratio);
 
     useEffect(() => {
@@ -30,6 +30,8 @@ export function useDevicePixelRatio(pollInterval = 500) {
             ratioRef.current = next;
             setRatio(next);
         };
+
+        commitRatio(getDevicePixelRatio());
 
         const scheduleUpdate = () => {
             if (rafId !== null) {
