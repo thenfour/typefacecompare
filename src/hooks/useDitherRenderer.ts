@@ -1,7 +1,7 @@
 import { useEffect, type MutableRefObject } from "react";
-import type { ColorInterpolationMode, RGBColor } from "@/utils/colorSpaces";
+import type { ColorInterpolationMode } from "@/utils/colorSpaces";
 import { interpolateGradientColor } from "@/utils/colorSpaces";
-import { applyAxisTripleToRgb, extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
+import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
 import {
     applyDitherJitter,
     applyErrorDiffusionToPixel,
@@ -23,13 +23,6 @@ export interface PreviewCanvasRefs {
     gamut: MutableRefObject<HTMLCanvasElement | null>;
     dither: MutableRefObject<HTMLCanvasElement | null>;
     reduced: MutableRefObject<HTMLCanvasElement | null>;
-}
-
-export interface GamutTransform {
-    sourceMean: AxisTriple;
-    desiredMean: AxisTriple;
-    scale: AxisTriple;
-    isActive: boolean;
 }
 
 interface PreviewStageConfig {
@@ -269,16 +262,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         canvasRefs.dither,
         canvasRefs.reduced,
     ]);
-}
-
-function applyGamutTransformToColor(color: RGBColor, transform: GamutTransform, mode: ColorInterpolationMode): RGBColor {
-    const axes = extractAxisTriple(color, mode);
-    const adjusted: AxisTriple = [
-        transform.desiredMean[0] + (axes[0] - transform.sourceMean[0]) * transform.scale[0],
-        transform.desiredMean[1] + (axes[1] - transform.sourceMean[1]) * transform.scale[1],
-        transform.desiredMean[2] + (axes[2] - transform.sourceMean[2]) * transform.scale[2],
-    ];
-    return applyAxisTripleToRgb(color, adjusted, mode);
 }
 
 function sampleSourceColor(

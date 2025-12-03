@@ -10,11 +10,12 @@ const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
 interface ColorSpaceScatterPlotProps {
     sourcePoints: ScatterPoint[];
+    gamutPoints?: ScatterPoint[];
     palettePoints: ScatterPoint[];
     axisLabels: [string, string, string];
 }
 
-export function ColorSpaceScatterPlot({ sourcePoints, palettePoints, axisLabels }: ColorSpaceScatterPlotProps) {
+export function ColorSpaceScatterPlot({ sourcePoints, gamutPoints = [], palettePoints, axisLabels }: ColorSpaceScatterPlotProps) {
     const data: Partial<Data>[] = [];
     if (sourcePoints.length > 0) {
         data.push({
@@ -28,6 +29,25 @@ export function ColorSpaceScatterPlot({ sourcePoints, palettePoints, axisLabels 
                 size: 3,
                 opacity: 0.5,
                 color: sourcePoints.map((point) => `rgb(${point.color[0]}, ${point.color[1]}, ${point.color[2]})`),
+            },
+        });
+    }
+    if (gamutPoints.length > 0) {
+        data.push({
+            type: "scatter3d",
+            mode: "markers",
+            name: "Gamut Fit",
+            x: gamutPoints.map((point) => point.coords[0]),
+            y: gamutPoints.map((point) => point.coords[1]),
+            z: gamutPoints.map((point) => point.coords[2]),
+            marker: {
+                size: 3,
+                opacity: 0.7,
+                color: gamutPoints.map((point) => `rgb(${point.color[0]}, ${point.color[1]}, ${point.color[2]})`),
+                line: {
+                    color: "rgba(0,0,0,0.25)",
+                    width: 0.5,
+                },
             },
         });
     }

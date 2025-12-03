@@ -9,7 +9,7 @@ import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { fetchDitherSourceExamples, type ExampleImage } from "@/data/ditherSourceExamples";
 import { useImageSource } from "@/hooks/useImageSource";
-import { useDitherRenderer, type GamutTransform } from "@/hooks/useDitherRenderer";
+import { useDitherRenderer } from "@/hooks/useDitherRenderer";
 import type { ReductionMode, SourceType } from "@/types/dither";
 import { rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
@@ -19,6 +19,7 @@ import { ReductionControls } from "@/components/dither/ReductionControls";
 import { PreviewSection } from "@/components/dither/PreviewSection";
 import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
 import { extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
+import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
 import {
     buildProceduralDitherTile,
     DEFAULT_ERROR_DIFFUSION_KERNEL,
@@ -285,6 +286,23 @@ export default function DitherGradientPage() {
         gamutOverallStrength,
         gamutTranslationStrength,
         gamutScaleStrength,
+    ]);
+    const gamutScatterPoints = useMemo(() => {
+        if (!gamutTransform || !gamutTransform.isActive || sourceScatterPoints.length === 0) {
+            return [] as ScatterPoint[];
+        }
+        return sourceScatterPoints.map((point) => {
+            const adjusted = applyGamutTransformToColor(
+                { r: point.color[0] ?? 0, g: point.color[1] ?? 0, b: point.color[2] ?? 0 },
+                gamutTransform,
+                distanceColorSpace
+            );
+            return buildScatterPointFromRgb(adjusted, distanceColorSpace);
+        });
+    }, [
+        sourceScatterPoints,
+        gamutTransform,
+        distanceColorSpace,
     ]);
     const gamutPreviewAvailable = Boolean(gamutTransform);
     const gamutControlsDisabled = !sourceAxisStats || !paletteAxisStats;
@@ -622,6 +640,7 @@ export default function DitherGradientPage() {
                             <div className="color-scatter-container">
                                 <ColorSpaceScatterPlot
                                     sourcePoints={sourceScatterPoints}
+                                    gamutPoints={gamutScatterPoints}
                                     palettePoints={paletteScatterPoints}
                                     axisLabels={scatterAxisLabels}
                                 />
