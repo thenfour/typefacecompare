@@ -54,6 +54,7 @@ export function ReductionControls({
                                 { value: "hsv", label: "HSV" },
                                 { value: "hwb", label: "HWB" },
                                 { value: "ryb", label: "RYB" },
+                                { value: "cmy", label: "CMY" },
                                 { value: "cmyk", label: "CMYK" },
                                 { value: "lab", label: "LAB" },
                                 { value: "oklab", label: "OKLab" },

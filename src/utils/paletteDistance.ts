@@ -177,6 +177,10 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             const cmyk = vector as { c: number; m: number; y: number; k: number };
             return [cmyk.c, cmyk.m, cmyk.y, cmyk.k];
         }
+        case "cmy": {
+            const cmy = vector as { c: number; m: number; y: number };
+            return [cmy.c, cmy.m, cmy.y];
+        }
         case "lab": {
             const lab = vector as { l: number; a: number; b: number };
             return [lab.l / 100, lab.a / 128, lab.b / 128];

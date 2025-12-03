@@ -6,6 +6,7 @@ export type ColorInterpolationMode =
     | "hsv"
     | "hwb"
     | "ryb"
+    | "cmy"
     | "cmyk"
     | "lab"
     | "ycbcr"
@@ -22,6 +23,7 @@ interface HSLVector { h: number; s: number; l: number; }
 interface HSVVector { h: number; s: number; v: number; }
 interface HWBVector { h: number; w: number; b: number; }
 interface RYBVector { h: number; s: number; v: number; }
+interface CMYVector { c: number; m: number; y: number; }
 interface CMYKVector { c: number; m: number; y: number; k: number; }
 interface LabVector { l: number; a: number; b: number; }
 interface YCbCrVector { y: number; cb: number; cr: number; }
@@ -34,6 +36,7 @@ type ColorVector =
     | HSVVector
     | HWBVector
     | RYBVector
+    | CMYVector
     | CMYKVector
     | LabVector
     | YCbCrVector
@@ -96,6 +99,12 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
             return mixPolarHwb(a as HWBVector, b as HWBVector, lerp);
         case "ryb":
             return mixPolarRyb(a as RYBVector, b as RYBVector, lerp);
+        case "cmy":
+            return {
+                c: lerp((a as CMYVector).c, (b as CMYVector).c),
+                m: lerp((a as CMYVector).m, (b as CMYVector).m),
+                y: lerp((a as CMYVector).y, (b as CMYVector).y)
+            } satisfies CMYVector;
         case "cmyk":
             return {
                 c: lerp((a as CMYKVector).c, (b as CMYKVector).c),
@@ -229,6 +238,8 @@ function rgbToVector(rgb: RGB, mode: ColorInterpolationMode): ColorVector {
             return rgbToHwb(rgb);
         case "ryb":
             return rgbToRyb(rgb);
+        case "cmy":
+            return rgbToCmy(rgb);
         case "cmyk":
             return rgbToCmyk(rgb);
         case "lab":
@@ -256,6 +267,8 @@ export function vectorToRgb(vector: ColorVector, mode: ColorInterpolationMode): 
             return clampRgb(hwbToRgb(vector as HWBVector));
         case "ryb":
             return clampRgb(rybToRgb(vector as RYBVector));
+        case "cmy":
+            return clampRgb(cmyToRgb(vector as CMYVector));
         case "cmyk":
             return clampRgb(cmykToRgb(vector as CMYKVector));
         case "lab":
@@ -529,6 +542,22 @@ function remapHueThroughMap(hue: number, invert: boolean) {
 }
 
 // CMYK helpers
+function rgbToCmy(rgb: RGB): CMYVector {
+    return {
+        c: 1 - clamp01(rgb.r),
+        m: 1 - clamp01(rgb.g),
+        y: 1 - clamp01(rgb.b)
+    } satisfies CMYVector;
+}
+
+function cmyToRgb(cmy: CMYVector): RGB {
+    return {
+        r: clamp01(1 - cmy.c),
+        g: clamp01(1 - cmy.m),
+        b: clamp01(1 - cmy.y)
+    } satisfies RGB;
+}
+
 function rgbToCmyk(rgb: RGB): CMYKVector {
     const c = 1 - rgb.r;
     const m = 1 - rgb.g;
