@@ -21,6 +21,16 @@ import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/Co
 import { extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
 import {
+    blendRotationMatrix,
+    determinantMatrix3,
+    identityMatrix3,
+    isIdentityMatrix3,
+    jacobiEigenDecomposition,
+    multiplyMatrix3,
+    transposeMatrix3,
+    type Matrix3,
+} from "@/utils/matrix3";
+import {
     buildProceduralDitherTile,
     DEFAULT_ERROR_DIFFUSION_KERNEL,
     ErrorDiffusionKernelId,
@@ -127,15 +137,16 @@ export default function DitherGradientPage() {
     const [voronoiJitter, setVoronoiJitter] = useState<number>(DEFAULT_VORONOI_JITTER);
     const [errorDiffusionKernelId, setErrorDiffusionKernelId] = useState<ErrorDiffusionKernelId>(DEFAULT_ERROR_DIFFUSION_KERNEL);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
-    const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
-    const [width, setWidth] = useState(256);
-    const [height, setHeight] = useState(256);
+    const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("oklab");
+    const [width, setWidth] = useState(160);
+    const [height, setHeight] = useState(160);
     const [previewScale, setPreviewScale] = useState(2);
-    const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(3);
-    const [ditherMaskStrength, setDitherMaskStrength] = useState(0);
-    const [gamutOverallStrength, setGamutOverallStrength] = useState(1);
-    const [gamutTranslationStrength, setGamutTranslationStrength] = useState(0);
-    const [gamutScaleStrength, setGamutScaleStrength] = useState<AxisTriple>([0, 0, 0]);
+    const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(5);
+    const [ditherMaskStrength, setDitherMaskStrength] = useState(2);
+    const [gamutOverallStrength, setGamutOverallStrength] = useState(0.3);
+    const [gamutTranslationStrength, setGamutTranslationStrength] = useState(1);
+    const [gamutRotationStrength, setGamutRotationStrength] = useState(0.1);
+    const [gamutScaleStrength, setGamutScaleStrength] = useState<AxisTriple>([1, 1, 1]);
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -273,11 +284,18 @@ export default function DitherGradientPage() {
             scale[index] = 1 + axisStrength * (ratio - 1);
         }
         const scalingActive = gamutScaleStrength.some((value) => Math.abs(value * gamutOverallStrength) > 0.0001);
-        const isActive = translationActive || scalingActive;
+        const baseRotationMatrix = computeRotationAlignmentMatrix(sourceAxisStats, paletteAxisStats);
+        const effectiveRotationStrength = gamutRotationStrength * gamutOverallStrength;
+        const rotationMatrix = baseRotationMatrix
+            ? blendRotationMatrix(baseRotationMatrix, effectiveRotationStrength)
+            : identityMatrix3();
+        const rotationActive = !isIdentityMatrix3(rotationMatrix);
+        const isActive = translationActive || scalingActive || rotationActive;
         return {
             sourceMean: sourceAxisStats.mean,
             desiredMean,
             scale,
+            rotationMatrix,
             isActive,
         } satisfies GamutTransform;
     }, [
@@ -285,6 +303,7 @@ export default function DitherGradientPage() {
         paletteAxisStats,
         gamutOverallStrength,
         gamutTranslationStrength,
+        gamutRotationStrength,
         gamutScaleStrength,
     ]);
     const gamutScatterPoints = useMemo(() => {
@@ -327,6 +346,10 @@ export default function DitherGradientPage() {
     const handleGamutTranslationChange = (nextValue: number) => {
         const clamped = Math.max(0, Math.min(1, nextValue));
         setGamutTranslationStrength(clamped);
+    };
+    const handleGamutRotationChange = (nextValue: number) => {
+        const clamped = Math.max(0, Math.min(1, nextValue));
+        setGamutRotationStrength(clamped);
     };
     const handleGamutScaleSliderChange = (axisIndex: number, nextValue: number) => {
         const clamped = Math.max(0, Math.min(1, nextValue));
@@ -478,9 +501,6 @@ export default function DitherGradientPage() {
                                     onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
                                 />
                             </label>
-                            <p className="dither-gradient-note">
-                                High-frequency areas (sharp edges / details) receive less dithering as the mask effect increases.
-                            </p>
                             <div className="gamut-fit-controls">
                                 <h4>Gamut Fit</h4>
                                 <label>
@@ -507,6 +527,18 @@ export default function DitherGradientPage() {
                                         disabled={gamutControlsDisabled}
                                     />
                                 </label>
+                                <label>
+                                    Rotation Strength ({Math.round(gamutRotationStrength * 100)}%)
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={1}
+                                        step={0.01}
+                                        value={gamutRotationStrength}
+                                        onChange={(event) => handleGamutRotationChange(event.target.valueAsNumber)}
+                                        disabled={gamutControlsDisabled}
+                                    />
+                                </label>
                                 <div className="gamut-fit-controls__scale-grid">
                                     {scatterAxisLabels.map((axisLabel, axisIndex) => (
                                         <label key={`${axisLabel}-${axisIndex}`}>
@@ -523,11 +555,6 @@ export default function DitherGradientPage() {
                                         </label>
                                     ))}
                                 </div>
-                                <p className="dither-gradient-note">
-                                    {gamutControlsDisabled
-                                        ? "Preview source and palette colors to enable gamut fitting."
-                                        : "Use the sliders to blend toward the palette stats, then toggle the Gamut Fit preview to inspect the adjustment."}
-                                </p>
                             </div>
                         </div>
                     </section>
@@ -793,6 +820,7 @@ const COLOR_SPACE_AXIS_LABELS: Partial<Record<ColorInterpolationMode, [string, s
 type AxisStats = {
     mean: AxisTriple;
     stdDev: AxisTriple;
+    samples: AxisTriple[];
 };
 
 function computeAxisStats(points: ScatterPoint[], colorSpace: ColorInterpolationMode): AxisStats | null {
@@ -823,6 +851,69 @@ function computeAxisStats(points: ScatterPoint[], colorSpace: ColorInterpolation
         Math.sqrt(variance[1] / axesList.length),
         Math.sqrt(variance[2] / axesList.length),
     ];
-    return { mean, stdDev };
+    return { mean, stdDev, samples: axesList };
+}
+
+function computeCovarianceMatrix(samples: AxisTriple[], mean: AxisTriple): Matrix3 | null {
+    if (samples.length < 3) {
+        return null;
+    }
+    const covariance: Matrix3 = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+    ];
+    for (const sample of samples) {
+        const dx = sample[0] - mean[0];
+        const dy = sample[1] - mean[1];
+        const dz = sample[2] - mean[2];
+        covariance[0][0] += dx * dx;
+        covariance[0][1] += dx * dy;
+        covariance[0][2] += dx * dz;
+        covariance[1][0] += dy * dx;
+        covariance[1][1] += dy * dy;
+        covariance[1][2] += dy * dz;
+        covariance[2][0] += dz * dx;
+        covariance[2][1] += dz * dy;
+        covariance[2][2] += dz * dz;
+    }
+    const divisor = samples.length;
+    if (divisor === 0) {
+        return null;
+    }
+    for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+            covariance[row][col] /= divisor;
+        }
+    }
+    return covariance;
+}
+
+function ensureRightHandedBasis(basis: Matrix3): Matrix3 {
+    if (determinantMatrix3(basis) >= 0) {
+        return basis;
+    }
+    const adjusted: Matrix3 = [
+        [...basis[0]],
+        [...basis[1]],
+        [...basis[2]],
+    ];
+    for (let row = 0; row < 3; row++) {
+        adjusted[row][2] *= -1;
+    }
+    return adjusted;
+}
+
+function computeRotationAlignmentMatrix(sourceStats: AxisStats, paletteStats: AxisStats): Matrix3 | null {
+    const sourceCovariance = computeCovarianceMatrix(sourceStats.samples, sourceStats.mean);
+    const paletteCovariance = computeCovarianceMatrix(paletteStats.samples, paletteStats.mean);
+    if (!sourceCovariance || !paletteCovariance) {
+        return null;
+    }
+    const sourceEigen = jacobiEigenDecomposition(sourceCovariance).eigenvectors;
+    const paletteEigen = jacobiEigenDecomposition(paletteCovariance).eigenvectors;
+    const sourceBasis = ensureRightHandedBasis(sourceEigen);
+    const paletteBasis = ensureRightHandedBasis(paletteEigen);
+    return multiplyMatrix3(paletteBasis, transposeMatrix3(sourceBasis));
 }
 

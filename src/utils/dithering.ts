@@ -307,6 +307,39 @@ export function applyErrorDiffusionToPixel(
     return { ditheredColor, quantizedColor };
 }
 
+function diffuseError(
+    error: { r: number; g: number; b: number },
+    x: number,
+    _y: number,
+    context: ErrorDiffusionContext,
+    strength: number
+) {
+    if (strength <= 0) {
+        return;
+    }
+    const { kernel, rowBuffers, width } = context;
+    if (rowBuffers.length === 0 || width <= 0) {
+        return;
+    }
+    const normalizedStrength = strength / kernel.divisor;
+    for (const offset of kernel.offsets) {
+        const targetRowIndex = offset.dy;
+        if (targetRowIndex < 0 || targetRowIndex >= rowBuffers.length) {
+            continue;
+        }
+        const targetX = x + offset.dx;
+        if (targetX < 0 || targetX >= width) {
+            continue;
+        }
+        const buffer = rowBuffers[targetRowIndex];
+        const baseIndex = targetX * 3;
+        const weight = normalizedStrength * offset.weight;
+        buffer[baseIndex] += error.r * weight;
+        buffer[baseIndex + 1] += error.g * weight;
+        buffer[baseIndex + 2] += error.b * weight;
+    }
+}
+
 const RANDOM_VARIANT_OFFSETS: Record<RandomNoiseDitherType, number> = {
     "bw-noise": 101,
     "grayscale-noise": 211,
