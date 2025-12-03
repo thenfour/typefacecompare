@@ -1,0 +1,123 @@
+:root {
+    --palette-definition-font: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.palette-definition-page {
+    min-height: 100vh;
+    background: #ffffff;
+    color: #0a0a0a;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.palette-definition-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.palette-definition-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(360px, 1fr);
+    gap: 24px;
+    align-items: stretch;
+}
+
+.palette-definition-textarea {
+    width: 100%;
+    min-height: 520px;
+    resize: vertical;
+    background: #fbfbfb;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 16px;
+    font-family: var(--palette-definition-font);
+    font-size: 14px;
+    line-height: 1.5;
+    color: #111;
+}
+
+.palette-definition-textarea:focus {
+    outline: 2px solid #111;
+    border-color: #111;
+}
+
+.palette-definition-viewer {
+    border: 1px solid #cfd1d5;
+    border-radius: 6px;
+    background: #fff;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.palette-definition-viewer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 13px;
+    color: #464646;
+}
+
+.palette-definition-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid #ebebeb;
+}
+
+.palette-definition-row {
+    display: flex;
+    gap: 0;
+}
+
+.palette-definition-row+.palette-definition-row {
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.palette-definition-swatch {
+    flex: 1;
+    min-height: 56px;
+    cursor: pointer;
+    transition: transform 80ms ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--palette-definition-font);
+    font-size: 11px;
+    color: rgba(0, 0, 0, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px;
+    border: none;
+}
+
+.palette-definition-swatch:active {
+    transform: translateY(1px);
+}
+
+.palette-definition-empty-state {
+    font-family: var(--palette-definition-font);
+    font-size: 12px;
+    color: #777;
+    padding: 32px;
+    text-align: center;
+    border: 1px dashed #d8d8d8;
+}
+
+.palette-definition-meta {
+    font-size: 12px;
+    color: #5a5a5a;
+    display: flex;
+    gap: 16px;
+}
+
+@media (max-width: 960px) {
+    .palette-definition-layout {
+        grid-template-columns: 1fr;
+    }
+}
