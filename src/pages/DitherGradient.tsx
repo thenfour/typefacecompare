@@ -11,18 +11,16 @@ import { GradientPreviewCanvas } from "../components/GradientPreviewCanvas";
 import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
-
-type DitherType =
-    | "none"
-    | "bayer2"
-    | "bayer4"
-    | "bayer8"
-    | "bw-noise"
-    | "grayscale-noise"
-    | "rgb-noise"
-    | "color-noise";
-type BayerDitherType = "bayer2" | "bayer4" | "bayer8";
-type RandomNoiseDitherType = "bw-noise" | "grayscale-noise" | "rgb-noise" | "color-noise";
+import {
+    buildProceduralDitherTile,
+    DitherThresholdTile,
+    DitherType,
+    DITHER_DESCRIPTIONS,
+    DITHER_LABELS,
+    DITHER_TYPE_ORDER,
+    applyDitherJitter,
+    usesSeededDither,
+} from "../utils/dithering";
 type ReductionMode = "binary" | "palette" | "none";
 type DistanceFeature = "all" | "luminance" | "hsl-saturation" | "hsl-lightness" | "oklch-chroma";
 const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
@@ -35,44 +33,6 @@ const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
 const DISTANCE_FEATURE_ORDER: DistanceFeature[] = ["all", "luminance", "hsl-saturation", "hsl-lightness", "oklch-chroma"];
 const LUMINANCE_SUPPORTED_SPACES: ColorInterpolationMode[] = ["lab", "oklch", "ycbcr", "hsl"];
 
-const DITHER_LABELS: Record<DitherType, string> = {
-    none: "None",
-    bayer2: "2×2 Bayer",
-    bayer4: "4×4 Bayer",
-    bayer8: "8×8 Bayer",
-    "bw-noise": "Random B/W noise",
-    "grayscale-noise": "Random grayscale noise",
-    "rgb-noise": "Random RGB primary noise",
-    "color-noise": "Random color noise",
-};
-const DITHER_TYPE_ORDER: DitherType[] = [
-    "none",
-    "bayer2",
-    "bayer4",
-    "bayer8",
-    "bw-noise",
-    "grayscale-noise",
-    "rgb-noise",
-    "color-noise",
-];
-const BAYER_DITHER_TYPES: BayerDitherType[] = ["bayer2", "bayer4", "bayer8"];
-const RANDOM_NOISE_TYPES: RandomNoiseDitherType[] = ["bw-noise", "grayscale-noise", "rgb-noise", "color-noise"];
-const RANDOM_VARIANT_OFFSETS: Record<RandomNoiseDitherType, number> = {
-    "bw-noise": 101,
-    "grayscale-noise": 211,
-    "rgb-noise": 307,
-    "color-noise": 401,
-};
-const DITHER_DESCRIPTIONS: Record<DitherType, string> = {
-    none: "No jitter",
-    bayer2: "2×2 ordered thresholds",
-    bayer4: "4×4 ordered thresholds",
-    bayer8: "8×8 ordered thresholds",
-    "bw-noise": "Binary noise per pixel",
-    "grayscale-noise": "Monochrome random jitter",
-    "rgb-noise": "Channel-wise binary noise",
-    "color-noise": "Channel-wise random jitter",
-};
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
 const RGB_FOUR_LEVELS = [0, 85, 170, 255] as const;
@@ -185,28 +145,6 @@ function getSupportedDistanceFeatures(mode: ColorInterpolationMode): DistanceFea
     return DISTANCE_FEATURE_ORDER.filter((feature) => isDistanceFeatureSupported(mode, feature));
 }
 
-const BAYER_MATRICES: Record<BayerDitherType, number[][]> = {
-    bayer2: [
-        [0, 2],
-        [3, 1],
-    ],
-    bayer4: [
-        [0, 12, 3, 15],
-        [8, 4, 11, 7],
-        [2, 14, 1, 13],
-        [10, 6, 9, 5],
-    ],
-    bayer8: [
-        [0, 32, 8, 40, 2, 34, 10, 42],
-        [48, 16, 56, 24, 50, 18, 58, 26],
-        [12, 44, 4, 36, 14, 46, 6, 38],
-        [60, 28, 52, 20, 62, 30, 54, 22],
-        [3, 35, 11, 43, 1, 33, 9, 41],
-        [51, 19, 59, 27, 49, 17, 57, 25],
-        [15, 47, 7, 39, 13, 45, 5, 37],
-        [63, 31, 55, 23, 61, 29, 53, 21],
-    ],
-};
 
 export default function DitherGradientPage() {
     const [gradientPaletteText, setGradientPaletteText] = useState<string>(PALETTE_PRESETS[0].value);
@@ -253,6 +191,10 @@ export default function DitherGradientPage() {
         [reductionSwatches, distanceColorSpace, distanceFeature]
     );
     const supportedDistanceFeatures = useMemo(() => getSupportedDistanceFeatures(distanceColorSpace), [distanceColorSpace]);
+    const proceduralDitherTile: DitherThresholdTile | null = useMemo(
+        () => buildProceduralDitherTile(ditherType, ditherSeed),
+        [ditherType, ditherSeed]
+    );
 
     const handleDistanceColorSpaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
         const nextMode = event.target.value as ColorInterpolationMode;
@@ -316,7 +258,7 @@ export default function DitherGradientPage() {
                 const u = width === 1 ? 0 : x / (width - 1);
                 const base = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
                 const sourceColor = clampRgb255(base);
-                const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed);
+                const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed, proceduralDitherTile);
                 const ditheredColor = clampRgb255(jittered);
                 const reducedColor = clampRgb255(
                     applyReduction(
@@ -367,6 +309,7 @@ export default function DitherGradientPage() {
         binaryThreshold,
         distanceColorSpace,
         reductionPaletteEntries,
+        proceduralDitherTile,
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
@@ -383,6 +326,7 @@ export default function DitherGradientPage() {
     // };
 
     const projectedPreviewDescription = distanceFeature === "all" ? "Same as source" : `${DISTANCE_FEATURE_LABELS[distanceFeature]} projection`;
+    const seedEnabled = usesSeededDither(ditherType);
 
     return (
         <>
@@ -475,7 +419,7 @@ export default function DitherGradientPage() {
                                 />
                             </label>
                             <label>
-                                Noise Seed {isRandomNoiseType(ditherType) ? "" : "(noise modes)"}
+                                Pattern Seed {seedEnabled ? "" : "(not used)"}
                                 <input
                                     type="number"
                                     min={0}
@@ -486,6 +430,7 @@ export default function DitherGradientPage() {
                                         const next = event.target.valueAsNumber;
                                         setDitherSeed(Number.isFinite(next) ? next : 0);
                                     }}
+                                    disabled={!seedEnabled}
                                 />
                             </label>
                             <label>
@@ -891,115 +836,6 @@ function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: numbe
     buffer[offset + 3] = 255;
 }
 
-// Adds a constant offset to each RGB channel; used to shift pixels by the dither threshold.
-function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
-    return {
-        r: rgb.r + offset,
-        g: rgb.g + offset,
-        b: rgb.b + offset,
-    };
-}
-
-/**
- * Adds ordered or stochastic dither jitter to an RGB pixel based on the selected type.
- * Input and output are 0-255 RGB values; strength is 0-1 and scales the threshold offset.
- */
-function applyDitherJitter(
-    rgb255: { r: number; g: number; b: number },
-    x: number,
-    y: number,
-    type: DitherType,
-    strength: number,
-    seed: number
-) {
-    if (type === "none" || strength <= 0) {
-        return rgb255;
-    }
-    if (isBayerDitherType(type)) {
-        const matrix = BAYER_MATRICES[type];
-        const size = matrix.length;
-        const denominator = size * size;
-        // matrix source is scaled 0..(N*N-1); convert to -0.5..+0.5 range for easier centering
-        const matrixSrcValue = matrix[y % size][x % size];
-        const threshold = (matrixSrcValue + 0.5) / denominator - 0.5;
-        const jitter = threshold * strength * 255;
-        return addRgb(rgb255, jitter);
-    }
-    return applyRandomNoiseDither(rgb255, x, y, type, strength, seed);
-}
-
-function isBayerDitherType(type: DitherType): type is BayerDitherType {
-    return BAYER_DITHER_TYPES.includes(type as BayerDitherType);
-}
-
-function isRandomNoiseType(type: DitherType): type is RandomNoiseDitherType {
-    return RANDOM_NOISE_TYPES.includes(type as RandomNoiseDitherType);
-}
-
-function applyRandomNoiseDither(
-    rgb255: { r: number; g: number; b: number },
-    x: number,
-    y: number,
-    type: DitherType,
-    strength: number,
-    seed: number
-) {
-    if (!isRandomNoiseType(type)) {
-        return rgb255;
-    }
-    const magnitude = strength * 255;
-    const baseVariant = RANDOM_VARIANT_OFFSETS[type];
-    if (type === "bw-noise") {
-        const rand = pseudoRandomUnit(seed, x, y, baseVariant);
-        const threshold = rand > 0.5 ? 0.5 : -0.5;
-        return addRgb(rgb255, threshold * magnitude);
-    }
-    if (type === "grayscale-noise") {
-        const rand = pseudoRandomUnit(seed, x, y, baseVariant);
-        const threshold = rand - 0.5;
-        return addRgb(rgb255, threshold * magnitude);
-    }
-    const jittered = {
-        r: rgb255.r + channelNoise(seed, x, y, baseVariant, 0, type) * magnitude,
-        g: rgb255.g + channelNoise(seed, x, y, baseVariant, 1, type) * magnitude,
-        b: rgb255.b + channelNoise(seed, x, y, baseVariant, 2, type) * magnitude,
-    };
-    return jittered;
-}
-
-function channelNoise(
-    seed: number,
-    x: number,
-    y: number,
-    baseVariant: number,
-    channelIndex: number,
-    type: RandomNoiseDitherType
-) {
-    const rand = pseudoRandomUnit(seed, x, y, baseVariant + channelIndex);
-    if (type === "rgb-noise") {
-        return rand > 0.5 ? 0.5 : -0.5;
-    }
-    return rand - 0.5;
-}
-
-function pseudoRandomUnit(seed: number, x: number, y: number, variant: number) {
-    let hash = normalizeSeed(seed) ^ Math.imul(variant + 0x7F4A7C15, 0x45D9F3B);
-    hash ^= Math.imul(x + 0x27D4EB2F, 0x9E3779B9);
-    hash = Math.imul(hash ^ (hash >>> 15), 0x85EBCA6B);
-    hash ^= Math.imul(y + 0x165667B1, 0xC2B2AE35);
-    hash ^= hash >>> 13;
-    hash = Math.imul(hash, 1274126177);
-    hash ^= hash >>> 16;
-    return (hash >>> 0) / 0xffffffff;
-}
-
-function normalizeSeed(seed: number) {
-    if (!Number.isFinite(seed)) {
-        return 0;
-    }
-    const normalized = Math.abs(Math.floor(seed)) >>> 0;
-    return normalized;
-}
 
 // applies hard step function to each RGB channel (if n < step, return 0 else return 255)
 // Binary per-channel threshold (0-255 inputs/threshold) used by the "binary" reduction mode.
