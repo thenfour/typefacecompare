@@ -6,7 +6,10 @@ import { ColorInterpolationMode, convertHexToVector, interpolateGradientColor, r
 import { hexToRgb } from "../utils/color";
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 import type { PaletteSwatchDefinition } from "../types/paletteDefinition";
+import { PalettePresetButtons } from "../components/PalettePresetButtons";
 import "../styles/DitherGradient.css";
+import "../styles/PaletteDefinition.css";
+import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
 
 type DitherType = "none" | "bayer2" | "bayer4" | "bayer8";
 type ReductionMode = "binary" | "palette" | "none";
@@ -19,6 +22,29 @@ const DEFAULT_PALETTE = `#1B1F3B // midnight
 #0D1321 // deep navy
 #FF6978 // rose
 #00C49A // aqua`;
+
+const PALETTE_PRESETS = [
+    {
+        label: "Default",
+        value: DEFAULT_PALETTE,
+    },
+    {
+        label: "Pastel Stack",
+        value: `#F6BD60 // sherbet\n#F7EDE2 // linen\n#F5CAC3 // blush\n#84A59D // sage\n-----\n#F28482 // grapefruit\n#B8F2E6 // mint\n#CDB4DB // lavender`,
+    },
+    {
+        label: "Retro CRT",
+        value: `#0F0F0F\n#1EE814\n#30B7FF\n#F7F05B\n-----\n#FF7F11\n#FA1E44\n#C201E2`,
+    },
+    {
+        label: "B&W",
+        value: `#0\n#f`,
+    },
+    {
+        label: "Gray7",
+        value: `#050505\n#2B2B2B\n#555555\n#808080\n-----\n#AAAAAA\n#D5D5D5\n#F5F5F5`,
+    },
+] as const;
 
 const CORNER_LABELS = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"] as const;
 interface ReductionPaletteEntry {
@@ -71,17 +97,6 @@ export default function DitherGradientPage() {
     const parsedReductionPalette = useMemo(() => parsePaletteDefinition(reductionPaletteText), [reductionPaletteText]);
     const reductionSwatches = parsedReductionPalette.swatches;
     const hasReductionPalette = reductionSwatches.length > 0;
-
-    useEffect(() => {
-        if (gradientSwatches.length === 0) {
-            return;
-        }
-        // setCornerAssignments((prev) => {
-        //     const next = buildCornerIndices(swatches, prev);
-        //     const changed = next.some((value, index) => value !== prev[index]);
-        //     return changed ? next : prev;
-        // });
-    }, [gradientSwatches]);
 
     const derivedCorners = useMemo(() => deriveCornerHexes(gradientSwatches, cornerAssignments), [gradientSwatches, cornerAssignments]);
     const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
@@ -164,11 +179,15 @@ export default function DitherGradientPage() {
                             <strong>Palette Definition</strong>
                             <span>{gradientSwatches.length} swatch{gradientSwatches.length === 1 ? "" : "es"}</span>
                         </header>
-                        <textarea
-                            value={gradientPaletteText}
-                            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setGradientPaletteText(event.target.value)}
-                            spellCheck={false}
-                        />
+                        <PalettePresetButtons presets={PALETTE_PRESETS} onSelect={setGradientPaletteText} />
+                        <div style={{ display: "flex" }}>
+                            <textarea
+                                value={gradientPaletteText}
+                                onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setGradientPaletteText(event.target.value)}
+                                spellCheck={false}
+                            />
+                            <PaletteDefinitionViewer swatches={gradientSwatches} rows={parsedGradientPalette.rows} />
+                        </div>
                         {gradientSwatches.length === 0 && (
                             <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
                         )}
@@ -179,12 +198,16 @@ export default function DitherGradientPage() {
                             <strong>Reduction Palette</strong>
                             <span>{reductionSwatches.length} swatch{reductionSwatches.length === 1 ? "" : "es"}</span>
                         </header>
-                        <textarea
-                            value={reductionPaletteText}
-                            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setReductionPaletteText(event.target.value)}
-                            spellCheck={false}
-                            placeholder="Leave empty to disable palette reduction"
-                        />
+                        <PalettePresetButtons presets={PALETTE_PRESETS} onSelect={setReductionPaletteText} />
+                        <div style={{ display: "flex" }}>
+                            <textarea
+                                value={reductionPaletteText}
+                                onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setReductionPaletteText(event.target.value)}
+                                spellCheck={false}
+                                placeholder="Leave empty to disable palette reduction"
+                            />
+                            <PaletteDefinitionViewer swatches={reductionSwatches} rows={parsedReductionPalette.rows} />
+                        </div>
                         {reductionMode === "palette" && reductionSwatches.length === 0 && (
                             <p className="dither-gradient-warning">Provide at least one valid color before enabling palette reduction.</p>
                         )}
@@ -304,7 +327,9 @@ export default function DitherGradientPage() {
                             ))}
                         </div>
                     </section> */}
+                </div>
 
+                <div className="dither-gradient-layout">
                     <section className="dither-gradient-card preview">
                         <header>
                             <strong>Gradient Preview</strong>
@@ -334,6 +359,17 @@ export default function DitherGradientPage() {
                             ) : (
                                 <p className="dither-gradient-warning">Waiting for valid palette input…</p>
                             )}
+                        </div>
+                    </section>
+                </div>
+
+                <div className="dither-gradient-layout">
+                    <section className="dither-gradient-card preview">
+                        <header>
+                            <strong>Color matching preview</strong>
+                        </header>
+                        <div>
+                            TODO: for both palettes, and for each swatch (rows), show the top N closest matches in the other palette (columns) , with deltaE or distance metric visible. Tooltip to show more detail.
                         </div>
                     </section>
                 </div>

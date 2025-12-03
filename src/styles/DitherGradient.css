@@ -73,6 +73,69 @@
     padding: 8px;
 }
 
+.palette-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.palette-presets button {
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    background: #f3f3f3;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.palette-presets button:hover {
+    background: #ececec;
+}
+
+.palette-presets button:active {
+    background: #e2e2e2;
+}
+
+.palette-swatch-strip {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.palette-swatch-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 4px 8px;
+    background: #fafafa;
+}
+
+.palette-swatch-chip-color {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.palette-swatch-chip-meta {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.palette-swatch-chip-meta strong {
+    font-size: 12px;
+}
+
+.palette-swatch-chip-meta small {
+    font-size: 11px;
+    color: #666;
+}
+
 .control-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

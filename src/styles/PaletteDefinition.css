@@ -77,8 +77,9 @@
 .palette-definition-row+.palette-definition-row {}
 
 .palette-definition-swatch {
-    flex: 1;
-    min-height: 56px;
+    flex: none;
+    height: 50px;
+    width: 50px;
     cursor: pointer;
     transition: transform 80ms ease;
     display: flex;
@@ -91,10 +92,6 @@
     letter-spacing: 0.04em;
     padding: 4px;
     border: none;
-}
-
-.palette-definition-swatch:active {
-    transform: translateY(1px);
 }
 
 .palette-definition-empty-state {
