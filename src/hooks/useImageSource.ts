@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { drawImageWithScaleMode, type ImageScaleMode } from "@/utils/imageScaling";
-import { loadImageElementFromUrl } from "@/utils/imageSource";
+import type { ExampleImage } from "@/data/ditherSourceExamples";
+import { loadImageElementFromUrl, loadLocalImageElement } from "@/utils/imageSource";
 
-export type ImageSourceKind = "url" | "clipboard";
+export type ImageSourceKind = "url" | "clipboard" | "example";
 
 export interface ImageSourceState {
     element: HTMLImageElement;
@@ -96,6 +97,36 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
         }
     }, [activateImage, imageUrlInput, replaceImageSource]);
 
+    const importExampleImage = useCallback(
+        async (example: ExampleImage) => {
+            if (!example?.path) {
+                setImageImportError("Example image path missing");
+                return;
+            }
+            if (typeof window === "undefined") {
+                setImageImportError("Image import is only available in the browser");
+                return;
+            }
+            setIsImportingImage(true);
+            setImageImportError(null);
+            try {
+                const imageElement = await loadLocalImageElement(example.path);
+                activateImage({
+                    element: imageElement,
+                    label: example.label,
+                    kind: "example",
+                });
+                setImageUrlInput("");
+            } catch (error) {
+                replaceImageSource(null);
+                setImageImportError(error instanceof Error ? error.message : "Failed to import image");
+            } finally {
+                setIsImportingImage(false);
+            }
+        },
+        [activateImage, replaceImageSource]
+    );
+
     useEffect(() => {
         if (typeof window === "undefined") {
             return;
@@ -143,6 +174,7 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
         imageSource,
         sourceImageData,
         importImageFromUrl,
+        importExampleImage,
         isImportingImage,
         imageImportError,
     } as const;

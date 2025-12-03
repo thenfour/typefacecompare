@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
 import { ColorInterpolationMode, rgbUnitTo255 } from "../utils/colorSpaces";
 import { hexToRgb } from "../utils/color";
@@ -7,6 +7,7 @@ import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 import type { PaletteSwatchDefinition } from "../types/paletteDefinition";
 import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
+import { fetchDitherSourceExamples, type ExampleImage } from "@/data/ditherSourceExamples";
 import { useImageSource } from "@/hooks/useImageSource";
 import { useDitherRenderer } from "@/hooks/useDitherRenderer";
 import type { ReductionMode, SourceType } from "@/types/dither";
@@ -126,12 +127,54 @@ export default function DitherGradientPage() {
     const [width, setWidth] = useState(256);
     const [height, setHeight] = useState(256);
     const [previewScale, setPreviewScale] = useState(2);
+    const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
+    const [areExamplesLoading, setAreExamplesLoading] = useState(true);
+    const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
     const handleActivateImageSource = useCallback(() => setSourceType("image"), [setSourceType]);
-    const { imageUrlInput, setImageUrlInput, imageScaleMode, setImageScaleMode, imageSource, sourceImageData, importImageFromUrl, isImportingImage, imageImportError } = useImageSource({
+    const {
+        imageUrlInput,
+        setImageUrlInput,
+        imageScaleMode,
+        setImageScaleMode,
+        imageSource,
+        sourceImageData,
+        importImageFromUrl,
+        importExampleImage,
+        isImportingImage,
+        imageImportError,
+    } = useImageSource({
         width,
         height,
         onActivateImageSource: handleActivateImageSource,
     });
+    useEffect(() => {
+        let isMounted = true;
+        const loadExamples = async () => {
+            setAreExamplesLoading(true);
+            try {
+                const images = await fetchDitherSourceExamples();
+                if (!isMounted) {
+                    return;
+                }
+                setExampleImages(images);
+                setExampleImagesError(null);
+            } catch (error) {
+                if (!isMounted) {
+                    return;
+                }
+                setExampleImages([]);
+                setExampleImagesError(error instanceof Error ? error.message : "Unable to load example images");
+            } finally {
+                if (isMounted) {
+                    setAreExamplesLoading(false);
+                }
+            }
+        };
+        void loadExamples();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
     const [showSourcePreview, setShowSourcePreview] = useState(true);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
@@ -247,6 +290,10 @@ export default function DitherGradientPage() {
                             imageUrlInput,
                             onImageUrlChange: setImageUrlInput,
                             onImportImage: importImageFromUrl,
+                            exampleImages,
+                            exampleImagesLoading: areExamplesLoading,
+                            exampleImagesError,
+                            onImportExampleImage: importExampleImage,
                             isImportingImage,
                             imageScaleMode,
                             onImageScaleModeChange: setImageScaleMode,

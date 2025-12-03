@@ -1,4 +1,5 @@
 import type { ChangeEvent } from "react";
+import type { ExampleImage } from "@/data/ditherSourceExamples";
 import type { ImageSourceState } from "@/hooks/useImageSource";
 import { IMAGE_SCALE_MODE_LABELS, type ImageScaleMode } from "@/utils/imageScaling";
 
@@ -6,6 +7,10 @@ export interface ImageSourceControlsProps {
     imageUrlInput: string;
     onImageUrlChange: (value: string) => void;
     onImportImage: () => void;
+    exampleImages: ExampleImage[];
+    exampleImagesLoading: boolean;
+    exampleImagesError: string | null;
+    onImportExampleImage: (example: ExampleImage) => void;
     isImportingImage: boolean;
     imageScaleMode: ImageScaleMode;
     onImageScaleModeChange: (mode: ImageScaleMode) => void;
@@ -18,6 +23,10 @@ export function ImageSourceControls({
     imageUrlInput,
     onImageUrlChange,
     onImportImage,
+    exampleImages,
+    exampleImagesLoading,
+    exampleImagesError,
+    onImportExampleImage,
     isImportingImage,
     imageScaleMode,
     onImageScaleModeChange,
@@ -25,6 +34,8 @@ export function ImageSourceControls({
     imageImportError,
     imageSourceReady,
 }: ImageSourceControlsProps) {
+    const activeExampleLabel = imageSource?.kind === "example" ? imageSource.label : null;
+
     return (
         <div className="image-source-controls">
             <label>
@@ -41,6 +52,31 @@ export function ImageSourceControls({
                     </button>
                 </div>
             </label>
+            {exampleImagesLoading && <p className="dither-gradient-note">Loading example images…</p>}
+            {exampleImagesError && <p className="dither-gradient-warning">{exampleImagesError}</p>}
+            {exampleImages.length > 0 && !exampleImagesError && (
+                <label className="image-source-controls__examples">
+                    Example Images
+                    <div className="image-source-controls__example-buttons">
+                        {exampleImages.map((example) => {
+                            const isActive = activeExampleLabel === example.label;
+                            return (
+                                <button
+                                    key={example.path}
+                                    type="button"
+                                    className={`image-source-controls__example-button${isActive ? " is-active" : ""}`}
+                                    onClick={() => onImportExampleImage(example)}
+                                    disabled={isImportingImage}
+                                    aria-pressed={isActive}
+                                >
+                                    <span>{example.label}</span>
+                                    {isActive && <small>Active</small>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </label>
+            )}
             <label>
                 Image Scaling
                 <select value={imageScaleMode} onChange={(event) => onImageScaleModeChange(event.target.value as ImageScaleMode)}>
@@ -60,7 +96,7 @@ export function ImageSourceControls({
             {!imageSourceReady && !imageImportError && !imageSource && (
                 <p className="dither-gradient-warning">Import an image to enable the image source.</p>
             )}
-            <p className="dither-gradient-note">Tip: You can also paste an image directly (Ctrl/Cmd+V).</p>
+            <p className="dither-gradient-note">Tip: Try the example set, paste directly (Ctrl/Cmd+V), or import any image URL.</p>
         </div>
     );
 }
