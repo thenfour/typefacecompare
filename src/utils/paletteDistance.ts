@@ -41,6 +41,24 @@ export function quantizeToPalette(
     return { ...closest.rgb };
 }
 
+export function blendColorTowardPalette(
+    rgb: { r: number; g: number; b: number },
+    palette: ReductionPaletteEntry[],
+    distanceMode: ColorInterpolationMode,
+    strength: number
+) {
+    if (strength <= 0 || palette.length === 0) {
+        return rgb;
+    }
+    const target = quantizeToPalette(rgb, palette, distanceMode);
+    const clampedStrength = Math.max(0, Math.min(1, strength));
+    return {
+        r: rgb.r + (target.r - rgb.r) * clampedStrength,
+        g: rgb.g + (target.g - rgb.g) * clampedStrength,
+        b: rgb.b + (target.b - rgb.b) * clampedStrength,
+    };
+}
+
 export function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode) {
     const vector = rgb255ToVector(rgb, mode);
     return vectorToTuple(vector, mode);

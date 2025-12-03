@@ -13,7 +13,7 @@ import {
     type DitherType,
     type ErrorDiffusionKernelId,
 } from "@/utils/dithering";
-import { applyReduction, clampRgb255, quantizeToPalette, type ReductionPaletteEntry } from "@/utils/paletteDistance";
+import { applyReduction, blendColorTowardPalette, clampRgb255, type ReductionPaletteEntry } from "@/utils/paletteDistance";
 import type { ReductionMode, SourceType } from "@/types/dither";
 
 export type PreviewStageKey = "source" | "gamut" | "dither" | "reduced";
@@ -58,6 +58,7 @@ export interface UseDitherRendererOptions {
     };
     paletteNudgeStrength: number;
     gamutTransform: GamutTransform | null;
+    sourceAdjustmentsActive: boolean;
     showSourcePreview: boolean;
     showGamutPreview: boolean;
     showDitherPreview: boolean;
@@ -84,6 +85,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         ditherMask,
         paletteNudgeStrength,
         gamutTransform,
+        sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
         showDitherPreview,
@@ -94,7 +96,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
     useEffect(() => {
         const previewStages: PreviewStageConfig[] = [
             { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
-            { key: "gamut", enabled: showGamutPreview && Boolean(gamutTransform), ref: canvasRefs.gamut },
+            { key: "gamut", enabled: showGamutPreview && sourceAdjustmentsActive, ref: canvasRefs.gamut },
             { key: "dither", enabled: showDitherPreview, ref: canvasRefs.dither },
             { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
         ];
@@ -190,10 +192,15 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     : base;
                 const pipelineSourceBase = shouldApplyGamut ? gamutAdjustedColor : base;
                 const pipelineSource = shouldApplyPaletteNudge
-                    ? applyPaletteNudge(pipelineSourceBase, reductionPaletteEntries, distanceColorSpace, paletteNudgeStrength)
+                    ? blendColorTowardPalette(
+                        pipelineSourceBase,
+                        reductionPaletteEntries,
+                        distanceColorSpace,
+                        paletteNudgeStrength
+                    )
                     : pipelineSourceBase;
                 const sourceColor = clampRgb255(base);
-                const gamutPreviewColor = clampRgb255(gamutTransform ? gamutAdjustedColor : base);
+                const gamutPreviewColor = clampRgb255(sourceAdjustmentsActive ? pipelineSource : base);
                 const maskFactor = maskBuffer ? maskBuffer[pixelIndex] : 1;
                 const effectiveDitherStrength = ditherStrength * maskFactor;
                 let ditheredColor: { r: number; g: number; b: number };
@@ -260,6 +267,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         ditherMask?.blurRadius,
         ditherMask?.strength,
         paletteNudgeStrength,
+        sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
         showDitherPreview,
@@ -270,24 +278,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         canvasRefs.dither,
         canvasRefs.reduced,
     ]);
-}
-
-function applyPaletteNudge(
-    color: { r: number; g: number; b: number },
-    palette: ReductionPaletteEntry[],
-    distanceMode: ColorInterpolationMode,
-    strength: number
-) {
-    if (strength <= 0 || palette.length === 0) {
-        return color;
-    }
-    const target = quantizeToPalette(color, palette, distanceMode);
-    const clampedStrength = Math.max(0, Math.min(1, strength));
-    return {
-        r: color.r + (target.r - color.r) * clampedStrength,
-        g: color.g + (target.g - color.g) * clampedStrength,
-        b: color.b + (target.b - color.b) * clampedStrength,
-    };
 }
 
 function sampleSourceColor(

@@ -11,7 +11,7 @@ import { fetchDitherSourceExamples, type ExampleImage } from "@/data/ditherSourc
 import { useImageSource } from "@/hooks/useImageSource";
 import { useDitherRenderer } from "@/hooks/useDitherRenderer";
 import type { ReductionMode, SourceType } from "@/types/dither";
-import { rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
+import { blendColorTowardPalette, rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
 import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
@@ -227,6 +227,7 @@ export default function DitherGradientPage() {
     const parsedReductionPalette = useMemo(() => parsePaletteDefinition(reductionPaletteText), [reductionPaletteText]);
     const reductionSwatches = parsedReductionPalette.swatches;
     const hasReductionPalette = reductionSwatches.length > 0;
+    const paletteNudgeActive = paletteNudgeStrength > 0 && hasReductionPalette && reductionMode === "palette";
 
     const derivedCornerHexes = useMemo(() => deriveCornerHexes(gradientSwatches, cornerAssignments), [gradientSwatches, cornerAssignments]);
     const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
@@ -327,19 +328,31 @@ export default function DitherGradientPage() {
             return [] as ScatterPoint[];
         }
         return sourceScatterPoints.map((point) => {
-            const adjusted = applyGamutTransformToColor(
+            let adjusted = applyGamutTransformToColor(
                 { r: point.color[0] ?? 0, g: point.color[1] ?? 0, b: point.color[2] ?? 0 },
                 gamutTransform,
                 distanceColorSpace
             );
+            if (paletteNudgeActive) {
+                adjusted = blendColorTowardPalette(
+                    adjusted,
+                    reductionPaletteEntries,
+                    distanceColorSpace,
+                    paletteNudgeStrength
+                );
+            }
             return buildScatterPointFromRgb(adjusted, distanceColorSpace);
         });
     }, [
         sourceScatterPoints,
         gamutTransform,
         distanceColorSpace,
+        paletteNudgeActive,
+        paletteNudgeStrength,
+        reductionPaletteEntries,
     ]);
-    const gamutPreviewAvailable = Boolean(gamutTransform);
+    const sourceAdjustmentsActive = Boolean((gamutTransform && gamutTransform.isActive) || paletteNudgeActive);
+    const gamutPreviewAvailable = sourceAdjustmentsActive;
     const gamutControlsDisabled = !sourceAxisStats || !paletteAxisStats;
     const gamutSlidersDisabled = gamutControlsDisabled || !gamutFitEnabled;
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
@@ -431,10 +444,13 @@ export default function DitherGradientPage() {
         },
         paletteNudgeStrength,
         gamutTransform,
+        sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
         showDitherPreview,
         showReducedPreview,
+        gamutTransform,
+        sourceAdjustmentsActive,
         canvasRefs: {
             source: sourceCanvasRef,
             gamut: gamutCanvasRef,
