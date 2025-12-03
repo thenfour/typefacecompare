@@ -13,12 +13,9 @@ interface PreviewSectionProps {
     onToggleDitherPreview: (value: boolean) => void;
     showReducedPreview: boolean;
     onToggleReducedPreview: (value: boolean) => void;
-    showProjectedPreview: boolean;
-    onToggleProjectedPreview: (value: boolean) => void;
     sourceCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     ditherCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     reducedCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
-    projectedCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     width: number;
     height: number;
     previewScale: number;
@@ -27,7 +24,6 @@ interface PreviewSectionProps {
     sourceCanvasDescription: string;
     reductionMode: ReductionMode;
     reductionSwatchCount: number;
-    projectedPreviewDescription: string;
 }
 
 export function PreviewSection({
@@ -39,12 +35,9 @@ export function PreviewSection({
     onToggleDitherPreview,
     showReducedPreview,
     onToggleReducedPreview,
-    showProjectedPreview,
-    onToggleProjectedPreview,
     sourceCanvasRef,
     ditherCanvasRef,
     reducedCanvasRef,
-    projectedCanvasRef,
     width,
     height,
     previewScale,
@@ -53,7 +46,6 @@ export function PreviewSection({
     sourceCanvasDescription,
     reductionMode,
     reductionSwatchCount,
-    projectedPreviewDescription,
 }: PreviewSectionProps) {
     return (
         <section className="dither-gradient-card preview">
@@ -101,17 +93,6 @@ export function PreviewSection({
                         devicePixelRatio={devicePixelRatio}
                     />
                 )}
-                {showProjectedPreview && (
-                    <GradientPreviewCanvas
-                        ref={projectedCanvasRef}
-                        title="Distance Projection"
-                        description={projectedPreviewDescription}
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
             </div>
             <div className="preview-toggle-list">
                 <label>
@@ -122,9 +103,6 @@ export function PreviewSection({
                 </label>
                 <label>
                     <input type="checkbox" checked={showReducedPreview} onChange={(event) => onToggleReducedPreview(event.target.checked)} /> Palette Reduced
-                </label>
-                <label>
-                    <input type="checkbox" checked={showProjectedPreview} onChange={(event) => onToggleProjectedPreview(event.target.checked)} /> Distance Projection
                 </label>
             </div>
         </section>

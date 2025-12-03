@@ -1,6 +1,5 @@
 import type { ColorInterpolationMode } from "@/utils/colorSpaces";
-import type { DistanceFeature, ReductionMode } from "@/types/dither";
-import { DISTANCE_FEATURE_LABELS } from "@/utils/paletteDistance";
+import type { ReductionMode } from "@/types/dither";
 import { OptionButtonGroup } from "@/components/dither/OptionButtonGroup";
 
 interface ReductionControlsProps {
@@ -10,9 +9,6 @@ interface ReductionControlsProps {
     reductionSwatchCount: number;
     distanceColorSpace: ColorInterpolationMode;
     onDistanceColorSpaceChange: (mode: ColorInterpolationMode) => void;
-    distanceFeature: DistanceFeature;
-    onDistanceFeatureChange: (feature: DistanceFeature) => void;
-    supportedDistanceFeatures: DistanceFeature[];
 }
 
 export function ReductionControls({
@@ -22,9 +18,6 @@ export function ReductionControls({
     reductionSwatchCount,
     distanceColorSpace,
     onDistanceColorSpaceChange,
-    distanceFeature,
-    onDistanceFeatureChange,
-    supportedDistanceFeatures,
 }: ReductionControlsProps) {
     return (
         <>
@@ -64,18 +57,6 @@ export function ReductionControls({
                                 { value: "ycbcr", label: "YCbCr" },
                                 { value: "oklch", label: "OKLCH" },
                             ]}
-                        />
-                    </div>
-                    <div>
-                        <span style={{ fontSize: 12, color: "#555" }}>Distance Feature</span>
-                        <OptionButtonGroup
-                            value={distanceFeature}
-                            onChange={onDistanceFeatureChange}
-                            ariaLabel="Palette distance feature"
-                            options={supportedDistanceFeatures.map((feature) => ({
-                                value: feature,
-                                label: DISTANCE_FEATURE_LABELS[feature],
-                            }))}
                         />
                     </div>
                 </>

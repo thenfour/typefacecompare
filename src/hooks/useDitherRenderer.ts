@@ -12,22 +12,15 @@ import {
     type DitherType,
     type ErrorDiffusionKernelId,
 } from "@/utils/dithering";
-import {
-    applyReduction,
-    clampRgb255,
-    coordsToPreviewRgb,
-    rgbToCoords,
-    type ReductionPaletteEntry,
-} from "@/utils/paletteDistance";
-import type { DistanceFeature, ReductionMode, SourceType } from "@/types/dither";
+import { applyReduction, clampRgb255, type ReductionPaletteEntry } from "@/utils/paletteDistance";
+import type { ReductionMode, SourceType } from "@/types/dither";
 
-export type PreviewStageKey = "source" | "dither" | "reduced" | "projected";
+export type PreviewStageKey = "source" | "dither" | "reduced";
 
 export interface PreviewCanvasRefs {
     source: MutableRefObject<HTMLCanvasElement | null>;
     dither: MutableRefObject<HTMLCanvasElement | null>;
     reduced: MutableRefObject<HTMLCanvasElement | null>;
-    projected: MutableRefObject<HTMLCanvasElement | null>;
 }
 
 interface PreviewStageConfig {
@@ -56,12 +49,10 @@ export interface UseDitherRendererOptions {
     reductionMode: ReductionMode;
     reductionPaletteEntries: ReductionPaletteEntry[];
     distanceColorSpace: ColorInterpolationMode;
-    distanceFeature: DistanceFeature;
     errorDiffusionKernelId: ErrorDiffusionKernelId;
     showSourcePreview: boolean;
     showDitherPreview: boolean;
     showReducedPreview: boolean;
-    showProjectedPreview: boolean;
     canvasRefs: PreviewCanvasRefs;
 }
 
@@ -80,12 +71,10 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         reductionMode,
         reductionPaletteEntries,
         distanceColorSpace,
-        distanceFeature,
         errorDiffusionKernelId,
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
-        showProjectedPreview,
         canvasRefs,
     } = options;
 
@@ -94,7 +83,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
             { key: "dither", enabled: showDitherPreview, ref: canvasRefs.dither },
             { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
-            { key: "projected", enabled: showProjectedPreview, ref: canvasRefs.projected },
         ];
 
         const isErrorDiffusion = isErrorDiffusionDither(ditherType);
@@ -167,7 +155,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                         reductionMode,
                         reductionPaletteEntries,
                         distanceColorSpace,
-                        distanceFeature
                     );
                     ditheredColor = result.ditheredColor;
                     reducedColor = result.quantizedColor;
@@ -175,16 +162,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed, proceduralDitherTile);
                     ditheredColor = clampRgb255(jittered);
                     reducedColor = clampRgb255(
-                        applyReduction(jittered, reductionMode, reductionPaletteEntries, distanceColorSpace, distanceFeature)
+                        applyReduction(jittered, reductionMode, reductionPaletteEntries, distanceColorSpace)
                     );
-                }
-
-                let projectedColor: { r: number; g: number; b: number } | null = null;
-                if (stageMap.projected) {
-                    projectedColor =
-                        distanceFeature === "all"
-                            ? sourceColor
-                            : coordsToPreviewRgb(rgbToCoords(sourceColor, distanceColorSpace, distanceFeature));
                 }
 
                 const offset = (y * width + x) * 4;
@@ -196,9 +175,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 }
                 if (stageMap.reduced) {
                     writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
-                }
-                if (stageMap.projected && projectedColor) {
-                    writePixel(stageMap.projected.imageData.data, offset, projectedColor);
                 }
             }
             if (errorDiffusionContext) {
@@ -223,16 +199,13 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         reductionMode,
         reductionPaletteEntries,
         distanceColorSpace,
-        distanceFeature,
         errorDiffusionKernelId,
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
-        showProjectedPreview,
         canvasRefs.source,
         canvasRefs.dither,
         canvasRefs.reduced,
-        canvasRefs.projected,
     ]);
 }
 

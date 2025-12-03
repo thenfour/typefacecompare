@@ -1,5 +1,5 @@
 import type { ColorInterpolationMode } from "./colorSpaces";
-import type { DistanceFeature, ReductionMode } from "@/types/dither";
+import type { ReductionMode } from "@/types/dither";
 import { applyReduction, clampRgb255, type ReductionPaletteEntry } from "./paletteDistance";
 
 export type DitherType =
@@ -281,8 +281,7 @@ export function applyErrorDiffusionToPixel(
     strength: number,
     reductionMode: ReductionMode,
     palette: ReductionPaletteEntry[],
-    distanceMode: ColorInterpolationMode,
-    distanceFeature: DistanceFeature
+    distanceMode: ColorInterpolationMode
 ) {
     const currentRow = context.rowBuffers[0];
     const index = x * 3;
@@ -296,7 +295,7 @@ export function applyErrorDiffusionToPixel(
     currentRow[index + 2] = 0;
 
     const ditheredColor = clampRgb255(adjusted);
-    const quantizedColor = clampRgb255(applyReduction(ditheredColor, reductionMode, palette, distanceMode, distanceFeature));
+    const quantizedColor = clampRgb255(applyReduction(ditheredColor, reductionMode, palette, distanceMode));
     const error = {
         r: ditheredColor.r - quantizedColor.r,
         g: ditheredColor.g - quantizedColor.g,

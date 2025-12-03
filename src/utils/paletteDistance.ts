@@ -1,15 +1,5 @@
 import { ColorInterpolationMode, convertHexToVector, rgb255ToVector } from "./colorSpaces";
-import type { ReductionMode, DistanceFeature } from "@/types/dither";
-
-export const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
-    all: "All components",
-    luminance: "Luminance / Lightness",
-    "hsl-saturation": "HSL Saturation",
-    "hsl-lightness": "HSL Lightness",
-    "oklch-chroma": "OKLCH Chroma",
-};
-
-export const DISTANCE_FEATURE_ORDER: DistanceFeature[] = ["all", "luminance", "hsl-saturation", "hsl-lightness", "oklch-chroma"];
+import type { ReductionMode } from "@/types/dither";
 
 const OKLCH_CHROMA_NORMALIZER = 0.4;
 
@@ -18,46 +8,14 @@ export interface ReductionPaletteEntry {
     coords: number[];
 }
 
-export function isDistanceFeatureSupported(mode: ColorInterpolationMode, feature: DistanceFeature) {
-    switch (feature) {
-        case "all":
-            return true;
-        case "luminance":
-            return (
-                mode === "lab" ||
-                mode === "oklab" ||
-                mode === "oklch" ||
-                mode === "ycbcr" ||
-                mode === "hsl" ||
-                mode === "hsv" ||
-                mode === "ryb" ||
-                mode === "luma-rgb" ||
-                mode === "luma-lab" ||
-                mode === "luma-oklab"
-            );
-        case "hsl-saturation":
-        case "hsl-lightness":
-            return mode === "hsl";
-        case "oklch-chroma":
-            return mode === "oklch";
-        default:
-            return false;
-    }
-}
-
-export function getSupportedDistanceFeatures(mode: ColorInterpolationMode): DistanceFeature[] {
-    return DISTANCE_FEATURE_ORDER.filter((feature) => isDistanceFeatureSupported(mode, feature));
-}
-
 export function applyReduction(
     rgb: { r: number; g: number; b: number },
     mode: ReductionMode,
     palette: ReductionPaletteEntry[],
-    distanceMode: ColorInterpolationMode,
-    distanceFeature: DistanceFeature
+    distanceMode: ColorInterpolationMode
 ) {
     if (mode === "palette" && palette.length > 0) {
-        return quantizeToPalette(rgb, palette, distanceMode, distanceFeature);
+        return quantizeToPalette(rgb, palette, distanceMode);
     }
     return rgb;
 }
@@ -65,13 +23,12 @@ export function applyReduction(
 export function quantizeToPalette(
     rgb: { r: number; g: number; b: number },
     palette: ReductionPaletteEntry[],
-    distanceMode: ColorInterpolationMode,
-    distanceFeature: DistanceFeature
+    distanceMode: ColorInterpolationMode
 ) {
     if (palette.length === 0) {
         return rgb;
     }
-    const targetCoords = rgbToCoords(rgb, distanceMode, distanceFeature);
+    const targetCoords = rgbToCoords(rgb, distanceMode);
     let closest = palette[0];
     let minDistance = Infinity;
     for (const swatch of palette) {
@@ -84,74 +41,9 @@ export function quantizeToPalette(
     return { ...closest.rgb };
 }
 
-export function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode, feature: DistanceFeature) {
+export function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode) {
     const vector = rgb255ToVector(rgb, mode);
-    const coords = vectorToTuple(vector, mode);
-    return projectDistanceFeature(vector, coords, mode, feature);
-}
-
-function projectDistanceFeature(
-    vector: ReturnType<typeof convertHexToVector>,
-    coords: number[],
-    mode: ColorInterpolationMode,
-    feature: DistanceFeature
-): number[] {
-    if (!isDistanceFeatureSupported(mode, feature)) {
-        throw new Error(`Distance feature ${feature} is not supported in ${mode}`);
-    }
-    switch (feature) {
-        case "all":
-            return coords;
-        case "luminance":
-            if (mode === "lab") {
-                const labVector = vector as { l?: number };
-                return [Math.max(0, Math.min(1, (labVector.l ?? 0) / 100))];
-            }
-            if (mode === "oklab") {
-                const oklabVector = vector as { L?: number };
-                return [oklabVector.L ?? 0];
-            }
-            if (mode === "oklch") {
-                const oklchVector = vector as { L?: number };
-                return [oklchVector.L ?? 0];
-            }
-            if (mode === "ycbcr") {
-                const ycbcrVector = vector as { y?: number };
-                return [ycbcrVector.y ?? 0];
-            }
-            if (mode === "hsl") {
-                const hslVector = vector as { l?: number };
-                return [hslVector.l ?? 0];
-            }
-            if (mode === "hsv") {
-                const hsvVector = vector as { v?: number };
-                return [hsvVector.v ?? 0];
-            }
-            if (mode === "ryb") {
-                const rybVector = vector as { v?: number };
-                return [rybVector.v ?? 0];
-            }
-            if (mode === "luma-rgb" || mode === "luma-lab" || mode === "luma-oklab") {
-                const lumaVector = vector as { l?: number };
-                return [lumaVector.l ?? 0];
-            }
-            break;
-        case "hsl-saturation": {
-            const hslVector = vector as { s?: number };
-            return [hslVector.s ?? 0];
-        }
-        case "hsl-lightness": {
-            const hslVector = vector as { l?: number };
-            return [hslVector.l ?? 0];
-        }
-        case "oklch-chroma": {
-            const oklchVector = vector as { C?: number };
-            return [Math.max(0, (oklchVector.C ?? 0) / OKLCH_CHROMA_NORMALIZER)];
-        }
-        default:
-            break;
-    }
-    return coords;
+    return vectorToTuple(vector, mode);
 }
 
 function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: ColorInterpolationMode): number[] {
@@ -186,13 +78,13 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             const luma = vector as { l: number };
             return [luma.l];
         }
-        case "cmyk": {
-            const cmyk = vector as { c: number; m: number; y: number; k: number };
-            return [cmyk.c, cmyk.m, cmyk.y, cmyk.k];
-        }
         case "cmy": {
             const cmy = vector as { c: number; m: number; y: number };
             return [cmy.c, cmy.m, cmy.y];
+        }
+        case "cmyk": {
+            const cmyk = vector as { c: number; m: number; y: number; k: number };
+            return [cmyk.c, cmyk.m, cmyk.y, cmyk.k];
         }
         case "lab": {
             const lab = vector as { l: number; a: number; b: number };
@@ -229,27 +121,6 @@ export function distanceSq(a: number[], b: number[]) {
         total += delta * delta;
     }
     return total;
-}
-
-export function coordsToPreviewRgb(coords: number[]) {
-    const normalized = coords.map((value) => normalizeCoordComponent(value));
-    const sample = (channelIndex: number) => normalized[channelIndex % normalized.length];
-    return clampRgb255({
-        r: sample(0),
-        g: sample(1),
-        b: sample(2),
-    });
-}
-
-function normalizeCoordComponent(value: number) {
-    if (!Number.isFinite(value)) {
-        return 0;
-    }
-    if (value >= 0 && value <= 1) {
-        return Math.round(Math.min(1, Math.max(0, value)) * 255);
-    }
-    const shifted = (value + 1) / 2;
-    return Math.round(Math.min(1, Math.max(0, shifted)) * 255);
 }
 
 export function clampRgb255(rgb: { r: number; g: number; b: number }) {

@@ -9,8 +9,8 @@ import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { useImageSource } from "@/hooks/useImageSource";
 import { useDitherRenderer } from "@/hooks/useDitherRenderer";
-import type { DistanceFeature, ReductionMode, SourceType } from "@/types/dither";
-import { DISTANCE_FEATURE_LABELS, getSupportedDistanceFeatures, isDistanceFeatureSupported, rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
+import type { ReductionMode, SourceType } from "@/types/dither";
+import { rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
 import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
@@ -123,7 +123,6 @@ export default function DitherGradientPage() {
     const [errorDiffusionKernelId, setErrorDiffusionKernelId] = useState<ErrorDiffusionKernelId>(DEFAULT_ERROR_DIFFUSION_KERNEL);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
-    const [distanceFeature, setDistanceFeature] = useState<DistanceFeature>("all");
     const [width, setWidth] = useState(256);
     const [height, setHeight] = useState(256);
     const [previewScale, setPreviewScale] = useState(2);
@@ -136,13 +135,11 @@ export default function DitherGradientPage() {
     const [showSourcePreview, setShowSourcePreview] = useState(true);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
-    const [showProjectedPreview, setShowProjectedPreview] = useState(false);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const ditherCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const reducedCanvasRef = useRef<HTMLCanvasElement | null>(null);
-    const projectedCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
 
@@ -157,12 +154,11 @@ export default function DitherGradientPage() {
                 const rgb255 = rgbUnitTo255(hexToRgb(swatch.hex));
                 return {
                     rgb: rgb255,
-                    coords: rgbToCoords(rgb255, distanceColorSpace, distanceFeature),
+                    coords: rgbToCoords(rgb255, distanceColorSpace),
                 };
             }),
-        [reductionSwatches, distanceColorSpace, distanceFeature]
+        [reductionSwatches, distanceColorSpace]
     );
-    const supportedDistanceFeatures = useMemo(() => getSupportedDistanceFeatures(distanceColorSpace), [distanceColorSpace]);
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -176,13 +172,6 @@ export default function DitherGradientPage() {
 
     const handleDistanceColorSpaceChange = (nextMode: ColorInterpolationMode) => {
         setDistanceColorSpace(nextMode);
-        setDistanceFeature((previous: DistanceFeature) => {
-            if (isDistanceFeatureSupported(nextMode, previous)) {
-                return previous;
-            }
-            const nextFeatures = getSupportedDistanceFeatures(nextMode);
-            return nextFeatures[0] ?? "all";
-        });
     };
 
     useDitherRenderer({
@@ -199,22 +188,16 @@ export default function DitherGradientPage() {
         reductionMode,
         reductionPaletteEntries,
         distanceColorSpace,
-        distanceFeature,
         errorDiffusionKernelId,
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
-        showProjectedPreview,
         canvasRefs: {
             source: sourceCanvasRef,
             dither: ditherCanvasRef,
             reduced: reducedCanvasRef,
-            projected: projectedCanvasRef,
         },
     });
-
-
-    const projectedPreviewDescription = distanceFeature === "all" ? "Same as source" : `${DISTANCE_FEATURE_LABELS[distanceFeature]} projection`;
     const seedEnabled = usesSeededDither(ditherType);
     const isVoronoiDither = ditherType === "voronoi-cluster";
     const isErrorDiffusion = isErrorDiffusionDither(ditherType);
@@ -336,9 +319,6 @@ export default function DitherGradientPage() {
                                         reductionSwatchCount={reductionSwatches.length}
                                         distanceColorSpace={distanceColorSpace}
                                         onDistanceColorSpaceChange={handleDistanceColorSpaceChange}
-                                        distanceFeature={distanceFeature}
-                                        onDistanceFeatureChange={setDistanceFeature}
-                                        supportedDistanceFeatures={supportedDistanceFeatures}
                                     />
                                 </div>
                             </div>
@@ -376,12 +356,9 @@ export default function DitherGradientPage() {
                         onToggleDitherPreview={setShowDitherPreview}
                         showReducedPreview={showReducedPreview}
                         onToggleReducedPreview={setShowReducedPreview}
-                        showProjectedPreview={showProjectedPreview}
-                        onToggleProjectedPreview={setShowProjectedPreview}
                         sourceCanvasRef={sourceCanvasRef}
                         ditherCanvasRef={ditherCanvasRef}
                         reducedCanvasRef={reducedCanvasRef}
-                        projectedCanvasRef={projectedCanvasRef}
                         width={width}
                         height={height}
                         previewScale={previewScale}
@@ -390,7 +367,6 @@ export default function DitherGradientPage() {
                         sourceCanvasDescription={sourceCanvasDescription}
                         reductionMode={reductionMode}
                         reductionSwatchCount={reductionSwatches.length}
-                        projectedPreviewDescription={projectedPreviewDescription}
                     />
                 </div>
 
