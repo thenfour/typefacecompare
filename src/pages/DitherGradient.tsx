@@ -95,7 +95,7 @@ const PALETTE_PRESETS = [
     },
 ] as const;
 
-const CORNER_LABELS = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"] as const;
+//const CORNER_LABELS = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"] as const;
 interface ReductionPaletteEntry {
     rgb: { r: number; g: number; b: number };
     coords: number[];
@@ -589,21 +589,6 @@ export default function DitherGradientPage() {
                                 />
                             )}
                         </div>
-                        <div className="corner-summary">
-                            {derivedCorners.hexes.length === 4 ? (
-                                derivedCorners.hexes.map((hex, index) => (
-                                    <div key={index} className="corner-summary-item">
-                                        <div className="color-chip" style={{ backgroundColor: hex }} />
-                                        <div>
-                                            <span>{CORNER_LABELS[index]}</span>
-                                            <strong>{hex}</strong>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="dither-gradient-warning">Waiting for valid palette input…</p>
-                            )}
-                        </div>
                     </section>
                 </div>
 
@@ -773,7 +758,6 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             return [rgb.r, rgb.g, rgb.b];
         }
         case "hsl": {
-            //console.log(vector);
             const hsl = vector as { h: number; s: number; l: number };
             const [hx, hy] = hueToCartesian(hsl.h);
             return [hx, hy, hsl.s, hsl.l];
@@ -818,9 +802,9 @@ function distanceSq(a: number[], b: number[]) {
 
 // Converts projected coordinate tuples into RGB for visualization. Components cycle over R/G/B as needed.
 function coordsToPreviewRgb(coords: number[]) {
-    if (coords.length === 0) {
-        return { r: 0, g: 0, b: 0 };
-    }
+    // if (coords.length === 0) {
+    //     return { r: 0, g: 0, b: 0 };
+    // }
     const normalized = coords.map((value) => normalizeCoordComponent(value));
     const sample = (channelIndex: number) => normalized[channelIndex % normalized.length];
     return clampRgb255({
