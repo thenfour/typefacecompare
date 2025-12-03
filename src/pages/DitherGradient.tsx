@@ -1,5 +1,4 @@
 import Head from "next/head";
-import Link from "next/link";
 import { ChangeEvent, useCallback, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
 import { ColorInterpolationMode, rgbUnitTo255 } from "../utils/colorSpaces";
@@ -240,7 +239,6 @@ export default function DitherGradientPage() {
             </Head>
             <main className="dither-gradient-page">
                 <div className="dither-gradient-header">
-                    <Link href="/">&#8592; TypefaceComparisonTool</Link>
                     <h1>Bilinear Dither Gradient Lab</h1>
                 </div>
 

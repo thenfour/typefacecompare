@@ -1,5 +1,4 @@
 import Head from "next/head";
-import Link from "next/link";
 import { ChangeEvent, useMemo, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
 import { PaletteDefinitionViewer } from "../components/PaletteDefinitionViewer";
@@ -25,7 +24,6 @@ export default function PaletteDefinitionPage() {
             </Head>
             <main className="palette-definition-page">
                 <div className="palette-definition-header">
-                    <Link href="/">&#8592; TypefaceComparisonTool</Link>
                     <h1>Palette Definition Workspace</h1>
                     <p style={{ maxWidth: 720, color: "#4a4a4a" }}>
                         Each non-empty line on the left defines a color. Supported tokens: #0, 0, #000, 000, 000000, #000000.

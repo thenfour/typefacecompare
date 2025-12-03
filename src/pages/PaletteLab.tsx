@@ -17,7 +17,6 @@ import {
     orderPaletteMinContrast,
     wcagContrast
 } from "../utils/color";
-import Link from "next/link";
 
 // --- UI -----------------------------------------------------------------------
 
@@ -164,7 +163,6 @@ function PaletteLab() {
             seed,
             enableVariations,
             numVariations,
-            variations
         };
         navigator.clipboard?.writeText(JSON.stringify(config, null, 2));
     }
@@ -232,7 +230,6 @@ function PaletteLab() {
 
     return (
         <div className="palette-lab-container">
-            <Link href="/">&#8592; TypefaceComparisonTool</Link>
             <h1 className="palette-lab-title">PaletteLab — OKLCH generator</h1>
             <p className="palette-lab-muted palette-lab-small">Evenly-spaced hues with matched luminance, gamut-aware, and guaranteed contrast against a label color. Each color is shown with its closest match to help identify similar colors at a glance. Great for band handles, meters, and UI accents.</p>
 
