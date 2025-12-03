@@ -280,7 +280,6 @@ export function applyErrorDiffusionToPixel(
     context: ErrorDiffusionContext,
     strength: number,
     reductionMode: ReductionMode,
-    binaryThreshold: number,
     palette: ReductionPaletteEntry[],
     distanceMode: ColorInterpolationMode,
     distanceFeature: DistanceFeature
@@ -297,9 +296,7 @@ export function applyErrorDiffusionToPixel(
     currentRow[index + 2] = 0;
 
     const ditheredColor = clampRgb255(adjusted);
-    const quantizedColor = clampRgb255(
-        applyReduction(ditheredColor, reductionMode, binaryThreshold, palette, distanceMode, distanceFeature)
-    );
+    const quantizedColor = clampRgb255(applyReduction(ditheredColor, reductionMode, palette, distanceMode, distanceFeature));
     const error = {
         r: ditheredColor.r - quantizedColor.r,
         g: ditheredColor.g - quantizedColor.g,

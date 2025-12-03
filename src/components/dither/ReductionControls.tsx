@@ -8,8 +8,6 @@ interface ReductionControlsProps {
     onReductionModeChange: (mode: ReductionMode) => void;
     hasReductionPalette: boolean;
     reductionSwatchCount: number;
-    binaryThreshold: number;
-    onBinaryThresholdChange: (value: number) => void;
     distanceColorSpace: ColorInterpolationMode;
     onDistanceColorSpaceChange: (mode: ColorInterpolationMode) => void;
     distanceFeature: DistanceFeature;
@@ -22,8 +20,6 @@ export function ReductionControls({
     onReductionModeChange,
     hasReductionPalette,
     reductionSwatchCount,
-    binaryThreshold,
-    onBinaryThresholdChange,
     distanceColorSpace,
     onDistanceColorSpaceChange,
     distanceFeature,
@@ -40,24 +36,10 @@ export function ReductionControls({
                     ariaLabel="Palette reduction mode"
                     options={[
                         { value: "none", label: "Disabled" },
-                        { value: "binary", label: "Binary" },
                         { value: "palette", label: `Palette (${reductionSwatchCount})`, disabled: !hasReductionPalette },
                     ]}
                 />
             </div>
-            {reductionMode === "binary" && (
-                <label>
-                    Binary Threshold ({binaryThreshold})
-                    <input
-                        type="range"
-                        min={16}
-                        max={240}
-                        step={1}
-                        value={binaryThreshold}
-                        onChange={(event) => onBinaryThresholdChange(event.target.valueAsNumber)}
-                    />
-                </label>
-            )}
             {reductionMode === "palette" && (
                 <>
                     <div>

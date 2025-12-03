@@ -105,11 +105,9 @@ export function PreviewSection({
                         ref={reducedCanvasRef}
                         title="Palette Reduced"
                         description={
-                            reductionMode === "none"
-                                ? "Disabled"
-                                : reductionMode === "binary"
-                                    ? "Binary channels"
-                                    : `Palette (${reductionSwatchCount})`
+                            reductionMode === "palette"
+                                ? `Palette (${reductionSwatchCount})`
+                                : "Disabled"
                         }
                         width={width}
                         height={height}

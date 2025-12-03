@@ -41,14 +41,10 @@ export function getSupportedDistanceFeatures(mode: ColorInterpolationMode): Dist
 export function applyReduction(
     rgb: { r: number; g: number; b: number },
     mode: ReductionMode,
-    binaryThreshold: number,
     palette: ReductionPaletteEntry[],
     distanceMode: ColorInterpolationMode,
     distanceFeature: DistanceFeature
 ) {
-    if (mode === "binary") {
-        return stepRgb(rgb, binaryThreshold);
-    }
     if (mode === "palette" && palette.length > 0) {
         return quantizeToPalette(rgb, palette, distanceMode, distanceFeature);
     }
@@ -198,14 +194,6 @@ function normalizeCoordComponent(value: number) {
     }
     const shifted = (value + 1) / 2;
     return Math.round(Math.min(1, Math.max(0, shifted)) * 255);
-}
-
-function stepRgb(rgb: { r: number; g: number; b: number }, step: number) {
-    return {
-        r: rgb.r < step ? 0 : 255,
-        g: rgb.g < step ? 0 : 255,
-        b: rgb.b < step ? 0 : 255,
-    };
 }
 
 export function clampRgb255(rgb: { r: number; g: number; b: number }) {

@@ -54,7 +54,6 @@ export interface UseDitherRendererOptions {
     ditherSeed: number;
     proceduralDitherTile: DitherThresholdTile | null;
     reductionMode: ReductionMode;
-    binaryThreshold: number;
     reductionPaletteEntries: ReductionPaletteEntry[];
     distanceColorSpace: ColorInterpolationMode;
     distanceFeature: DistanceFeature;
@@ -79,7 +78,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         ditherSeed,
         proceduralDitherTile,
         reductionMode,
-        binaryThreshold,
         reductionPaletteEntries,
         distanceColorSpace,
         distanceFeature,
@@ -167,7 +165,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                         errorDiffusionContext,
                         ditherStrength,
                         reductionMode,
-                        binaryThreshold,
                         reductionPaletteEntries,
                         distanceColorSpace,
                         distanceFeature
@@ -178,7 +175,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed, proceduralDitherTile);
                     ditheredColor = clampRgb255(jittered);
                     reducedColor = clampRgb255(
-                        applyReduction(jittered, reductionMode, binaryThreshold, reductionPaletteEntries, distanceColorSpace, distanceFeature)
+                        applyReduction(jittered, reductionMode, reductionPaletteEntries, distanceColorSpace, distanceFeature)
                     );
                 }
 
@@ -224,7 +221,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         ditherSeed,
         proceduralDitherTile,
         reductionMode,
-        binaryThreshold,
         reductionPaletteEntries,
         distanceColorSpace,
         distanceFeature,

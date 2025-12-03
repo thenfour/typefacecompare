@@ -122,7 +122,6 @@ export default function DitherGradientPage() {
     const [voronoiJitter, setVoronoiJitter] = useState<number>(DEFAULT_VORONOI_JITTER);
     const [errorDiffusionKernelId, setErrorDiffusionKernelId] = useState<ErrorDiffusionKernelId>(DEFAULT_ERROR_DIFFUSION_KERNEL);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
-    const [binaryThreshold, setBinaryThreshold] = useState(127);
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
     const [distanceFeature, setDistanceFeature] = useState<DistanceFeature>("all");
     const [width, setWidth] = useState(256);
@@ -198,7 +197,6 @@ export default function DitherGradientPage() {
         ditherSeed,
         proceduralDitherTile,
         reductionMode,
-        binaryThreshold,
         reductionPaletteEntries,
         distanceColorSpace,
         distanceFeature,
@@ -336,8 +334,6 @@ export default function DitherGradientPage() {
                                         onReductionModeChange={setReductionMode}
                                         hasReductionPalette={hasReductionPalette}
                                         reductionSwatchCount={reductionSwatches.length}
-                                        binaryThreshold={binaryThreshold}
-                                        onBinaryThresholdChange={setBinaryThreshold}
                                         distanceColorSpace={distanceColorSpace}
                                         onDistanceColorSpaceChange={handleDistanceColorSpaceChange}
                                         distanceFeature={distanceFeature}
