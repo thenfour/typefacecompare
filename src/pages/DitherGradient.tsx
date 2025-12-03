@@ -60,7 +60,7 @@ interface ReductionPaletteEntry {
     coords: number[];
 }
 
-type PreviewStageKey = "source" | "dither" | "reduced";
+type PreviewStageKey = "source" | "dither" | "reduced" | "projected";
 
 interface PreviewStageConfig {
     key: PreviewStageKey;
@@ -139,11 +139,13 @@ export default function DitherGradientPage() {
     const [showSourcePreview, setShowSourcePreview] = useState(true);
     const [showDitherPreview, setShowDitherPreview] = useState(true);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
+    const [showProjectedPreview, setShowProjectedPreview] = useState(false);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const ditherCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const reducedCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const projectedCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
 
@@ -181,6 +183,7 @@ export default function DitherGradientPage() {
             { key: "source", enabled: showSourcePreview, ref: sourceCanvasRef },
             { key: "dither", enabled: showDitherPreview, ref: ditherCanvasRef },
             { key: "reduced", enabled: showReducedPreview, ref: reducedCanvasRef },
+            { key: "projected", enabled: showProjectedPreview, ref: projectedCanvasRef },
         ];
 
         if (derivedCorners.hexes.length < 4) {
@@ -237,6 +240,13 @@ export default function DitherGradientPage() {
                         distanceFeature
                     )
                 );
+                let projectedColor: { r: number; g: number; b: number } | null = null;
+                if (stageMap.projected) {
+                    projectedColor =
+                        distanceFeature === "all"
+                            ? sourceColor
+                            : coordsToPreviewRgb(rgbToCoords(sourceColor, distanceColorSpace, distanceFeature));
+                }
 
                 const offset = (y * width + x) * 4;
                 if (stageMap.source) {
@@ -247,6 +257,9 @@ export default function DitherGradientPage() {
                 }
                 if (stageMap.reduced) {
                     writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
+                }
+                if (stageMap.projected && projectedColor) {
+                    writePixel(stageMap.projected.imageData.data, offset, projectedColor);
                 }
             }
         }
@@ -268,6 +281,7 @@ export default function DitherGradientPage() {
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
+        showProjectedPreview,
         distanceFeature,
     ]);
 
@@ -278,6 +292,8 @@ export default function DitherGradientPage() {
     //         return next;
     //     });
     // };
+
+    const projectedPreviewDescription = distanceFeature === "all" ? "Same as source" : `${DISTANCE_FEATURE_LABELS[distanceFeature]} projection`;
 
     return (
         <>
@@ -485,6 +501,9 @@ export default function DitherGradientPage() {
                             <label>
                                 <input type="checkbox" checked={showReducedPreview} onChange={(event) => setShowReducedPreview(event.target.checked)} /> Palette Reduced
                             </label>
+                            <label>
+                                <input type="checkbox" checked={showProjectedPreview} onChange={(event) => setShowProjectedPreview(event.target.checked)} /> Distance Projection
+                            </label>
                         </div>
                         <div className="preview-canvas-grid">
                             {showSourcePreview && (
@@ -514,6 +533,17 @@ export default function DitherGradientPage() {
                                     ref={reducedCanvasRef}
                                     title="Palette Reduced"
                                     description={reductionMode === "none" ? "Disabled" : reductionMode === "binary" ? "Binary channels" : `Palette (${reductionSwatches.length})`}
+                                    width={width}
+                                    height={height}
+                                    previewScale={previewScale}
+                                    devicePixelRatio={devicePixelRatio}
+                                />
+                            )}
+                            {showProjectedPreview && (
+                                <GradientPreviewCanvas
+                                    ref={projectedCanvasRef}
+                                    title="Distance Projection"
+                                    description={projectedPreviewDescription}
                                     width={width}
                                     height={height}
                                     previewScale={previewScale}
@@ -748,6 +778,31 @@ function distanceSq(a: number[], b: number[]) {
         total += delta * delta;
     }
     return total;
+}
+
+// Converts projected coordinate tuples into RGB for visualization. Components cycle over R/G/B as needed.
+function coordsToPreviewRgb(coords: number[]) {
+    if (coords.length === 0) {
+        return { r: 0, g: 0, b: 0 };
+    }
+    const normalized = coords.map((value) => normalizeCoordComponent(value));
+    const sample = (channelIndex: number) => normalized[channelIndex % normalized.length];
+    return clampRgb255({
+        r: sample(0),
+        g: sample(1),
+        b: sample(2),
+    });
+}
+
+function normalizeCoordComponent(value: number) {
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+    if (value >= 0 && value <= 1) {
+        return Math.round(Math.min(1, Math.max(0, value)) * 255);
+    }
+    const shifted = (value + 1) / 2; // approximate -1..1 range to 0..1
+    return Math.round(Math.min(1, Math.max(0, shifted)) * 255);
 }
 
 // Writes a single pixel into an ImageData buffer using 0-255 channel ranges.
