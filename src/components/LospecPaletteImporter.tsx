@@ -79,7 +79,7 @@ export function LospecPaletteImporter({ targetLabel, onApplyPalette, className }
     return (
         <div className={`lospec-import-block${className ? ` ${className}` : ""}`}>
             <label>
-                Import from Lospec
+                <a href="https://lospec.com/palette-list" target="_blank" rel="noopener noreferrer">Import from Lospec</a>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                     <input
                         type="text"

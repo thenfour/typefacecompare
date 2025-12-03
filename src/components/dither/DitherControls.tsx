@@ -1,0 +1,122 @@
+import type { DitherType, ErrorDiffusionKernelId } from "@/utils/dithering";
+import { DITHER_LABELS, DITHER_TYPE_ORDER, ERROR_DIFFUSION_KERNELS } from "@/utils/dithering";
+
+interface DitherControlsProps {
+    ditherType: DitherType;
+    onDitherTypeChange: (type: DitherType) => void;
+    ditherStrength: number;
+    onDitherStrengthChange: (value: number) => void;
+    ditherSeed: number;
+    onDitherSeedChange: (value: number) => void;
+    seedEnabled: boolean;
+    isErrorDiffusion: boolean;
+    errorDiffusionKernelId: ErrorDiffusionKernelId;
+    onErrorDiffusionKernelChange: (id: ErrorDiffusionKernelId) => void;
+    isVoronoiDither: boolean;
+    voronoiCellsPerAxis: number;
+    onVoronoiCellsChange: (value: number) => void;
+    voronoiCellOptions: number[];
+    voronoiJitter: number;
+    onVoronoiJitterChange: (value: number) => void;
+}
+
+export function DitherControls({
+    ditherType,
+    onDitherTypeChange,
+    ditherStrength,
+    onDitherStrengthChange,
+    ditherSeed,
+    onDitherSeedChange,
+    seedEnabled,
+    isErrorDiffusion,
+    errorDiffusionKernelId,
+    onErrorDiffusionKernelChange,
+    isVoronoiDither,
+    voronoiCellsPerAxis,
+    onVoronoiCellsChange,
+    voronoiCellOptions,
+    voronoiJitter,
+    onVoronoiJitterChange,
+}: DitherControlsProps) {
+    return (
+        <>
+            <label>
+                Dither Pattern
+                <select value={ditherType} onChange={(event) => onDitherTypeChange(event.target.value as DitherType)}>
+                    {DITHER_TYPE_ORDER.map((type) => (
+                        <option value={type} key={type}>
+                            {DITHER_LABELS[type]}
+                        </option>
+                    ))}
+                </select>
+            </label>
+            <label>
+                Dither Strength ({ditherStrength.toFixed(2)})
+                <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={ditherStrength}
+                    onChange={(event) => onDitherStrengthChange(event.target.valueAsNumber)}
+                    disabled={ditherType === "none"}
+                />
+            </label>
+            <label>
+                Pattern Seed {seedEnabled ? "" : "(not used)"}
+                <input
+                    type="number"
+                    min={0}
+                    max={99999999}
+                    step={1}
+                    value={ditherSeed}
+                    onChange={(event) => {
+                        const next = event.target.valueAsNumber;
+                        onDitherSeedChange(Number.isFinite(next) ? next : 0);
+                    }}
+                    disabled={!seedEnabled}
+                />
+            </label>
+            {isErrorDiffusion && (
+                <label>
+                    Error Diffusion Kernel
+                    <select
+                        value={errorDiffusionKernelId}
+                        onChange={(event) => onErrorDiffusionKernelChange(event.target.value as ErrorDiffusionKernelId)}
+                    >
+                        {ERROR_DIFFUSION_KERNELS.map((kernel) => (
+                            <option value={kernel.id} key={kernel.id}>
+                                {kernel.label}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            )}
+            {isVoronoiDither && (
+                <>
+                    <label>
+                        Voronoi Cells per Axis
+                        <select value={voronoiCellsPerAxis} onChange={(event) => onVoronoiCellsChange(Number(event.target.value))}>
+                            {voronoiCellOptions.map((option) => (
+                                <option value={option} key={option}>
+                                    {option}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label>
+                        Voronoi Jitter ({voronoiJitter.toFixed(2)})
+                        <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={voronoiJitter}
+                            onChange={(event) => onVoronoiJitterChange(Number(event.target.value))}
+                        />
+                    </label>
+                </>
+            )}
+        </>
+    );
+}
