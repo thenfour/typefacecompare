@@ -63,20 +63,6 @@ export function PreviewSection({
                     {sourceSummaryLabel} • {ditherType === "none" ? "No dithering" : DITHER_LABELS[ditherType]}
                 </span>
             </header>
-            <div className="preview-toggle-list">
-                <label>
-                    <input type="checkbox" checked={showSourcePreview} onChange={(event) => onToggleSourcePreview(event.target.checked)} /> Source
-                </label>
-                <label>
-                    <input type="checkbox" checked={showDitherPreview} onChange={(event) => onToggleDitherPreview(event.target.checked)} /> Dithered
-                </label>
-                <label>
-                    <input type="checkbox" checked={showReducedPreview} onChange={(event) => onToggleReducedPreview(event.target.checked)} /> Palette Reduced
-                </label>
-                <label>
-                    <input type="checkbox" checked={showProjectedPreview} onChange={(event) => onToggleProjectedPreview(event.target.checked)} /> Distance Projection
-                </label>
-            </div>
             <div className="preview-canvas-grid">
                 {showSourcePreview && (
                     <GradientPreviewCanvas
@@ -126,6 +112,20 @@ export function PreviewSection({
                         devicePixelRatio={devicePixelRatio}
                     />
                 )}
+            </div>
+            <div className="preview-toggle-list">
+                <label>
+                    <input type="checkbox" checked={showSourcePreview} onChange={(event) => onToggleSourcePreview(event.target.checked)} /> Source
+                </label>
+                <label>
+                    <input type="checkbox" checked={showDitherPreview} onChange={(event) => onToggleDitherPreview(event.target.checked)} /> Dithered
+                </label>
+                <label>
+                    <input type="checkbox" checked={showReducedPreview} onChange={(event) => onToggleReducedPreview(event.target.checked)} /> Palette Reduced
+                </label>
+                <label>
+                    <input type="checkbox" checked={showProjectedPreview} onChange={(event) => onToggleProjectedPreview(event.target.checked)} /> Distance Projection
+                </label>
             </div>
         </section>
     );
