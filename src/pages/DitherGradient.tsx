@@ -12,7 +12,17 @@ import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
 
-type DitherType = "none" | "bayer2" | "bayer4" | "bayer8";
+type DitherType =
+    | "none"
+    | "bayer2"
+    | "bayer4"
+    | "bayer8"
+    | "bw-noise"
+    | "grayscale-noise"
+    | "rgb-noise"
+    | "color-noise";
+type BayerDitherType = "bayer2" | "bayer4" | "bayer8";
+type RandomNoiseDitherType = "bw-noise" | "grayscale-noise" | "rgb-noise" | "color-noise";
 type ReductionMode = "binary" | "palette" | "none";
 type DistanceFeature = "all" | "luminance" | "hsl-saturation" | "hsl-lightness" | "oklch-chroma";
 const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
@@ -24,6 +34,45 @@ const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
 };
 const DISTANCE_FEATURE_ORDER: DistanceFeature[] = ["all", "luminance", "hsl-saturation", "hsl-lightness", "oklch-chroma"];
 const LUMINANCE_SUPPORTED_SPACES: ColorInterpolationMode[] = ["lab", "oklch", "ycbcr", "hsl"];
+
+const DITHER_LABELS: Record<DitherType, string> = {
+    none: "None",
+    bayer2: "2×2 Bayer",
+    bayer4: "4×4 Bayer",
+    bayer8: "8×8 Bayer",
+    "bw-noise": "Random B/W noise",
+    "grayscale-noise": "Random grayscale noise",
+    "rgb-noise": "Random RGB primary noise",
+    "color-noise": "Random color noise",
+};
+const DITHER_TYPE_ORDER: DitherType[] = [
+    "none",
+    "bayer2",
+    "bayer4",
+    "bayer8",
+    "bw-noise",
+    "grayscale-noise",
+    "rgb-noise",
+    "color-noise",
+];
+const BAYER_DITHER_TYPES: BayerDitherType[] = ["bayer2", "bayer4", "bayer8"];
+const RANDOM_NOISE_TYPES: RandomNoiseDitherType[] = ["bw-noise", "grayscale-noise", "rgb-noise", "color-noise"];
+const RANDOM_VARIANT_OFFSETS: Record<RandomNoiseDitherType, number> = {
+    "bw-noise": 101,
+    "grayscale-noise": 211,
+    "rgb-noise": 307,
+    "color-noise": 401,
+};
+const DITHER_DESCRIPTIONS: Record<DitherType, string> = {
+    none: "No jitter",
+    bayer2: "2×2 ordered thresholds",
+    bayer4: "4×4 ordered thresholds",
+    bayer8: "8×8 ordered thresholds",
+    "bw-noise": "Binary noise per pixel",
+    "grayscale-noise": "Monochrome random jitter",
+    "rgb-noise": "Channel-wise binary noise",
+    "color-noise": "Channel-wise random jitter",
+};
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
 const RGB_FOUR_LEVELS = [0, 85, 170, 255] as const;
@@ -136,7 +185,7 @@ function getSupportedDistanceFeatures(mode: ColorInterpolationMode): DistanceFea
     return DISTANCE_FEATURE_ORDER.filter((feature) => isDistanceFeatureSupported(mode, feature));
 }
 
-const BAYER_MATRICES: Record<Exclude<DitherType, "none">, number[][]> = {
+const BAYER_MATRICES: Record<BayerDitherType, number[][]> = {
     bayer2: [
         [0, 2],
         [3, 1],
@@ -166,6 +215,7 @@ export default function DitherGradientPage() {
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.333);
+    const [ditherSeed, setDitherSeed] = useState<number>(1);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [binaryThreshold, setBinaryThreshold] = useState(127);
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
@@ -217,12 +267,6 @@ export default function DitherGradientPage() {
     };
 
     useEffect(() => {
-        if (!hasReductionPalette && reductionMode === "palette") {
-            setReductionMode("none");
-        }
-    }, [hasReductionPalette, reductionMode]);
-
-    useEffect(() => {
         const previewStages: PreviewStageConfig[] = [
             { key: "source", enabled: showSourcePreview, ref: sourceCanvasRef },
             { key: "dither", enabled: showDitherPreview, ref: ditherCanvasRef },
@@ -272,7 +316,7 @@ export default function DitherGradientPage() {
                 const u = width === 1 ? 0 : x / (width - 1);
                 const base = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
                 const sourceColor = clampRgb255(base);
-                const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength);
+                const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed);
                 const ditheredColor = clampRgb255(jittered);
                 const reducedColor = clampRgb255(
                     applyReduction(
@@ -318,6 +362,7 @@ export default function DitherGradientPage() {
         interpolationMode,
         ditherType,
         ditherStrength,
+        ditherSeed,
         reductionMode,
         binaryThreshold,
         distanceColorSpace,
@@ -349,10 +394,6 @@ export default function DitherGradientPage() {
                 <div className="dither-gradient-header">
                     <Link href="/">&#8592; TypefaceComparisonTool</Link>
                     <h1>Bilinear Dither Gradient Lab</h1>
-                    <p>
-                        Paste palette text, pick four corners, and explore bilinear gradients in multiple color spaces with optional ordered dithering.
-                        When fewer than four colors are provided, corners recycle across the whole palette automatically.
-                    </p>
                 </div>
 
                 <div className="dither-gradient-layout">
@@ -414,10 +455,11 @@ export default function DitherGradientPage() {
                             <label>
                                 Dither Pattern
                                 <select value={ditherType} onChange={(event) => setDitherType(event.target.value as DitherType)}>
-                                    <option value="none">None</option>
-                                    <option value="bayer2">2×2 Bayer</option>
-                                    <option value="bayer4">4×4 Bayer</option>
-                                    <option value="bayer8">8×8 Bayer</option>
+                                    {DITHER_TYPE_ORDER.map((type) => (
+                                        <option value={type} key={type}>
+                                            {DITHER_LABELS[type]}
+                                        </option>
+                                    ))}
                                 </select>
                             </label>
                             <label>
@@ -430,6 +472,20 @@ export default function DitherGradientPage() {
                                     value={ditherStrength}
                                     onChange={(event) => setDitherStrength(event.target.valueAsNumber)}
                                     disabled={ditherType === "none"}
+                                />
+                            </label>
+                            <label>
+                                Noise Seed {isRandomNoiseType(ditherType) ? "" : "(noise modes)"}
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={99999999}
+                                    step={1}
+                                    value={ditherSeed}
+                                    onChange={(event) => {
+                                        const next = event.target.valueAsNumber;
+                                        setDitherSeed(Number.isFinite(next) ? next : 0);
+                                    }}
                                 />
                             </label>
                             <label>
@@ -527,7 +583,9 @@ export default function DitherGradientPage() {
                     <section className="dither-gradient-card preview">
                         <header>
                             <strong>Gradient Preview</strong>
-                            <span>{interpolationMode.toUpperCase()} • {ditherType === "none" ? "No dithering" : ditherType.toUpperCase()}</span>
+                            <span>
+                                {interpolationMode.toUpperCase()} • {ditherType === "none" ? "No dithering" : DITHER_LABELS[ditherType]}
+                            </span>
                         </header>
                         <div className="preview-toggle-list">
                             <label>
@@ -559,7 +617,7 @@ export default function DitherGradientPage() {
                                 <GradientPreviewCanvas
                                     ref={ditherCanvasRef}
                                     title="Dither Applied"
-                                    description={ditherType === "none" ? "No jitter" : `${ditherType.toUpperCase()} pattern`}
+                                    description={DITHER_DESCRIPTIONS[ditherType]}
                                     width={width}
                                     height={height}
                                     previewScale={previewScale}
@@ -843,23 +901,104 @@ function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
 }
 
 /**
- * Adds ordered dither jitter to an RGB pixel using the selected Bayer matrix.
+ * Adds ordered or stochastic dither jitter to an RGB pixel based on the selected type.
  * Input and output are 0-255 RGB values; strength is 0-1 and scales the threshold offset.
  */
-function applyDitherJitter(rgb255: { r: number; g: number; b: number }, x: number, y: number, type: DitherType, strength: number) {
-    if (type === "none") {
+function applyDitherJitter(
+    rgb255: { r: number; g: number; b: number },
+    x: number,
+    y: number,
+    type: DitherType,
+    strength: number,
+    seed: number
+) {
+    if (type === "none" || strength <= 0) {
         return rgb255;
     }
-    const matrix = BAYER_MATRICES[type];
-    const size = matrix.length;
-    const denominator = size * size;
-    // matrix source is scaled 0..(N*N-1); we convert to -0.5..+0.5 range for easier centering
-    const matrixSrcValue = matrix[y % size][x % size];
-    const threshold = (matrixSrcValue + 0.5) / denominator - 0.5;
-    const jitter = threshold * strength * 255; // convert threshold (0,1) to RGB channel offset (-128,128) scaled by strength
+    if (isBayerDitherType(type)) {
+        const matrix = BAYER_MATRICES[type];
+        const size = matrix.length;
+        const denominator = size * size;
+        // matrix source is scaled 0..(N*N-1); convert to -0.5..+0.5 range for easier centering
+        const matrixSrcValue = matrix[y % size][x % size];
+        const threshold = (matrixSrcValue + 0.5) / denominator - 0.5;
+        const jitter = threshold * strength * 255;
+        return addRgb(rgb255, jitter);
+    }
+    return applyRandomNoiseDither(rgb255, x, y, type, strength, seed);
+}
 
-    const jitteredColor = addRgb(rgb255, jitter);
-    return jitteredColor;
+function isBayerDitherType(type: DitherType): type is BayerDitherType {
+    return BAYER_DITHER_TYPES.includes(type as BayerDitherType);
+}
+
+function isRandomNoiseType(type: DitherType): type is RandomNoiseDitherType {
+    return RANDOM_NOISE_TYPES.includes(type as RandomNoiseDitherType);
+}
+
+function applyRandomNoiseDither(
+    rgb255: { r: number; g: number; b: number },
+    x: number,
+    y: number,
+    type: DitherType,
+    strength: number,
+    seed: number
+) {
+    if (!isRandomNoiseType(type)) {
+        return rgb255;
+    }
+    const magnitude = strength * 255;
+    const baseVariant = RANDOM_VARIANT_OFFSETS[type];
+    if (type === "bw-noise") {
+        const rand = pseudoRandomUnit(seed, x, y, baseVariant);
+        const threshold = rand > 0.5 ? 0.5 : -0.5;
+        return addRgb(rgb255, threshold * magnitude);
+    }
+    if (type === "grayscale-noise") {
+        const rand = pseudoRandomUnit(seed, x, y, baseVariant);
+        const threshold = rand - 0.5;
+        return addRgb(rgb255, threshold * magnitude);
+    }
+    const jittered = {
+        r: rgb255.r + channelNoise(seed, x, y, baseVariant, 0, type) * magnitude,
+        g: rgb255.g + channelNoise(seed, x, y, baseVariant, 1, type) * magnitude,
+        b: rgb255.b + channelNoise(seed, x, y, baseVariant, 2, type) * magnitude,
+    };
+    return jittered;
+}
+
+function channelNoise(
+    seed: number,
+    x: number,
+    y: number,
+    baseVariant: number,
+    channelIndex: number,
+    type: RandomNoiseDitherType
+) {
+    const rand = pseudoRandomUnit(seed, x, y, baseVariant + channelIndex);
+    if (type === "rgb-noise") {
+        return rand > 0.5 ? 0.5 : -0.5;
+    }
+    return rand - 0.5;
+}
+
+function pseudoRandomUnit(seed: number, x: number, y: number, variant: number) {
+    let hash = normalizeSeed(seed) ^ Math.imul(variant + 0x7F4A7C15, 0x45D9F3B);
+    hash ^= Math.imul(x + 0x27D4EB2F, 0x9E3779B9);
+    hash = Math.imul(hash ^ (hash >>> 15), 0x85EBCA6B);
+    hash ^= Math.imul(y + 0x165667B1, 0xC2B2AE35);
+    hash ^= hash >>> 13;
+    hash = Math.imul(hash, 1274126177);
+    hash ^= hash >>> 16;
+    return (hash >>> 0) / 0xffffffff;
+}
+
+function normalizeSeed(seed: number) {
+    if (!Number.isFinite(seed)) {
+        return 0;
+    }
+    const normalized = Math.abs(Math.floor(seed)) >>> 0;
+    return normalized;
 }
 
 // applies hard step function to each RGB channel (if n < step, return 0 else return 255)
