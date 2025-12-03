@@ -165,13 +165,13 @@ export default function DitherGradientPage() {
     const [cornerAssignments] = useState<number[]>([0, 1, 2, 3]);
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
-    const [ditherStrength, setDitherStrength] = useState(0.5);
+    const [ditherStrength, setDitherStrength] = useState(0.333);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [binaryThreshold, setBinaryThreshold] = useState(127);
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
     const [distanceFeature, setDistanceFeature] = useState<DistanceFeature>("all");
-    const [width, setWidth] = useState(240);
-    const [height, setHeight] = useState(180);
+    const [width, setWidth] = useState(256);
+    const [height, setHeight] = useState(256);
     const [previewScale, setPreviewScale] = useState(2);
     const [showSourcePreview, setShowSourcePreview] = useState(true);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
