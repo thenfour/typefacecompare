@@ -6,6 +6,7 @@ interface DitherControlsProps {
     onDitherTypeChange: (type: DitherType) => void;
     ditherStrength: number;
     onDitherStrengthChange: (value: number) => void;
+    ditherStrengthDisabled?: boolean;
     ditherSeed: number;
     onDitherSeedChange: (value: number) => void;
     seedEnabled: boolean;
@@ -25,6 +26,7 @@ export function DitherControls({
     onDitherTypeChange,
     ditherStrength,
     onDitherStrengthChange,
+    ditherStrengthDisabled = false,
     ditherSeed,
     onDitherSeedChange,
     seedEnabled,
@@ -59,7 +61,7 @@ export function DitherControls({
                     step={0.01}
                     value={ditherStrength}
                     onChange={(event) => onDitherStrengthChange(event.target.valueAsNumber)}
-                    disabled={ditherType === "none"}
+                    disabled={ditherType === "none" || ditherStrengthDisabled}
                 />
             </label>
             <label>

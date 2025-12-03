@@ -123,6 +123,12 @@ const PALETTE_PRESETS = [
     },
 ] as const;
 
+type GamutStrengthSnapshot = {
+    overall: number;
+    translation: number;
+    rotation: number;
+    scale: AxisTriple;
+};
 
 export default function DitherGradientPage() {
     const [gradientPaletteText, setGradientPaletteText] = useState<string>(PALETTE_PRESETS[0].value);
@@ -131,6 +137,8 @@ export default function DitherGradientPage() {
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.333);
+    const [ditheringEnabled, setDitheringEnabled] = useState(true);
+    const [savedDitherStrength, setSavedDitherStrength] = useState(ditherStrength);
     const [ditherSeed, setDitherSeed] = useState<number>(1);
     const [sourceType, setSourceType] = useState<SourceType>("gradient");
     const [voronoiCellsPerAxis, setVoronoiCellsPerAxis] = useState<number>(DEFAULT_VORONOI_CELLS);
@@ -147,6 +155,13 @@ export default function DitherGradientPage() {
     const [gamutTranslationStrength, setGamutTranslationStrength] = useState(1);
     const [gamutRotationStrength, setGamutRotationStrength] = useState(0.1);
     const [gamutScaleStrength, setGamutScaleStrength] = useState<AxisTriple>([1, 1, 1]);
+    const [gamutFitEnabled, setGamutFitEnabled] = useState(true);
+    const [savedGamutStrengths, setSavedGamutStrengths] = useState<GamutStrengthSnapshot>(() => ({
+        overall: gamutOverallStrength,
+        translation: gamutTranslationStrength,
+        rotation: gamutRotationStrength,
+        scale: [...gamutScaleStrength] as AxisTriple,
+    }));
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -325,6 +340,7 @@ export default function DitherGradientPage() {
     ]);
     const gamutPreviewAvailable = Boolean(gamutTransform);
     const gamutControlsDisabled = !sourceAxisStats || !paletteAxisStats;
+    const gamutSlidersDisabled = gamutControlsDisabled || !gamutFitEnabled;
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -358,6 +374,35 @@ export default function DitherGradientPage() {
             next[axisIndex] = clamped;
             return next;
         });
+    };
+    const handleGamutFitToggle = (nextEnabled: boolean) => {
+        setGamutFitEnabled(nextEnabled);
+        if (nextEnabled) {
+            setGamutOverallStrength(savedGamutStrengths.overall);
+            setGamutTranslationStrength(savedGamutStrengths.translation);
+            setGamutRotationStrength(savedGamutStrengths.rotation);
+            setGamutScaleStrength([...savedGamutStrengths.scale] as AxisTriple);
+            return;
+        }
+        setSavedGamutStrengths({
+            overall: gamutOverallStrength,
+            translation: gamutTranslationStrength,
+            rotation: gamutRotationStrength,
+            scale: [...gamutScaleStrength] as AxisTriple,
+        });
+        setGamutOverallStrength(0);
+        setGamutTranslationStrength(0);
+        setGamutRotationStrength(0);
+        setGamutScaleStrength([0, 0, 0]);
+    };
+    const handleDitheringToggle = (nextEnabled: boolean) => {
+        setDitheringEnabled(nextEnabled);
+        if (nextEnabled) {
+            setDitherStrength(savedDitherStrength);
+            return;
+        }
+        setSavedDitherStrength(ditherStrength);
+        setDitherStrength(0);
     };
 
     useDitherRenderer({
@@ -503,6 +548,15 @@ export default function DitherGradientPage() {
                             </label>
                             <div className="gamut-fit-controls">
                                 <h4>Gamut Fit</h4>
+                                <label className="gamut-fit-toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={gamutFitEnabled}
+                                        onChange={(event) => handleGamutFitToggle(event.target.checked)}
+                                        disabled={gamutControlsDisabled}
+                                    />
+                                    Enable Gamut Fit
+                                </label>
                                 <label>
                                     Overall Strength ({Math.round(gamutOverallStrength * 100)}%)
                                     <input
@@ -512,7 +566,7 @@ export default function DitherGradientPage() {
                                         step={0.01}
                                         value={gamutOverallStrength}
                                         onChange={(event) => handleGamutOverallStrengthChange(event.target.valueAsNumber)}
-                                        disabled={gamutControlsDisabled}
+                                        disabled={gamutSlidersDisabled}
                                     />
                                 </label>
                                 <label>
@@ -524,7 +578,7 @@ export default function DitherGradientPage() {
                                         step={0.01}
                                         value={gamutTranslationStrength}
                                         onChange={(event) => handleGamutTranslationChange(event.target.valueAsNumber)}
-                                        disabled={gamutControlsDisabled}
+                                        disabled={gamutSlidersDisabled}
                                     />
                                 </label>
                                 <label>
@@ -536,7 +590,7 @@ export default function DitherGradientPage() {
                                         step={0.01}
                                         value={gamutRotationStrength}
                                         onChange={(event) => handleGamutRotationChange(event.target.valueAsNumber)}
-                                        disabled={gamutControlsDisabled}
+                                        disabled={gamutSlidersDisabled}
                                     />
                                 </label>
                                 <div className="gamut-fit-controls__scale-grid">
@@ -550,7 +604,7 @@ export default function DitherGradientPage() {
                                                 step={0.01}
                                                 value={gamutScaleStrength[axisIndex]}
                                                 onChange={(event) => handleGamutScaleSliderChange(axisIndex, event.target.valueAsNumber)}
-                                                disabled={gamutControlsDisabled}
+                                                disabled={gamutSlidersDisabled}
                                             />
                                         </label>
                                     ))}
@@ -569,11 +623,20 @@ export default function DitherGradientPage() {
                                     <h3>Dither</h3>
                                 </div>
                                 <div className="controls-panel__fields">
+                                    <label className="dither-enable-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={ditheringEnabled}
+                                            onChange={(event) => handleDitheringToggle(event.target.checked)}
+                                        />
+                                        Enable Dithering
+                                    </label>
                                     <DitherControls
                                         ditherType={ditherType}
                                         onDitherTypeChange={setDitherType}
                                         ditherStrength={ditherStrength}
                                         onDitherStrengthChange={setDitherStrength}
+                                        ditherStrengthDisabled={!ditheringEnabled}
                                         ditherSeed={ditherSeed}
                                         onDitherSeedChange={setDitherSeed}
                                         seedEnabled={seedEnabled}
