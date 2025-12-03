@@ -50,6 +50,10 @@ export interface UseDitherRendererOptions {
     reductionPaletteEntries: ReductionPaletteEntry[];
     distanceColorSpace: ColorInterpolationMode;
     errorDiffusionKernelId: ErrorDiffusionKernelId;
+    ditherMask?: {
+        blurRadius: number;
+        strength: number;
+    };
     showSourcePreview: boolean;
     showDitherPreview: boolean;
     showReducedPreview: boolean;
@@ -72,6 +76,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         reductionPaletteEntries,
         distanceColorSpace,
         errorDiffusionKernelId,
+        ditherMask,
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
@@ -127,6 +132,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             return acc;
         }, {} as Partial<Record<PreviewStageKey, ActivePreviewStage>>);
 
+        const pixelCount = width * height;
+        const baseColorBuffer = new Float32Array(pixelCount * 3);
         for (let y = 0; y < height; y++) {
             const v = height === 1 ? 0 : y / (height - 1);
             for (let x = 0; x < width; x++) {
@@ -141,7 +148,34 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     y,
                     sourceImageData
                 );
+                const pixelIndex = y * width + x;
+                const baseOffset = pixelIndex * 3;
+                baseColorBuffer[baseOffset] = base.r;
+                baseColorBuffer[baseOffset + 1] = base.g;
+                baseColorBuffer[baseOffset + 2] = base.b;
+            }
+        }
+
+        const maskBuffer = buildDitherMaskBuffer(
+            baseColorBuffer,
+            width,
+            height,
+            ditherMask?.blurRadius ?? 0,
+            ditherMask?.strength ?? 0
+        );
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const pixelIndex = y * width + x;
+                const baseOffset = pixelIndex * 3;
+                const base = {
+                    r: baseColorBuffer[baseOffset],
+                    g: baseColorBuffer[baseOffset + 1],
+                    b: baseColorBuffer[baseOffset + 2],
+                };
                 const sourceColor = clampRgb255(base);
+                const maskFactor = maskBuffer ? maskBuffer[pixelIndex] : 1;
+                const effectiveDitherStrength = ditherStrength * maskFactor;
                 let ditheredColor: { r: number; g: number; b: number };
                 let reducedColor: { r: number; g: number; b: number };
 
@@ -151,7 +185,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                         x,
                         y,
                         errorDiffusionContext,
-                        ditherStrength,
+                        effectiveDitherStrength,
                         reductionMode,
                         reductionPaletteEntries,
                         distanceColorSpace,
@@ -159,14 +193,14 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     ditheredColor = result.ditheredColor;
                     reducedColor = result.quantizedColor;
                 } else {
-                    const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed, proceduralDitherTile);
+                    const jittered = applyDitherJitter(base, x, y, ditherType, effectiveDitherStrength, ditherSeed, proceduralDitherTile);
                     ditheredColor = clampRgb255(jittered);
                     reducedColor = clampRgb255(
                         applyReduction(jittered, reductionMode, reductionPaletteEntries, distanceColorSpace)
                     );
                 }
 
-                const offset = (y * width + x) * 4;
+                const offset = pixelIndex * 4;
                 if (stageMap.source) {
                     writePixel(stageMap.source.imageData.data, offset, sourceColor);
                 }
@@ -200,6 +234,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         reductionPaletteEntries,
         distanceColorSpace,
         errorDiffusionKernelId,
+        ditherMask?.blurRadius,
+        ditherMask?.strength,
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
@@ -238,4 +274,70 @@ function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: numbe
     buffer[offset + 1] = color.g;
     buffer[offset + 2] = color.b;
     buffer[offset + 3] = 255;
+}
+
+function buildDitherMaskBuffer(
+    baseColorBuffer: Float32Array,
+    width: number,
+    height: number,
+    blurRadius: number,
+    strength: number
+): Float32Array | null {
+    // don't clamp yet; we clamp later anyway and this lets us exaggerate the effect.
+    const normalizedStrength = strength;//Math.max(0, Math.min(1, strength));
+    const radius = Math.max(0, Math.round(blurRadius));
+    if (normalizedStrength === 0 || radius === 0) {
+        return null;
+    }
+    const pixelCount = width * height;
+    const luminance = new Float32Array(pixelCount);
+    for (let index = 0; index < pixelCount; index++) {
+        const offset = index * 3;
+        const r = baseColorBuffer[offset];
+        const g = baseColorBuffer[offset + 1];
+        const b = baseColorBuffer[offset + 2];
+        luminance[index] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+    const blurred = blurFloatArray(luminance, width, height, radius);
+    const mask = new Float32Array(pixelCount);
+    for (let index = 0; index < pixelCount; index++) {
+        const sharpness = Math.abs(luminance[index] - blurred[index]);
+        const normalizedSharpness = Math.min(1, sharpness / 255);
+        const attenuation = 1 - normalizedStrength * normalizedSharpness;
+        mask[index] = Math.max(0, Math.min(1, attenuation));
+    }
+    return mask;
+}
+
+function blurFloatArray(values: Float32Array, width: number, height: number, radius: number) {
+    if (radius <= 0) {
+        return values.slice();
+    }
+    const kernelSize = radius * 2 + 1;
+    const temp = new Float32Array(values.length);
+    const output = new Float32Array(values.length);
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let sum = 0;
+            for (let offset = -radius; offset <= radius; offset++) {
+                const sampleX = Math.min(width - 1, Math.max(0, x + offset));
+                sum += values[y * width + sampleX];
+            }
+            temp[y * width + x] = sum / kernelSize;
+        }
+    }
+
+    for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+            let sum = 0;
+            for (let offset = -radius; offset <= radius; offset++) {
+                const sampleY = Math.min(height - 1, Math.max(0, y + offset));
+                sum += temp[sampleY * width + x];
+            }
+            output[y * width + x] = sum / kernelSize;
+        }
+    }
+
+    return output;
 }

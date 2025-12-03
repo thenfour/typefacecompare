@@ -129,6 +129,8 @@ export default function DitherGradientPage() {
     const [width, setWidth] = useState(256);
     const [height, setHeight] = useState(256);
     const [previewScale, setPreviewScale] = useState(2);
+    const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(3);
+    const [ditherMaskStrength, setDitherMaskStrength] = useState(0);
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -261,6 +263,10 @@ export default function DitherGradientPage() {
         reductionPaletteEntries,
         distanceColorSpace,
         errorDiffusionKernelId,
+        ditherMask: {
+            blurRadius: ditherMaskBlurRadius,
+            strength: ditherMaskStrength,
+        },
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
@@ -351,6 +357,40 @@ export default function DitherGradientPage() {
                             ) : null
                         }
                     />
+
+                    <section className="dither-gradient-card source-adjustments-card">
+                        <header>
+                            <strong>Source Adjustments</strong>
+                            <span>Prepare the bitmap before dithering</span>
+                        </header>
+                        <div className="controls-panel__fields">
+                            <label>
+                                Dither Mask Blur Radius ({ditherMaskBlurRadius}px)
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={10}
+                                    step={1}
+                                    value={ditherMaskBlurRadius}
+                                    onChange={(event) => setDitherMaskBlurRadius(event.target.valueAsNumber)}
+                                />
+                            </label>
+                            <label>
+                                Dither Mask Effect Strength ({Math.round(ditherMaskStrength * 100)}%)
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={10}
+                                    step={0.05}
+                                    value={ditherMaskStrength}
+                                    onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
+                                />
+                            </label>
+                            <p className="dither-gradient-note">
+                                High-frequency areas (sharp edges / details) receive less dithering as the mask effect increases.
+                            </p>
+                        </div>
+                    </section>
 
                     <section className="dither-gradient-card settings">
                         <header>
