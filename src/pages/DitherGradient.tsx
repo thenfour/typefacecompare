@@ -1,7 +1,7 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
-import { ColorInterpolationMode, rgbUnitTo255 } from "../utils/colorSpaces";
+import { ColorInterpolationMode, interpolateGradientColor, rgbUnitTo255 } from "../utils/colorSpaces";
 import { hexToRgb } from "../utils/color";
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 import type { PaletteSwatchDefinition } from "../types/paletteDefinition";
@@ -200,7 +200,19 @@ export default function DitherGradientPage() {
             }),
         [reductionSwatches, distanceColorSpace]
     );
-    const sourceScatterPoints = useMemo(() => sampleImageRgbPoints(sourceImageData, MAX_SCATTER_SOURCE_POINTS), [sourceImageData]);
+    const sourceScatterPoints = useMemo(
+        () =>
+            sampleSourceScatterPoints({
+                sourceType,
+                sourceImageData,
+                derivedCornerHexes,
+                interpolationMode,
+                width,
+                height,
+                maxPoints: MAX_SCATTER_SOURCE_POINTS,
+            }),
+        [sourceType, sourceImageData, derivedCornerHexes, interpolationMode, width, height]
+    );
     const paletteScatterPoints = useMemo(() => paletteEntriesToRgbPoints(reductionPaletteEntries), [reductionPaletteEntries]);
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
@@ -461,6 +473,27 @@ function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: numbe
     return hexes;
 }
 
+interface SourceScatterSampleOptions {
+    sourceType: SourceType;
+    sourceImageData: ImageData | null;
+    derivedCornerHexes: string[];
+    interpolationMode: ColorInterpolationMode;
+    width: number;
+    height: number;
+    maxPoints: number;
+}
+
+function sampleSourceScatterPoints(options: SourceScatterSampleOptions): RGBPoint[] {
+    const { sourceType, sourceImageData, derivedCornerHexes, interpolationMode, width, height, maxPoints } = options;
+    if (sourceType === "image") {
+        return sampleImageRgbPoints(sourceImageData, maxPoints);
+    }
+    if (sourceType === "gradient") {
+        return sampleGradientRgbPoints(derivedCornerHexes, interpolationMode, width, height, maxPoints);
+    }
+    return [];
+}
+
 function sampleImageRgbPoints(imageData: ImageData | null, maxPoints: number): RGBPoint[] {
     if (!imageData || maxPoints <= 0) {
         return [];
@@ -476,6 +509,31 @@ function sampleImageRgbPoints(imageData: ImageData | null, maxPoints: number): R
     for (let pixelIndex = 0; pixelIndex < totalPixels && result.length < clampMaxPoints; pixelIndex += step) {
         const dataIndex = pixelIndex * 4;
         result.push([data[dataIndex], data[dataIndex + 1], data[dataIndex + 2]]);
+    }
+    return result;
+}
+
+function sampleGradientRgbPoints(
+    cornerHexes: string[],
+    interpolationMode: ColorInterpolationMode,
+    width: number,
+    height: number,
+    maxPoints: number
+): RGBPoint[] {
+    if (cornerHexes.length < 4 || maxPoints <= 0 || width <= 0 || height <= 0) {
+        return [];
+    }
+    const totalPixels = width * height;
+    const clampMaxPoints = Math.min(maxPoints, totalPixels);
+    const step = Math.max(1, Math.floor(totalPixels / clampMaxPoints));
+    const result: RGBPoint[] = [];
+    for (let pixelIndex = 0; pixelIndex < totalPixels && result.length < clampMaxPoints; pixelIndex += step) {
+        const x = pixelIndex % width;
+        const y = Math.floor(pixelIndex / width);
+        const u = width === 1 ? 0 : x / (width - 1);
+        const v = height === 1 ? 0 : y / (height - 1);
+        const color = interpolateGradientColor(cornerHexes, u, v, interpolationMode);
+        result.push([color.r, color.g, color.b]);
     }
     return result;
 }
