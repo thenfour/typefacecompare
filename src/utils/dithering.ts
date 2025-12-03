@@ -1,3 +1,7 @@
+import type { ColorInterpolationMode } from "./colorSpaces";
+import type { DistanceFeature, ReductionMode } from "@/types/dither";
+import { applyReduction, clampRgb255, type ReductionPaletteEntry } from "./paletteDistance";
+
 export type DitherType =
     | "none"
     | "bayer2"
@@ -255,6 +259,69 @@ export const DEFAULT_ERROR_DIFFUSION_KERNEL: ErrorDiffusionKernelId = "floyd-ste
 const ERROR_DIFFUSION_KERNEL_MAP = new Map<ErrorDiffusionKernelId, ErrorDiffusionKernel>(
     ERROR_DIFFUSION_KERNELS.map((kernel) => [kernel.id, kernel])
 );
+
+export interface ErrorDiffusionContext {
+    kernel: ErrorDiffusionKernel;
+    rowBuffers: Float32Array[];
+    width: number;
+    height: number;
+}
+
+export function createErrorDiffusionContext(width: number, height: number, kernel: ErrorDiffusionKernel): ErrorDiffusionContext {
+    const bufferCount = Math.max(1, kernel.maxDy + 1);
+    const rowBuffers = Array.from({ length: bufferCount }, () => new Float32Array(width * 3));
+    return { kernel, rowBuffers, width, height };
+}
+
+export function advanceErrorDiffusionRow(context: ErrorDiffusionContext) {
+    if (context.rowBuffers.length === 0) {
+        return;
+    }
+    const finished = context.rowBuffers.shift();
+    if (!finished) {
+        return;
+    }
+    finished.fill(0);
+    context.rowBuffers.push(finished);
+}
+
+export function applyErrorDiffusionToPixel(
+    baseColor: { r: number; g: number; b: number },
+    x: number,
+    y: number,
+    context: ErrorDiffusionContext,
+    strength: number,
+    reductionMode: ReductionMode,
+    binaryThreshold: number,
+    palette: ReductionPaletteEntry[],
+    distanceMode: ColorInterpolationMode,
+    distanceFeature: DistanceFeature
+) {
+    const currentRow = context.rowBuffers[0];
+    const index = x * 3;
+    const adjusted = {
+        r: baseColor.r + (currentRow[index] ?? 0),
+        g: baseColor.g + (currentRow[index + 1] ?? 0),
+        b: baseColor.b + (currentRow[index + 2] ?? 0),
+    };
+    currentRow[index] = 0;
+    currentRow[index + 1] = 0;
+    currentRow[index + 2] = 0;
+
+    const ditheredColor = clampRgb255(adjusted);
+    const quantizedColor = clampRgb255(
+        applyReduction(ditheredColor, reductionMode, binaryThreshold, palette, distanceMode, distanceFeature)
+    );
+    const error = {
+        r: ditheredColor.r - quantizedColor.r,
+        g: ditheredColor.g - quantizedColor.g,
+        b: ditheredColor.b - quantizedColor.b,
+    };
+    if (strength > 0) {
+        diffuseError(error, x, y, context, strength);
+    }
+    return { ditheredColor, quantizedColor };
+}
 
 const RANDOM_VARIANT_OFFSETS: Record<RandomNoiseDitherType, number> = {
     "bw-noise": 101,

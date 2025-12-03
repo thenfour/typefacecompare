@@ -12,6 +12,10 @@ import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
 import { LospecPaletteImporter } from "@/components/LospecPaletteImporter";
+import { useImageSource } from "@/hooks/useImageSource";
+import type { DistanceFeature, ReductionMode, SourceType } from "@/types/dither";
+import { IMAGE_SCALE_MODE_LABELS } from "@/utils/imageScaling";
+import type { ImageScaleMode } from "@/utils/imageScaling";
 import {
     buildProceduralDitherTile,
     DEFAULT_ERROR_DIFFUSION_KERNEL,
@@ -30,17 +34,6 @@ import {
     isErrorDiffusionDither,
     usesSeededDither,
 } from "../utils/dithering";
-type ReductionMode = "binary" | "palette" | "none";
-type DistanceFeature = "all" | "luminance" | "hsl-saturation" | "hsl-lightness" | "oklch-chroma";
-type SourceType = "gradient" | "image";
-type ImageScaleMode = "cover" | "contain" | "stretch" | "none";
-type ImageSourceKind = "url" | "clipboard";
-interface ImageSourceState {
-    element: HTMLImageElement;
-    label: string;
-    kind: ImageSourceKind;
-    cleanup?: () => void;
-}
 const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
     all: "All components",
     luminance: "Luminance / Lightness",
@@ -49,12 +42,6 @@ const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
     "oklch-chroma": "OKLCH Chroma",
 };
 const DISTANCE_FEATURE_ORDER: DistanceFeature[] = ["all", "luminance", "hsl-saturation", "hsl-lightness", "oklch-chroma"];
-const IMAGE_SCALE_MODE_LABELS: Record<ImageScaleMode, string> = {
-    cover: "Cover",
-    contain: "Contain",
-    stretch: "Stretch",
-    none: "No scaling",
-};
 const LUMINANCE_SUPPORTED_SPACES: ColorInterpolationMode[] = ["lab", "oklch", "ycbcr", "hsl"];
 const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
 
@@ -188,12 +175,6 @@ export default function DitherGradientPage() {
     const [ditherStrength, setDitherStrength] = useState(0.333);
     const [ditherSeed, setDitherSeed] = useState<number>(1);
     const [sourceType, setSourceType] = useState<SourceType>("gradient");
-    const [imageUrlInput, setImageUrlInput] = useState("");
-    const [imageScaleMode, setImageScaleMode] = useState<ImageScaleMode>("cover");
-    const [imageSource, setImageSource] = useState<ImageSourceState | null>(null);
-    const [sourceImageData, setSourceImageData] = useState<ImageData | null>(null);
-    const [isImportingImage, setIsImportingImage] = useState(false);
-    const [imageImportError, setImageImportError] = useState<string | null>(null);
     const [voronoiCellsPerAxis, setVoronoiCellsPerAxis] = useState<number>(DEFAULT_VORONOI_CELLS);
     const [voronoiJitter, setVoronoiJitter] = useState<number>(DEFAULT_VORONOI_JITTER);
     const [errorDiffusionKernelId, setErrorDiffusionKernelId] = useState<ErrorDiffusionKernelId>(DEFAULT_ERROR_DIFFUSION_KERNEL);
@@ -204,6 +185,12 @@ export default function DitherGradientPage() {
     const [width, setWidth] = useState(256);
     const [height, setHeight] = useState(256);
     const [previewScale, setPreviewScale] = useState(2);
+    const handleActivateImageSource = useCallback(() => setSourceType("image"), [setSourceType]);
+    const { imageUrlInput, setImageUrlInput, imageScaleMode, setImageScaleMode, imageSource, sourceImageData, importImageFromUrl, isImportingImage, imageImportError } = useImageSource({
+        width,
+        height,
+        onActivateImageSource: handleActivateImageSource,
+    });
     const [showSourcePreview, setShowSourcePreview] = useState(true);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
@@ -245,45 +232,6 @@ export default function DitherGradientPage() {
         [ditherType, ditherSeed, voronoiCellsPerAxis, voronoiJitter]
     );
 
-    const replaceImageSource = useCallback((next: ImageSourceState | null) => {
-        setImageSource((previous) => {
-            if (previous?.cleanup) {
-                try {
-                    previous.cleanup();
-                } catch {
-                    // ignore cleanup failures
-                }
-            }
-            return next;
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!imageSource?.element) {
-            setSourceImageData(null);
-            return;
-        }
-        if (typeof document === "undefined") {
-            return;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-            return;
-        }
-        drawImageWithScaleMode(ctx, imageSource.element, imageScaleMode, width, height);
-        const nextImageData = ctx.getImageData(0, 0, width, height);
-        setSourceImageData(nextImageData);
-    }, [imageSource, width, height, imageScaleMode]);
-
-    useEffect(() => {
-        return () => {
-            replaceImageSource(null);
-        };
-    }, [replaceImageSource]);
-
     const handleDistanceColorSpaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
         const nextMode = event.target.value as ColorInterpolationMode;
         setDistanceColorSpace(nextMode);
@@ -295,75 +243,6 @@ export default function DitherGradientPage() {
             return nextFeatures[0] ?? "all";
         });
     };
-
-    const handleImportImage = async () => {
-        const trimmedUrl = imageUrlInput.trim();
-        if (!trimmedUrl) {
-            setImageImportError("Enter an image URL");
-            return;
-        }
-        if (typeof window === "undefined") {
-            setImageImportError("Image import is only available in the browser");
-            return;
-        }
-        setIsImportingImage(true);
-        setImageImportError(null);
-        try {
-            const imageElement = await loadImageElementFromUrl(trimmedUrl);
-            replaceImageSource({
-                element: imageElement,
-                label: "Imported URL",
-                kind: "url",
-            });
-            setSourceType("image");
-        } catch (error) {
-            replaceImageSource(null);
-            setImageImportError(error instanceof Error ? error.message : "Failed to import image");
-        } finally {
-            setIsImportingImage(false);
-        }
-    };
-
-    useEffect(() => {
-        if (typeof window === "undefined") {
-            return;
-        }
-        const handlePaste = (event: ClipboardEvent) => {
-            const clipboardData = event.clipboardData;
-            if (!clipboardData) {
-                return;
-            }
-            const fileItem = Array.from(clipboardData.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
-            if (!fileItem) {
-                return;
-            }
-            const file = fileItem.getAsFile();
-            if (!file) {
-                return;
-            }
-            const objectUrl = URL.createObjectURL(file);
-            const pastedImage = new Image();
-            pastedImage.decoding = "async";
-            pastedImage.onload = () => {
-                replaceImageSource({
-                    element: pastedImage,
-                    label: "Pasted image",
-                    kind: "clipboard",
-                    cleanup: () => URL.revokeObjectURL(objectUrl),
-                });
-                setImageImportError(null);
-                setSourceType("image");
-                setImageUrlInput("");
-            };
-            pastedImage.onerror = () => {
-                URL.revokeObjectURL(objectUrl);
-                setImageImportError("Unable to decode pasted image");
-            };
-            pastedImage.src = objectUrl;
-        };
-        window.addEventListener("paste", handlePaste);
-        return () => window.removeEventListener("paste", handlePaste);
-    }, [replaceImageSource]);
 
     useEffect(() => {
         const previewStages: PreviewStageConfig[] = [
@@ -515,13 +394,6 @@ export default function DitherGradientPage() {
         sourceImageData,
     ]);
 
-    // const handleCornerChange = (cornerIndex: number, swatchIndex: number) => {
-    //     setCornerAssignments((prev) => {
-    //         const next = [...prev];
-    //         next[cornerIndex] = swatchIndex;
-    //         return next;
-    //     });
-    // };
 
     const projectedPreviewDescription = distanceFeature === "all" ? "Same as source" : `${DISTANCE_FEATURE_LABELS[distanceFeature]} projection`;
     const seedEnabled = usesSeededDither(ditherType);
@@ -635,7 +507,7 @@ export default function DitherGradientPage() {
                                             />
                                             <button
                                                 type="button"
-                                                onClick={handleImportImage}
+                                                onClick={importImageFromUrl}
                                                 disabled={isImportingImage || !imageUrlInput.trim()}
                                             >
                                                 {isImportingImage ? "Importing…" : "Import"}
@@ -820,35 +692,6 @@ export default function DitherGradientPage() {
                             </label>
                         </div>
                     </section>
-                    {/* 
-                    <section className="dither-gradient-card corners">
-                        <header>
-                            <strong>Corner Colors</strong>
-                            <span>Pick any swatch per corner; repeats are allowed.</span>
-                        </header>
-                        <div className="corner-grid">
-                            {CORNER_LABELS.map((label, index) => (
-                                <div key={label} className="corner-control">
-                                    <span>{label}</span>
-                                    <select
-                                        value={swatches.length === 0 ? "" : cornerAssignments[index] ?? 0}
-                                        onChange={(event) => handleCornerChange(index, Number(event.target.value))}
-                                        disabled={swatches.length === 0}
-                                    >
-                                        {swatches.map((swatch, swatchIndex) => (
-                                            <option value={swatchIndex} key={swatch.tokenId}>
-                                                #{swatch.ordinal + 1} — {swatch.hex}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <div
-                                        className="corner-swatch-preview"
-                                        style={{ backgroundColor: derivedCorners.hexes[index] ?? "transparent" }}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </section> */}
                 </div>
 
                 <div className="dither-gradient-layout">
@@ -936,20 +779,6 @@ export default function DitherGradientPage() {
         </>
     );
 }
-
-// function buildCornerIndices(swatches: PaletteSwatchDefinition[], previous: number[]): number[] {
-//     if (swatches.length === 0) {
-//         return previous;
-//     }
-//     const next = new Array(4).fill(0).map((_, index) => {
-//         const candidate = previous[index];
-//         if (typeof candidate === "number" && swatches[candidate]) {
-//             return candidate;
-//         }
-//         return index % swatches.length;
-//     });
-//     return next;
-// }
 
 /**
  * Resolves the four corner colors to hex strings.
@@ -1304,56 +1133,5 @@ function clampRgb255(rgb: { r: number; g: number; b: number }) {
         g: Math.min(255, Math.max(0, Math.round(rgb.g))),
         b: Math.min(255, Math.max(0, Math.round(rgb.b))),
     };
-}
-
-async function loadImageElementFromUrl(url: string): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-        const image = new Image();
-        image.crossOrigin = "anonymous";
-        image.decoding = "async";
-        image.onload = () => resolve(image);
-        image.onerror = () => reject(new Error("Unable to load image"));
-        image.src = url;
-    });
-}
-
-function drawImageWithScaleMode(
-    ctx: CanvasRenderingContext2D,
-    image: HTMLImageElement,
-    mode: ImageScaleMode,
-    targetWidth: number,
-    targetHeight: number
-) {
-    const sourceWidth = image.naturalWidth || image.width;
-    const sourceHeight = image.naturalHeight || image.height;
-    if (sourceWidth <= 0 || sourceHeight <= 0) {
-        ctx.clearRect(0, 0, targetWidth, targetHeight);
-        return;
-    }
-    ctx.clearRect(0, 0, targetWidth, targetHeight);
-    let drawWidth = targetWidth;
-    let drawHeight = targetHeight;
-    let dx = 0;
-    let dy = 0;
-    if (mode === "stretch") {
-        drawWidth = targetWidth;
-        drawHeight = targetHeight;
-    } else if (mode === "none") {
-        drawWidth = sourceWidth;
-        drawHeight = sourceHeight;
-    } else {
-        const scale = mode === "cover"
-            ? Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight)
-            : Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
-        drawWidth = sourceWidth * scale;
-        drawHeight = sourceHeight * scale;
-    }
-    dx = (targetWidth - drawWidth) / 2;
-    dy = (targetHeight - drawHeight) / 2;
-    if (mode === "none") {
-        dx = 0;
-        dy = 0;
-    }
-    ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
 }
 
