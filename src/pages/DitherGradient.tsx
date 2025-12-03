@@ -19,6 +19,8 @@ import {
     DITHER_LABELS,
     DITHER_TYPE_ORDER,
     applyDitherJitter,
+    DEFAULT_VORONOI_CELLS,
+    DEFAULT_VORONOI_JITTER,
     usesSeededDither,
 } from "../utils/dithering";
 type ReductionMode = "binary" | "palette" | "none";
@@ -32,6 +34,7 @@ const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
 };
 const DISTANCE_FEATURE_ORDER: DistanceFeature[] = ["all", "luminance", "hsl-saturation", "hsl-lightness", "oklch-chroma"];
 const LUMINANCE_SUPPORTED_SPACES: ColorInterpolationMode[] = ["lab", "oklch", "ycbcr", "hsl"];
+const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
 
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
@@ -61,6 +64,14 @@ const PALETTE_PRESETS = [
     {
         label: "B&W",
         value: `#0\n#f`,
+    },
+    {
+        label: "grad4",
+        value: `#800
+#cbb
+-----
+#88f
+#113`,
     },
     {
         label: "Grayscale4",
@@ -154,6 +165,8 @@ export default function DitherGradientPage() {
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.333);
     const [ditherSeed, setDitherSeed] = useState<number>(1);
+    const [voronoiCellsPerAxis, setVoronoiCellsPerAxis] = useState<number>(DEFAULT_VORONOI_CELLS);
+    const [voronoiJitter, setVoronoiJitter] = useState<number>(DEFAULT_VORONOI_JITTER);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [binaryThreshold, setBinaryThreshold] = useState(127);
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
@@ -192,8 +205,14 @@ export default function DitherGradientPage() {
     );
     const supportedDistanceFeatures = useMemo(() => getSupportedDistanceFeatures(distanceColorSpace), [distanceColorSpace]);
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
-        () => buildProceduralDitherTile(ditherType, ditherSeed),
-        [ditherType, ditherSeed]
+        () =>
+            buildProceduralDitherTile(ditherType, ditherSeed, {
+                voronoi: {
+                    cellsPerAxis: voronoiCellsPerAxis,
+                    jitter: voronoiJitter,
+                },
+            }),
+        [ditherType, ditherSeed, voronoiCellsPerAxis, voronoiJitter]
     );
 
     const handleDistanceColorSpaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -327,6 +346,7 @@ export default function DitherGradientPage() {
 
     const projectedPreviewDescription = distanceFeature === "all" ? "Same as source" : `${DISTANCE_FEATURE_LABELS[distanceFeature]} projection`;
     const seedEnabled = usesSeededDither(ditherType);
+    const isVoronoiDither = ditherType === "voronoi-cluster";
 
     return (
         <>
@@ -433,6 +453,34 @@ export default function DitherGradientPage() {
                                     disabled={!seedEnabled}
                                 />
                             </label>
+                            {isVoronoiDither && (
+                                <>
+                                    <label>
+                                        Voronoi Cells per Axis
+                                        <select
+                                            value={voronoiCellsPerAxis}
+                                            onChange={(event) => setVoronoiCellsPerAxis(Number(event.target.value))}
+                                        >
+                                            {VORONOI_CELL_OPTIONS.map((option) => (
+                                                <option value={option} key={option}>
+                                                    {option}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label>
+                                        Voronoi Jitter ({voronoiJitter.toFixed(2)})
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={1}
+                                            step={0.05}
+                                            value={voronoiJitter}
+                                            onChange={(event) => setVoronoiJitter(Number(event.target.value))}
+                                        />
+                                    </label>
+                                </>
+                            )}
                             <label>
                                 Palette Reduction
                                 <select value={reductionMode} onChange={(event) => setReductionMode(event.target.value as ReductionMode)}>

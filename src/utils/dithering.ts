@@ -57,6 +57,13 @@ export const DITHER_TYPE_ORDER: DitherType[] = [
     "voronoi-cluster",
 ];
 
+export interface ProceduralDitherOptions {
+    voronoi?: {
+        cellsPerAxis?: number;
+        jitter?: number;
+    };
+}
+
 const BAYER_DITHER_TYPES: BayerDitherType[] = ["bayer2", "bayer4", "bayer8"];
 const RANDOM_NOISE_TYPES: RandomNoiseDitherType[] = ["bw-noise", "grayscale-noise", "rgb-noise", "color-noise"];
 const PROCEDURAL_TILE_TYPES: ProceduralTileDitherType[] = ["blue-noise", "voronoi-cluster"];
@@ -70,9 +77,9 @@ const RANDOM_VARIANT_OFFSETS: Record<RandomNoiseDitherType, number> = {
 };
 
 const BLUE_NOISE_TILE_SIZE = 64;
-const VORONOI_TILE_SIZE = 64;
-const VORONOI_CELL_COUNT = 8;
-const VORONOI_JITTER = 0.85;
+export const VORONOI_TILE_SIZE = 64;
+export const DEFAULT_VORONOI_CELLS = 8;
+export const DEFAULT_VORONOI_JITTER = 0.85;
 
 const BAYER_MATRICES: Record<BayerDitherType, number[][]> = {
     bayer2: [
@@ -126,12 +133,18 @@ export function applyDitherJitter(
     return applyRandomNoiseDither(rgb255, x, y, type, strength, seed);
 }
 
-export function buildProceduralDitherTile(type: DitherType, seed: number): DitherThresholdTile | null {
+export function buildProceduralDitherTile(
+    type: DitherType,
+    seed: number,
+    options?: ProceduralDitherOptions
+): DitherThresholdTile | null {
     if (type === "blue-noise") {
         return generateBlueNoiseTile(BLUE_NOISE_TILE_SIZE, seed);
     }
     if (type === "voronoi-cluster") {
-        return generateVoronoiClusterTile(VORONOI_TILE_SIZE, VORONOI_CELL_COUNT, seed);
+        const cellsPerAxis = resolveVoronoiCells(options?.voronoi?.cellsPerAxis);
+        const jitter = clamp01(options?.voronoi?.jitter ?? DEFAULT_VORONOI_JITTER);
+        return generateVoronoiClusterTile(VORONOI_TILE_SIZE, cellsPerAxis, jitter, seed);
     }
     return null;
 }
@@ -227,12 +240,12 @@ function generateBlueNoiseTile(size: number, seed: number): DitherThresholdTile 
     };
 }
 
-function generateVoronoiClusterTile(size: number, cellsPerAxis: number, seed: number): DitherThresholdTile {
+function generateVoronoiClusterTile(size: number, cellsPerAxis: number, jitter: number, seed: number): DitherThresholdTile {
     if (size % cellsPerAxis !== 0) {
         throw new Error(`Voronoi tile size ${size} must be divisible by ${cellsPerAxis}`);
     }
     const cellSize = size / cellsPerAxis;
-    const centroids = buildVoronoiCentroids(cellsPerAxis, cellSize, size, seed);
+    const centroids = buildVoronoiCentroids(cellsPerAxis, cellSize, size, jitter, seed);
     const total = size * size;
     const scores = new Float32Array(total);
     for (let y = 0; y < size; y++) {
@@ -270,14 +283,20 @@ function generateVoronoiClusterTile(size: number, cellsPerAxis: number, seed: nu
     };
 }
 
-function buildVoronoiCentroids(cellsPerAxis: number, cellSize: number, tileSize: number, seed: number) {
+function buildVoronoiCentroids(
+    cellsPerAxis: number,
+    cellSize: number,
+    tileSize: number,
+    jitter: number,
+    seed: number
+) {
     const centroids: { x: number; y: number }[] = new Array(cellsPerAxis * cellsPerAxis);
     for (let cy = 0; cy < cellsPerAxis; cy++) {
         for (let cx = 0; cx < cellsPerAxis; cx++) {
             const baseX = cx * cellSize + cellSize / 2;
             const baseY = cy * cellSize + cellSize / 2;
-            const jitterX = (pseudoRandomUnit(seed, cx, cy, 811) - 0.5) * cellSize * VORONOI_JITTER;
-            const jitterY = (pseudoRandomUnit(seed, cx, cy, 923) - 0.5) * cellSize * VORONOI_JITTER;
+            const jitterX = (pseudoRandomUnit(seed, cx, cy, 811) - 0.5) * cellSize * jitter;
+            const jitterY = (pseudoRandomUnit(seed, cx, cy, 923) - 0.5) * cellSize * jitter;
             const xPos = normalizeTileCoord(baseX + jitterX, tileSize);
             const yPos = normalizeTileCoord(baseY + jitterY, tileSize);
             centroids[cy * cellsPerAxis + cx] = { x: xPos, y: yPos };
@@ -305,6 +324,27 @@ function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
     };
 }
 
+function resolveVoronoiCells(requested?: number) {
+    const size = VORONOI_TILE_SIZE;
+    const min = 1;
+    const max = size;
+    const candidate = Math.max(min, Math.min(max, Math.floor(requested ?? DEFAULT_VORONOI_CELLS)));
+    if (size % candidate === 0) {
+        return candidate;
+    }
+    for (let delta = 1; delta < size; delta++) {
+        const lower = candidate - delta;
+        if (lower >= min && size % lower === 0) {
+            return lower;
+        }
+        const upper = candidate + delta;
+        if (upper <= max && size % upper === 0) {
+            return upper;
+        }
+    }
+    return DEFAULT_VORONOI_CELLS;
+}
+
 function wrapTileIndex(size: number, x: number, y: number) {
     const wrappedX = wrapModulo(x, size);
     const wrappedY = wrapModulo(y, size);
@@ -319,6 +359,19 @@ function wrapModulo(value: number, modulus: number) {
 function normalizeTileCoord(value: number, size: number) {
     const mod = value % size;
     return mod < 0 ? mod + size : mod;
+}
+
+function clamp01(value: number) {
+    if (!Number.isFinite(value)) {
+        return 0;
+    }
+    if (value <= 0) {
+        return 0;
+    }
+    if (value >= 1) {
+        return 1;
+    }
+    return value;
 }
 
 function rankThresholds(scores: Float32Array) {
