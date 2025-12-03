@@ -84,7 +84,9 @@ function renderGradientControls({
     const interpolationOptions: { value: ColorInterpolationMode; label: string }[] = [
         { value: "rgb", label: "RGB" },
         { value: "hsl", label: "HSL" },
+        { value: "hsv", label: "HSV" },
         { value: "hwb", label: "HWB" },
+        { value: "ryb", label: "RYB" },
         { value: "cmyk", label: "CMYK" },
         { value: "lab", label: "LAB" },
         { value: "oklab", label: "OKLab" },

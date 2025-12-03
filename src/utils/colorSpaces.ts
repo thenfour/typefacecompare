@@ -1,6 +1,16 @@
 import { RGB, hexToRgb, oklchToSrgbHex, rgbToLab } from "./color";
 
-export type ColorInterpolationMode = "rgb" | "hsl" | "hwb" | "cmyk" | "lab" | "ycbcr" | "oklab" | "oklch";
+export type ColorInterpolationMode =
+    | "rgb"
+    | "hsl"
+    | "hsv"
+    | "hwb"
+    | "ryb"
+    | "cmyk"
+    | "lab"
+    | "ycbcr"
+    | "oklab"
+    | "oklch";
 
 export interface RGBColor {
     r: number;
@@ -9,14 +19,26 @@ export interface RGBColor {
 }
 
 interface HSLVector { h: number; s: number; l: number; }
+interface HSVVector { h: number; s: number; v: number; }
 interface HWBVector { h: number; w: number; b: number; }
+interface RYBVector { h: number; s: number; v: number; }
 interface CMYKVector { c: number; m: number; y: number; k: number; }
 interface LabVector { l: number; a: number; b: number; }
 interface YCbCrVector { y: number; cb: number; cr: number; }
 interface OklabVector { L: number; a: number; b: number; }
 interface OklchVector { L: number; C: number; h: number; }
 
-type ColorVector = RGB | HSLVector | HWBVector | CMYKVector | LabVector | YCbCrVector | OklabVector | OklchVector;
+type ColorVector =
+    | RGB
+    | HSLVector
+    | HSVVector
+    | HWBVector
+    | RYBVector
+    | CMYKVector
+    | LabVector
+    | YCbCrVector
+    | OklabVector
+    | OklchVector;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const clamp255 = (value: number) => Math.min(255, Math.max(0, value));
@@ -68,8 +90,12 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
             } satisfies RGB;
         case "hsl":
             return mixPolarHsl(a as HSLVector, b as HSLVector, lerp);
+        case "hsv":
+            return mixPolarHsv(a as HSVVector, b as HSVVector, lerp);
         case "hwb":
             return mixPolarHwb(a as HWBVector, b as HWBVector, lerp);
+        case "ryb":
+            return mixPolarRyb(a as RYBVector, b as RYBVector, lerp);
         case "cmyk":
             return {
                 c: lerp((a as CMYKVector).c, (b as CMYKVector).c),
@@ -115,6 +141,19 @@ function mixPolarHsl(a: HSLVector, b: HSLVector, lerp: (start: number, end: numb
     } satisfies HSLVector;
 }
 
+function mixPolarHsv(a: HSVVector, b: HSVVector, lerp: (start: number, end: number) => number): HSVVector {
+    const [ax, ay] = polarToCartesian(a.s, a.h);
+    const [bx, by] = polarToCartesian(b.s, b.h);
+    const mx = lerp(ax, bx);
+    const my = lerp(ay, by);
+    const { radius, angleDegrees } = cartesianToPolar(mx, my);
+    return {
+        h: angleDegrees,
+        s: clamp01(radius),
+        v: lerp(a.v, b.v)
+    } satisfies HSVVector;
+}
+
 function mixPolarHwb(a: HWBVector, b: HWBVector, lerp: (start: number, end: number) => number): HWBVector {
     const chromaA = Math.max(0, 1 - a.w - a.b);
     const chromaB = Math.max(0, 1 - b.w - b.b);
@@ -128,6 +167,19 @@ function mixPolarHwb(a: HWBVector, b: HWBVector, lerp: (start: number, end: numb
         w: lerp(a.w, b.w),
         b: lerp(a.b, b.b)
     } satisfies HWBVector;
+}
+
+function mixPolarRyb(a: RYBVector, b: RYBVector, lerp: (start: number, end: number) => number): RYBVector {
+    const [ax, ay] = polarToCartesian(a.s, a.h);
+    const [bx, by] = polarToCartesian(b.s, b.h);
+    const mx = lerp(ax, bx);
+    const my = lerp(ay, by);
+    const { radius, angleDegrees } = cartesianToPolar(mx, my);
+    return {
+        h: angleDegrees,
+        s: clamp01(radius),
+        v: lerp(a.v, b.v)
+    } satisfies RYBVector;
 }
 
 function mixPolarOklch(a: OklchVector, b: OklchVector, lerp: (start: number, end: number) => number): OklchVector {
@@ -171,8 +223,12 @@ function rgbToVector(rgb: RGB, mode: ColorInterpolationMode): ColorVector {
             return { ...rgb } satisfies RGB;
         case "hsl":
             return rgbToHsl(rgb);
+        case "hsv":
+            return rgbToHsv(rgb);
         case "hwb":
             return rgbToHwb(rgb);
+        case "ryb":
+            return rgbToRyb(rgb);
         case "cmyk":
             return rgbToCmyk(rgb);
         case "lab":
@@ -194,8 +250,12 @@ export function vectorToRgb(vector: ColorVector, mode: ColorInterpolationMode): 
             return clampRgb(vector as RGB);
         case "hsl":
             return clampRgb(hslToRgb(vector as HSLVector));
+        case "hsv":
+            return clampRgb(hsvToRgb(vector as HSVVector));
         case "hwb":
             return clampRgb(hwbToRgb(vector as HWBVector));
+        case "ryb":
+            return clampRgb(rybToRgb(vector as RYBVector));
         case "cmyk":
             return clampRgb(cmykToRgb(vector as CMYKVector));
         case "lab":
@@ -280,6 +340,72 @@ function hueToRgb(p: number, q: number, t: number) {
     return p;
 }
 
+// HSV conversion helpers
+function rgbToHsv(rgb: RGB): HSVVector {
+    const r = rgb.r;
+    const g = rgb.g;
+    const b = rgb.b;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    let h = 0;
+    const s = max === 0 ? 0 : delta / max;
+    const v = max;
+
+    if (delta !== 0) {
+        if (max === r) {
+            h = ((g - b) / delta + (g < b ? 6 : 0)) * 60;
+        } else if (max === g) {
+            h = ((b - r) / delta + 2) * 60;
+        } else {
+            h = ((r - g) / delta + 4) * 60;
+        }
+    }
+
+    return { h, s, v } satisfies HSVVector;
+}
+
+function hsvToRgb(hsv: HSVVector): RGB {
+    const h = ((hsv.h % 360) + 360) % 360;
+    const s = clamp01(hsv.s);
+    const v = clamp01(hsv.v);
+    if (s === 0) {
+        return { r: v, g: v, b: v } satisfies RGB;
+    }
+    const c = v * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = v - c;
+
+    let r1 = 0;
+    let g1 = 0;
+    let b1 = 0;
+    if (h < 60) {
+        r1 = c;
+        g1 = x;
+    } else if (h < 120) {
+        r1 = x;
+        g1 = c;
+    } else if (h < 180) {
+        g1 = c;
+        b1 = x;
+    } else if (h < 240) {
+        g1 = x;
+        b1 = c;
+    } else if (h < 300) {
+        r1 = x;
+        b1 = c;
+    } else {
+        r1 = c;
+        b1 = x;
+    }
+
+    return {
+        r: clamp01(r1 + m),
+        g: clamp01(g1 + m),
+        b: clamp01(b1 + m)
+    } satisfies RGB;
+}
+
 function rgbToHwb(rgb: RGB): HWBVector {
     const { h } = rgbToHsl(rgb);
     const whiteness = Math.min(rgb.r, rgb.g, rgb.b);
@@ -339,16 +465,68 @@ function pureHueToRgb(hueDegrees: number): RGB {
     return { r, g, b } satisfies RGB;
 }
 
-    function polarToCartesian(radius: number, degrees: number) {
-        const radians = (((degrees ?? 0) % 360) + 360) % 360 * (Math.PI / 180);
-        return [radius * Math.cos(radians), radius * Math.sin(radians)];
-    }
+function rgbToRyb(rgb: RGB): RYBVector {
+    const hsv = rgbToHsv(rgb);
+    return {
+        h: rgbHueToRybHue(hsv.h),
+        s: hsv.s,
+        v: hsv.v
+    } satisfies RYBVector;
+}
 
-    function cartesianToPolar(x: number, y: number) {
-        const radius = Math.sqrt(x * x + y * y);
-        const angleDegrees = (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360;
-        return { radius, angleDegrees };
+function rybToRgb(ryb: RYBVector): RGB {
+    const mappedHue = rybHueToRgbHue(ryb.h);
+    return hsvToRgb({ h: mappedHue, s: clamp01(ryb.s), v: clamp01(ryb.v) });
+}
+
+function polarToCartesian(radius: number, degrees: number) {
+    const radians = (((degrees ?? 0) % 360) + 360) % 360 * (Math.PI / 180);
+    return [radius * Math.cos(radians), radius * Math.sin(radians)];
+}
+
+function cartesianToPolar(x: number, y: number) {
+    const radius = Math.sqrt(x * x + y * y);
+    const angleDegrees = (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360;
+    return { radius, angleDegrees };
+}
+
+const RYB_HUE_MAP: ReadonlyArray<{ ryb: number; rgb: number }> = [
+    { ryb: 0, rgb: 0 },
+    { ryb: 60, rgb: 35 },
+    { ryb: 120, rgb: 60 },
+    { ryb: 180, rgb: 120 },
+    { ryb: 240, rgb: 195 },
+    { ryb: 300, rgb: 275 },
+    { ryb: 360, rgb: 360 }
+];
+
+function rybHueToRgbHue(hue: number) {
+    return remapHueThroughMap(hue, false);
+}
+
+function rgbHueToRybHue(hue: number) {
+    return remapHueThroughMap(hue, true);
+}
+
+function remapHueThroughMap(hue: number, invert: boolean) {
+    const normalized = ((hue % 360) + 360) % 360;
+    const sourceKey: "ryb" | "rgb" = invert ? "rgb" : "ryb";
+    const targetKey: "ryb" | "rgb" = invert ? "ryb" : "rgb";
+    for (let index = 0; index < RYB_HUE_MAP.length - 1; index++) {
+        const start = RYB_HUE_MAP[index];
+        const end = RYB_HUE_MAP[index + 1];
+        const startValue = start[sourceKey];
+        const endValue = end[sourceKey];
+        if (normalized >= startValue && normalized <= endValue) {
+            const range = endValue - startValue;
+            const t = range === 0 ? 0 : (normalized - startValue) / range;
+            const mappedStart = start[targetKey];
+            const mappedEnd = end[targetKey];
+            return mappedStart + (mappedEnd - mappedStart) * t;
+        }
     }
+    return normalized;
+}
 
 // CMYK helpers
 function rgbToCmyk(rgb: RGB): CMYKVector {

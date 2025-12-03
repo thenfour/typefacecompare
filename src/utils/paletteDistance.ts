@@ -23,7 +23,15 @@ export function isDistanceFeatureSupported(mode: ColorInterpolationMode, feature
         case "all":
             return true;
         case "luminance":
-            return mode === "lab" || mode === "oklab" || mode === "oklch" || mode === "ycbcr" || mode === "hsl";
+            return (
+                mode === "lab" ||
+                mode === "oklab" ||
+                mode === "oklch" ||
+                mode === "ycbcr" ||
+                mode === "hsl" ||
+                mode === "hsv" ||
+                mode === "ryb"
+            );
         case "hsl-saturation":
         case "hsl-lightness":
             return mode === "hsl";
@@ -112,6 +120,14 @@ function projectDistanceFeature(
                 const hslVector = vector as { l?: number };
                 return [hslVector.l ?? 0];
             }
+            if (mode === "hsv") {
+                const hsvVector = vector as { v?: number };
+                return [hsvVector.v ?? 0];
+            }
+            if (mode === "ryb") {
+                const rybVector = vector as { v?: number };
+                return [rybVector.v ?? 0];
+            }
             break;
         case "hsl-saturation": {
             const hslVector = vector as { s?: number };
@@ -142,10 +158,20 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             const [hx, hy] = hueToCartesian(hsl.h);
             return [hx, hy, hsl.s, hsl.l];
         }
+        case "hsv": {
+            const hsv = vector as { h: number; s: number; v: number };
+            const [hx, hy] = hueToCartesian(hsv.h);
+            return [hx, hy, hsv.s, hsv.v];
+        }
         case "hwb": {
             const hwb = vector as { h: number; w: number; b: number };
             const [hx, hy] = hueToCartesian(hwb.h);
             return [hx, hy, hwb.w, hwb.b];
+        }
+        case "ryb": {
+            const ryb = vector as { h: number; s: number; v: number };
+            const [hx, hy] = hueToCartesian(ryb.h);
+            return [hx, hy, ryb.s, ryb.v];
         }
         case "cmyk": {
             const cmyk = vector as { c: number; m: number; y: number; k: number };
