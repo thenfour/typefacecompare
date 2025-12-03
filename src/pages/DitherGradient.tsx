@@ -17,6 +17,7 @@ import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
 import { ReductionControls } from "@/components/dither/ReductionControls";
 import { PreviewSection } from "@/components/dither/PreviewSection";
+import { ColorSpaceScatterPlot, type RGBPoint } from "@/components/dither/ColorSpaceScatterPlot";
 import {
     buildProceduralDitherTile,
     DEFAULT_ERROR_DIFFUSION_KERNEL,
@@ -29,6 +30,7 @@ import {
     usesSeededDither,
 } from "../utils/dithering";
 const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
+const MAX_SCATTER_SOURCE_POINTS = 4000;
 
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
@@ -198,6 +200,8 @@ export default function DitherGradientPage() {
             }),
         [reductionSwatches, distanceColorSpace]
     );
+    const sourceScatterPoints = useMemo(() => sampleImageRgbPoints(sourceImageData, MAX_SCATTER_SOURCE_POINTS), [sourceImageData]);
+    const paletteScatterPoints = useMemo(() => paletteEntriesToRgbPoints(reductionPaletteEntries), [reductionPaletteEntries]);
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -416,11 +420,19 @@ export default function DitherGradientPage() {
                 <div className="dither-gradient-layout">
                     <section className="dither-gradient-card preview">
                         <header>
-                            <strong>Color matching preview</strong>
+                            <strong>Color Space Scatter</strong>
+                            <span>RGB sample distribution</span>
                         </header>
-                        <div>
-                            TODO: for both palettes, and for each swatch (rows), show the top N closest matches in the other palette (columns) , with deltaE or distance metric visible. Tooltip to show more detail.
-                        </div>
+                        {sourceScatterPoints.length === 0 && paletteScatterPoints.length === 0 ? (
+                            <div className="color-scatter-container--empty">Import an image or define a reduction palette to preview color samples.</div>
+                        ) : (
+                            <div className="color-scatter-container">
+                                <ColorSpaceScatterPlot sourcePoints={sourceScatterPoints} palettePoints={paletteScatterPoints} />
+                            </div>
+                        )}
+                        <p className="dither-gradient-note">
+                            Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} pixels are sampled from the source image; palette points show every reduction swatch.
+                        </p>
                     </section>
                 </div>
             </main>
@@ -447,5 +459,28 @@ function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: numbe
         }
     }
     return hexes;
+}
+
+function sampleImageRgbPoints(imageData: ImageData | null, maxPoints: number): RGBPoint[] {
+    if (!imageData || maxPoints <= 0) {
+        return [];
+    }
+    const totalPixels = imageData.width * imageData.height;
+    if (totalPixels === 0) {
+        return [];
+    }
+    const clampMaxPoints = Math.min(maxPoints, totalPixels);
+    const step = Math.max(1, Math.floor(totalPixels / clampMaxPoints));
+    const result: RGBPoint[] = [];
+    const { data } = imageData;
+    for (let pixelIndex = 0; pixelIndex < totalPixels && result.length < clampMaxPoints; pixelIndex += step) {
+        const dataIndex = pixelIndex * 4;
+        result.push([data[dataIndex], data[dataIndex + 1], data[dataIndex + 2]]);
+    }
+    return result;
+}
+
+function paletteEntriesToRgbPoints(entries: ReductionPaletteEntry[]): RGBPoint[] {
+    return entries.map((entry) => [entry.rgb.r, entry.rgb.g, entry.rgb.b]);
 }
 
