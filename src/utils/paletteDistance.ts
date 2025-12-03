@@ -23,7 +23,7 @@ export function isDistanceFeatureSupported(mode: ColorInterpolationMode, feature
         case "all":
             return true;
         case "luminance":
-            return mode === "lab" || mode === "oklch" || mode === "ycbcr" || mode === "hsl";
+            return mode === "lab" || mode === "oklab" || mode === "oklch" || mode === "ycbcr" || mode === "hsl";
         case "hsl-saturation":
         case "hsl-lightness":
             return mode === "hsl";
@@ -96,6 +96,10 @@ function projectDistanceFeature(
                 const labVector = vector as { l?: number };
                 return [Math.max(0, Math.min(1, (labVector.l ?? 0) / 100))];
             }
+            if (mode === "oklab") {
+                const oklabVector = vector as { L?: number };
+                return [oklabVector.L ?? 0];
+            }
             if (mode === "oklch") {
                 const oklchVector = vector as { L?: number };
                 return [oklchVector.L ?? 0];
@@ -138,6 +142,11 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             const [hx, hy] = hueToCartesian(hsl.h);
             return [hx, hy, hsl.s, hsl.l];
         }
+        case "hwb": {
+            const hwb = vector as { h: number; w: number; b: number };
+            const [hx, hy] = hueToCartesian(hwb.h);
+            return [hx, hy, hwb.w, hwb.b];
+        }
         case "cmyk": {
             const cmyk = vector as { c: number; m: number; y: number; k: number };
             return [cmyk.c, cmyk.m, cmyk.y, cmyk.k];
@@ -145,6 +154,10 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
         case "lab": {
             const lab = vector as { l: number; a: number; b: number };
             return [lab.l / 100, lab.a / 128, lab.b / 128];
+        }
+        case "oklab": {
+            const oklab = vector as { L: number; a: number; b: number };
+            return [oklab.L, oklab.a, oklab.b];
         }
         case "ycbcr": {
             const ycbcr = vector as { y: number; cb: number; cr: number };

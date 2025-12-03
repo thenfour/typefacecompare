@@ -1,6 +1,6 @@
 import { RGB, hexToRgb, oklchToSrgbHex, rgbToLab } from "./color";
 
-export type ColorInterpolationMode = "rgb" | "hsl" | "cmyk" | "lab" | "ycbcr" | "oklch";
+export type ColorInterpolationMode = "rgb" | "hsl" | "hwb" | "cmyk" | "lab" | "ycbcr" | "oklab" | "oklch";
 
 export interface RGBColor {
     r: number;
@@ -9,12 +9,14 @@ export interface RGBColor {
 }
 
 interface HSLVector { h: number; s: number; l: number; }
+interface HWBVector { h: number; w: number; b: number; }
 interface CMYKVector { c: number; m: number; y: number; k: number; }
 interface LabVector { l: number; a: number; b: number; }
 interface YCbCrVector { y: number; cb: number; cr: number; }
+interface OklabVector { L: number; a: number; b: number; }
 interface OklchVector { L: number; C: number; h: number; }
 
-type ColorVector = RGB | HSLVector | CMYKVector | LabVector | YCbCrVector | OklchVector;
+type ColorVector = RGB | HSLVector | HWBVector | CMYKVector | LabVector | YCbCrVector | OklabVector | OklchVector;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const clamp255 = (value: number) => Math.min(255, Math.max(0, value));
@@ -66,6 +68,8 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
             } satisfies RGB;
         case "hsl":
             return mixPolarHsl(a as HSLVector, b as HSLVector, lerp);
+        case "hwb":
+            return mixPolarHwb(a as HWBVector, b as HWBVector, lerp);
         case "cmyk":
             return {
                 c: lerp((a as CMYKVector).c, (b as CMYKVector).c),
@@ -79,6 +83,12 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
                 a: lerp((a as LabVector).a, (b as LabVector).a),
                 b: lerp((a as LabVector).b, (b as LabVector).b)
             } satisfies LabVector;
+        case "oklab":
+            return {
+                L: lerp((a as OklabVector).L, (b as OklabVector).L),
+                a: lerp((a as OklabVector).a, (b as OklabVector).a),
+                b: lerp((a as OklabVector).b, (b as OklabVector).b)
+            } satisfies OklabVector;
         case "ycbcr":
             return {
                 y: lerp((a as YCbCrVector).y, (b as YCbCrVector).y),
@@ -103,6 +113,21 @@ function mixPolarHsl(a: HSLVector, b: HSLVector, lerp: (start: number, end: numb
         s: clamp01(radius),
         l: lerp(a.l, b.l)
     } satisfies HSLVector;
+}
+
+function mixPolarHwb(a: HWBVector, b: HWBVector, lerp: (start: number, end: number) => number): HWBVector {
+    const chromaA = Math.max(0, 1 - a.w - a.b);
+    const chromaB = Math.max(0, 1 - b.w - b.b);
+    const [ax, ay] = polarToCartesian(chromaA, a.h);
+    const [bx, by] = polarToCartesian(chromaB, b.h);
+    const mx = lerp(ax, bx);
+    const my = lerp(ay, by);
+    const { angleDegrees } = cartesianToPolar(mx, my);
+    return {
+        h: angleDegrees,
+        w: lerp(a.w, b.w),
+        b: lerp(a.b, b.b)
+    } satisfies HWBVector;
 }
 
 function mixPolarOklch(a: OklchVector, b: OklchVector, lerp: (start: number, end: number) => number): OklchVector {
@@ -146,10 +171,14 @@ function rgbToVector(rgb: RGB, mode: ColorInterpolationMode): ColorVector {
             return { ...rgb } satisfies RGB;
         case "hsl":
             return rgbToHsl(rgb);
+        case "hwb":
+            return rgbToHwb(rgb);
         case "cmyk":
             return rgbToCmyk(rgb);
         case "lab":
             return rgbToLab(rgb);
+        case "oklab":
+            return rgbToOklab(rgb);
         case "ycbcr":
             return rgbToYcbcr(rgb);
         case "oklch":
@@ -165,10 +194,14 @@ export function vectorToRgb(vector: ColorVector, mode: ColorInterpolationMode): 
             return clampRgb(vector as RGB);
         case "hsl":
             return clampRgb(hslToRgb(vector as HSLVector));
+        case "hwb":
+            return clampRgb(hwbToRgb(vector as HWBVector));
         case "cmyk":
             return clampRgb(cmykToRgb(vector as CMYKVector));
         case "lab":
             return clampRgb(labToRgb(vector as LabVector));
+        case "oklab":
+            return clampRgb(oklabToRgb(vector as OklabVector));
         case "ycbcr":
             return clampRgb(ycbcrToRgb(vector as YCbCrVector));
         case "oklch":
@@ -245,6 +278,65 @@ function hueToRgb(p: number, q: number, t: number) {
     if (temp < 1 / 2) return q;
     if (temp < 2 / 3) return p + (q - p) * (2 / 3 - temp) * 6;
     return p;
+}
+
+function rgbToHwb(rgb: RGB): HWBVector {
+    const { h } = rgbToHsl(rgb);
+    const whiteness = Math.min(rgb.r, rgb.g, rgb.b);
+    const blackness = 1 - Math.max(rgb.r, rgb.g, rgb.b);
+    return {
+        h,
+        w: clamp01(whiteness),
+        b: clamp01(blackness)
+    } satisfies HWBVector;
+}
+
+function hwbToRgb(hwb: HWBVector): RGB {
+    let h = ((hwb.h % 360) + 360) % 360;
+    let w = clamp01(hwb.w);
+    let b = clamp01(hwb.b);
+    const sum = w + b;
+    if (sum > 1) {
+        w /= sum;
+        b /= sum;
+    }
+    const pure = pureHueToRgb(h);
+    const factor = 1 - w - b;
+    return {
+        r: clamp01(pure.r * factor + w),
+        g: clamp01(pure.g * factor + w),
+        b: clamp01(pure.b * factor + w)
+    } satisfies RGB;
+}
+
+function pureHueToRgb(hueDegrees: number): RGB {
+    const hue = ((hueDegrees % 360) + 360) % 360;
+    const c = 1;
+    const hp = hue / 60;
+    const x = c * (1 - Math.abs((hp % 2) - 1));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (hp >= 0 && hp < 1) {
+        r = c;
+        g = x;
+    } else if (hp >= 1 && hp < 2) {
+        r = x;
+        g = c;
+    } else if (hp >= 2 && hp < 3) {
+        g = c;
+        b = x;
+    } else if (hp >= 3 && hp < 4) {
+        g = x;
+        b = c;
+    } else if (hp >= 4 && hp < 5) {
+        r = x;
+        b = c;
+    } else {
+        r = c;
+        b = x;
+    }
+    return { r, g, b } satisfies RGB;
 }
 
     function polarToCartesian(radius: number, degrees: number) {
@@ -392,4 +484,24 @@ function srgbToLinearChannel(value: number) {
 function oklchToRgb(vec: OklchVector): RGB {
     const { rgb } = oklchToSrgbHex(vec.L, vec.C, vec.h);
     return rgb;
+}
+
+function oklabToRgb(vec: OklabVector): RGB {
+    const l_ = vec.L + 0.3963377774 * vec.a + 0.2158037573 * vec.b;
+    const m_ = vec.L - 0.1055613458 * vec.a - 0.0638541728 * vec.b;
+    const s_ = vec.L - 0.0894841775 * vec.a - 1.2914855480 * vec.b;
+
+    const l = l_ * l_ * l_;
+    const m = m_ * m_ * m_;
+    const s = s_ * s_ * s_;
+
+    const rLin = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+    const gLin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+    const bLin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+
+    return {
+        r: linearToSrgb(rLin),
+        g: linearToSrgb(gLin),
+        b: linearToSrgb(bLin)
+    } satisfies RGB;
 }
