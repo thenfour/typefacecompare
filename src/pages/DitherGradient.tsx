@@ -11,6 +11,7 @@ import { GradientPreviewCanvas } from "../components/GradientPreviewCanvas";
 import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
+import { LospecPaletteImporter } from "@/components/LospecPaletteImporter";
 import {
     buildProceduralDitherTile,
     DEFAULT_ERROR_DIFFUSION_KERNEL,
@@ -556,6 +557,7 @@ export default function DitherGradientPage() {
                             <span>{gradientSwatches.length} swatch{gradientSwatches.length === 1 ? "" : "es"}</span>
                         </header>
                         <PalettePresetButtons presets={PALETTE_PRESETS} onSelect={setGradientPaletteText} />
+                        <LospecPaletteImporter targetLabel="gradient palette" onApplyPalette={setGradientPaletteText} />
                         <div style={{ display: "flex" }}>
                             <textarea
                                 value={gradientPaletteText}
@@ -575,6 +577,7 @@ export default function DitherGradientPage() {
                             <span>{reductionSwatches.length} swatch{reductionSwatches.length === 1 ? "" : "es"}</span>
                         </header>
                         <PalettePresetButtons presets={PALETTE_PRESETS} onSelect={setReductionPaletteText} />
+                        <LospecPaletteImporter targetLabel="reduction palette" onApplyPalette={setReductionPaletteText} />
                         <div style={{ display: "flex" }}>
                             <textarea
                                 value={reductionPaletteText}
