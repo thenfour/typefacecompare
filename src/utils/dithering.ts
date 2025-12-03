@@ -7,7 +7,9 @@ export type DitherType =
     | "cluster-dot4"
     | "cluster-dot8"
     | "scanline"
+    | "shade-bands"
     | "diag45"
+    | "hex-packed"
     | "bw-noise"
     | "grayscale-noise"
     | "rgb-noise"
@@ -23,7 +25,9 @@ export type OrderedMatrixDitherType =
     | "cluster-dot4"
     | "cluster-dot8"
     | "scanline"
-    | "diag45";
+    | "shade-bands"
+    | "diag45"
+    | "hex-packed";
 export type RandomNoiseDitherType = "bw-noise" | "grayscale-noise" | "rgb-noise" | "color-noise";
 export type ProceduralTileDitherType = "blue-noise" | "voronoi-cluster";
 export type ErrorDiffusionKernelId =
@@ -57,7 +61,9 @@ export const DITHER_LABELS: Record<DitherType, string> = {
     "cluster-dot4": "4×4 Clustered dot",
     "cluster-dot8": "8×8 Clustered dot",
     scanline: "Scanline (horizontal)",
+    "shade-bands": "Shade bands",
     diag45: "Diagonal hatch",
+    "hex-packed": "Hex packed",
     "bw-noise": "Random B/W noise",
     "grayscale-noise": "Random grayscale noise",
     "rgb-noise": "Random RGB primary noise",
@@ -76,7 +82,9 @@ export const DITHER_DESCRIPTIONS: Record<DitherType, string> = {
     "cluster-dot4": "Tight 4×4 clustered halftone",
     "cluster-dot8": "Larger 8×8 clustered halftone",
     scanline: "Horizontal stripe thresholds",
+    "shade-bands": "Band-limited gradient blocks",
     diag45: "45° diagonal stripes",
+    "hex-packed": "Axial hex packing pattern",
     "bw-noise": "Binary noise per pixel",
     "grayscale-noise": "Monochrome random jitter",
     "rgb-noise": "Channel-wise binary noise",
@@ -95,7 +103,9 @@ export const DITHER_TYPE_ORDER: DitherType[] = [
     "cluster-dot4",
     "cluster-dot8",
     "scanline",
+    "shade-bands",
     "diag45",
+    "hex-packed",
     "bw-noise",
     "grayscale-noise",
     "rgb-noise",
@@ -120,7 +130,9 @@ const ORDERED_DITHER_TYPES: OrderedMatrixDitherType[] = [
     "cluster-dot4",
     "cluster-dot8",
     "scanline",
+    "shade-bands",
     "diag45",
+    "hex-packed",
 ];
 const RANDOM_NOISE_TYPES: RandomNoiseDitherType[] = ["bw-noise", "grayscale-noise", "rgb-noise", "color-noise"];
 const PROCEDURAL_TILE_TYPES: ProceduralTileDitherType[] = ["blue-noise", "voronoi-cluster"];
@@ -264,7 +276,9 @@ const ORDERED_DITHER_MATRICES: Record<OrderedMatrixDitherType, number[][]> = {
     "cluster-dot4": buildClusterDotMatrix(4),
     "cluster-dot8": buildClusterDotMatrix(8),
     scanline: buildScanlineMatrix(4),
+    "shade-bands": buildShadeBandsMatrix(8, 6),
     diag45: buildDiagonalMatrix(8),
+    "hex-packed": buildHexPackedMatrix(8),
 };
 
 function buildBayerMatrix(size: number): number[][] {

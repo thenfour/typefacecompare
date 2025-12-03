@@ -1,6 +1,6 @@
 import Head from "next/head";
 import Link from "next/link";
-import { ChangeEvent, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
 import { ColorInterpolationMode, convertHexToVector, interpolateGradientColor, rgb255ToVector, rgbUnitTo255 } from "../utils/colorSpaces";
 import { hexToRgb } from "../utils/color";
@@ -31,6 +31,15 @@ import {
 } from "../utils/dithering";
 type ReductionMode = "binary" | "palette" | "none";
 type DistanceFeature = "all" | "luminance" | "hsl-saturation" | "hsl-lightness" | "oklch-chroma";
+type SourceType = "gradient" | "image";
+type ImageScaleMode = "cover" | "contain" | "stretch" | "none";
+type ImageSourceKind = "url" | "clipboard";
+interface ImageSourceState {
+    element: HTMLImageElement;
+    label: string;
+    kind: ImageSourceKind;
+    cleanup?: () => void;
+}
 const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
     all: "All components",
     luminance: "Luminance / Lightness",
@@ -39,6 +48,12 @@ const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
     "oklch-chroma": "OKLCH Chroma",
 };
 const DISTANCE_FEATURE_ORDER: DistanceFeature[] = ["all", "luminance", "hsl-saturation", "hsl-lightness", "oklch-chroma"];
+const IMAGE_SCALE_MODE_LABELS: Record<ImageScaleMode, string> = {
+    cover: "Cover",
+    contain: "Contain",
+    stretch: "Stretch",
+    none: "No scaling",
+};
 const LUMINANCE_SUPPORTED_SPACES: ColorInterpolationMode[] = ["lab", "oklch", "ycbcr", "hsl"];
 const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
 
@@ -171,6 +186,13 @@ export default function DitherGradientPage() {
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.333);
     const [ditherSeed, setDitherSeed] = useState<number>(1);
+    const [sourceType, setSourceType] = useState<SourceType>("gradient");
+    const [imageUrlInput, setImageUrlInput] = useState("");
+    const [imageScaleMode, setImageScaleMode] = useState<ImageScaleMode>("cover");
+    const [imageSource, setImageSource] = useState<ImageSourceState | null>(null);
+    const [sourceImageData, setSourceImageData] = useState<ImageData | null>(null);
+    const [isImportingImage, setIsImportingImage] = useState(false);
+    const [imageImportError, setImageImportError] = useState<string | null>(null);
     const [voronoiCellsPerAxis, setVoronoiCellsPerAxis] = useState<number>(DEFAULT_VORONOI_CELLS);
     const [voronoiJitter, setVoronoiJitter] = useState<number>(DEFAULT_VORONOI_JITTER);
     const [errorDiffusionKernelId, setErrorDiffusionKernelId] = useState<ErrorDiffusionKernelId>(DEFAULT_ERROR_DIFFUSION_KERNEL);
@@ -222,6 +244,45 @@ export default function DitherGradientPage() {
         [ditherType, ditherSeed, voronoiCellsPerAxis, voronoiJitter]
     );
 
+    const replaceImageSource = useCallback((next: ImageSourceState | null) => {
+        setImageSource((previous) => {
+            if (previous?.cleanup) {
+                try {
+                    previous.cleanup();
+                } catch {
+                    // ignore cleanup failures
+                }
+            }
+            return next;
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!imageSource?.element) {
+            setSourceImageData(null);
+            return;
+        }
+        if (typeof document === "undefined") {
+            return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+            return;
+        }
+        drawImageWithScaleMode(ctx, imageSource.element, imageScaleMode, width, height);
+        const nextImageData = ctx.getImageData(0, 0, width, height);
+        setSourceImageData(nextImageData);
+    }, [imageSource, width, height, imageScaleMode]);
+
+    useEffect(() => {
+        return () => {
+            replaceImageSource(null);
+        };
+    }, [replaceImageSource]);
+
     const handleDistanceColorSpaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
         const nextMode = event.target.value as ColorInterpolationMode;
         setDistanceColorSpace(nextMode);
@@ -233,6 +294,75 @@ export default function DitherGradientPage() {
             return nextFeatures[0] ?? "all";
         });
     };
+
+    const handleImportImage = async () => {
+        const trimmedUrl = imageUrlInput.trim();
+        if (!trimmedUrl) {
+            setImageImportError("Enter an image URL");
+            return;
+        }
+        if (typeof window === "undefined") {
+            setImageImportError("Image import is only available in the browser");
+            return;
+        }
+        setIsImportingImage(true);
+        setImageImportError(null);
+        try {
+            const imageElement = await loadImageElementFromUrl(trimmedUrl);
+            replaceImageSource({
+                element: imageElement,
+                label: "Imported URL",
+                kind: "url",
+            });
+            setSourceType("image");
+        } catch (error) {
+            replaceImageSource(null);
+            setImageImportError(error instanceof Error ? error.message : "Failed to import image");
+        } finally {
+            setIsImportingImage(false);
+        }
+    };
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+        const handlePaste = (event: ClipboardEvent) => {
+            const clipboardData = event.clipboardData;
+            if (!clipboardData) {
+                return;
+            }
+            const fileItem = Array.from(clipboardData.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
+            if (!fileItem) {
+                return;
+            }
+            const file = fileItem.getAsFile();
+            if (!file) {
+                return;
+            }
+            const objectUrl = URL.createObjectURL(file);
+            const pastedImage = new Image();
+            pastedImage.decoding = "async";
+            pastedImage.onload = () => {
+                replaceImageSource({
+                    element: pastedImage,
+                    label: "Pasted image",
+                    kind: "clipboard",
+                    cleanup: () => URL.revokeObjectURL(objectUrl),
+                });
+                setImageImportError(null);
+                setSourceType("image");
+                setImageUrlInput("");
+            };
+            pastedImage.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                setImageImportError("Unable to decode pasted image");
+            };
+            pastedImage.src = objectUrl;
+        };
+        window.addEventListener("paste", handlePaste);
+        return () => window.removeEventListener("paste", handlePaste);
+    }, [replaceImageSource]);
 
     useEffect(() => {
         const previewStages: PreviewStageConfig[] = [
@@ -247,7 +377,9 @@ export default function DitherGradientPage() {
             ? createErrorDiffusionContext(width, height, selectedErrorDiffusionKernel)
             : null;
 
-        if (derivedCorners.hexes.length < 4) {
+        const requiresGradientData = sourceType === "gradient";
+        const requiresImageData = sourceType === "image";
+        if ((requiresGradientData && derivedCorners.hexes.length < 4) || (requiresImageData && !sourceImageData)) {
             previewStages.forEach((stage) => {
                 const canvas = stage.ref.current;
                 if (!canvas) return;
@@ -287,7 +419,16 @@ export default function DitherGradientPage() {
             const v = height === 1 ? 0 : y / (height - 1);
             for (let x = 0; x < width; x++) {
                 const u = width === 1 ? 0 : x / (width - 1);
-                const base = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
+                const base = sampleSourceColor(
+                    sourceType,
+                    derivedCorners.hexes,
+                    interpolationMode,
+                    u,
+                    v,
+                    x,
+                    y,
+                    sourceImageData
+                );
                 const sourceColor = clampRgb255(base);
                 let ditheredColor: { r: number; g: number; b: number };
                 let reducedColor: { r: number; g: number; b: number };
@@ -369,6 +510,8 @@ export default function DitherGradientPage() {
         showReducedPreview,
         showProjectedPreview,
         distanceFeature,
+        sourceType,
+        sourceImageData,
     ]);
 
     // const handleCornerChange = (cornerIndex: number, swatchIndex: number) => {
@@ -384,6 +527,15 @@ export default function DitherGradientPage() {
     const isVoronoiDither = ditherType === "voronoi-cluster";
     const isErrorDiffusion = isErrorDiffusionDither(ditherType);
     const selectedErrorDiffusionKernel = getErrorDiffusionKernel(errorDiffusionKernelId);
+    const usingImageSource = sourceType === "image";
+    const imageSourceReady = !!sourceImageData;
+    const sourceSummaryLabel = usingImageSource
+        ? imageSource?.label ?? "Image source"
+        : `${interpolationMode.toUpperCase()} gradient`;
+    const sourceCanvasTitle = usingImageSource ? "Source Image" : "Source Gradient";
+    const sourceCanvasDescription = usingImageSource
+        ? imageSource?.label ?? "Imported bitmap"
+        : "Interpolated";
 
     return (
         <>
@@ -442,6 +594,76 @@ export default function DitherGradientPage() {
                             <strong>Controls</strong>
                         </header>
                         <div className="control-grid">
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                                <span>Source</span>
+                                <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                                        <input
+                                            type="radio"
+                                            name="source-type"
+                                            value="gradient"
+                                            checked={sourceType === "gradient"}
+                                            onChange={() => setSourceType("gradient")}
+                                        />
+                                        Gradient
+                                    </label>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                                        <input
+                                            type="radio"
+                                            name="source-type"
+                                            value="image"
+                                            checked={sourceType === "image"}
+                                            onChange={() => setSourceType("image")}
+                                        />
+                                        Image
+                                    </label>
+                                </div>
+                            </div>
+                            {sourceType === "image" && (
+                                <>
+                                    <label>
+                                        Image URL
+                                        <div style={{ display: "flex", gap: "0.5rem" }}>
+                                            <input
+                                                type="url"
+                                                placeholder="https://example.com/image.png"
+                                                value={imageUrlInput}
+                                                onChange={(event) => setImageUrlInput(event.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleImportImage}
+                                                disabled={isImportingImage || !imageUrlInput.trim()}
+                                            >
+                                                {isImportingImage ? "Importing…" : "Import"}
+                                            </button>
+                                        </div>
+                                    </label>
+                                    <label>
+                                        Image Scaling
+                                        <select
+                                            value={imageScaleMode}
+                                            onChange={(event) => setImageScaleMode(event.target.value as ImageScaleMode)}
+                                        >
+                                            {Object.entries(IMAGE_SCALE_MODE_LABELS).map(([value, label]) => (
+                                                <option value={value} key={value}>
+                                                    {label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    {imageSource && !imageImportError && (
+                                        <p className="dither-gradient-note">
+                                            {imageSource.label} • {imageSource.element.naturalWidth}×{imageSource.element.naturalHeight}px
+                                        </p>
+                                    )}
+                                    {imageImportError && <p className="dither-gradient-warning">{imageImportError}</p>}
+                                    {!imageSourceReady && !imageImportError && !imageSource && (
+                                        <p className="dither-gradient-warning">Import an image to enable the image source.</p>
+                                    )}
+                                    <p className="dither-gradient-note">Tip: You can also paste an image directly (Ctrl/Cmd+V).</p>
+                                </>
+                            )}
                             <label>
                                 Interpolation Space
                                 <select value={interpolationMode} onChange={(event) => setInterpolationMode(event.target.value as ColorInterpolationMode)}>
@@ -631,7 +853,7 @@ export default function DitherGradientPage() {
                         <header>
                             <strong>Gradient Preview</strong>
                             <span>
-                                {interpolationMode.toUpperCase()} • {ditherType === "none" ? "No dithering" : DITHER_LABELS[ditherType]}
+                                {sourceSummaryLabel} • {ditherType === "none" ? "No dithering" : DITHER_LABELS[ditherType]}
                             </span>
                         </header>
                         <div className="preview-toggle-list">
@@ -652,8 +874,8 @@ export default function DitherGradientPage() {
                             {showSourcePreview && (
                                 <GradientPreviewCanvas
                                     ref={sourceCanvasRef}
-                                    title="Source Gradient"
-                                    description="Interpolated"
+                                    title={sourceCanvasTitle}
+                                    description={sourceCanvasDescription}
                                     width={width}
                                     height={height}
                                     previewScale={previewScale}
@@ -931,6 +1153,30 @@ function normalizeCoordComponent(value: number) {
 }
 
 // Writes a single pixel into an ImageData buffer using 0-255 channel ranges.
+function sampleSourceColor(
+    sourceType: SourceType,
+    cornerHexes: string[],
+    interpolationMode: ColorInterpolationMode,
+    u: number,
+    v: number,
+    x: number,
+    y: number,
+    sourceImageData: ImageData | null
+) {
+    if (sourceType === "image" && sourceImageData) {
+        const clampedX = Math.max(0, Math.min(sourceImageData.width - 1, x));
+        const clampedY = Math.max(0, Math.min(sourceImageData.height - 1, y));
+        const offset = (clampedY * sourceImageData.width + clampedX) * 4;
+        const data = sourceImageData.data;
+        return {
+            r: data[offset] ?? 0,
+            g: data[offset + 1] ?? 0,
+            b: data[offset + 2] ?? 0,
+        };
+    }
+    return interpolateGradientColor(cornerHexes, u, v, interpolationMode);
+}
+
 function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: number; g: number; b: number }) {
     buffer[offset] = color.r;
     buffer[offset + 1] = color.g;
@@ -1055,5 +1301,56 @@ function clampRgb255(rgb: { r: number; g: number; b: number }) {
         g: Math.min(255, Math.max(0, Math.round(rgb.g))),
         b: Math.min(255, Math.max(0, Math.round(rgb.b))),
     };
+}
+
+async function loadImageElementFromUrl(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.crossOrigin = "anonymous";
+        image.decoding = "async";
+        image.onload = () => resolve(image);
+        image.onerror = () => reject(new Error("Unable to load image"));
+        image.src = url;
+    });
+}
+
+function drawImageWithScaleMode(
+    ctx: CanvasRenderingContext2D,
+    image: HTMLImageElement,
+    mode: ImageScaleMode,
+    targetWidth: number,
+    targetHeight: number
+) {
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+        ctx.clearRect(0, 0, targetWidth, targetHeight);
+        return;
+    }
+    ctx.clearRect(0, 0, targetWidth, targetHeight);
+    let drawWidth = targetWidth;
+    let drawHeight = targetHeight;
+    let dx = 0;
+    let dy = 0;
+    if (mode === "stretch") {
+        drawWidth = targetWidth;
+        drawHeight = targetHeight;
+    } else if (mode === "none") {
+        drawWidth = sourceWidth;
+        drawHeight = sourceHeight;
+    } else {
+        const scale = mode === "cover"
+            ? Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight)
+            : Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
+        drawWidth = sourceWidth * scale;
+        drawHeight = sourceHeight * scale;
+    }
+    dx = (targetWidth - drawWidth) / 2;
+    dy = (targetHeight - drawHeight) / 2;
+    if (mode === "none") {
+        dx = 0;
+        dy = 0;
+    }
+    ctx.drawImage(image, dx, dy, drawWidth, drawHeight);
 }
 
