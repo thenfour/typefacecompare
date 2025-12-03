@@ -11,12 +11,19 @@ import { fetchDitherSourceExamples, type ExampleImage } from "@/data/ditherSourc
 import { useImageSource } from "@/hooks/useImageSource";
 import { useDitherRenderer } from "@/hooks/useDitherRenderer";
 import type { ReductionMode, SourceType } from "@/types/dither";
-import { blendColorTowardPalette, rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
+import {
+    blendColorTowardPalette,
+    DEFAULT_PALETTE_MAGNET_PARAMS,
+    rgbToCoords,
+    type PaletteMagnetParams,
+    type ReductionPaletteEntry,
+} from "@/utils/paletteDistance";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
 import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
 import { ReductionControls } from "@/components/dither/ReductionControls";
 import { PreviewSection } from "@/components/dither/PreviewSection";
+import { Tooltip } from "@/components/Tooltip";
 import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
 import { extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
@@ -163,6 +170,11 @@ export default function DitherGradientPage() {
         scale: [...gamutScaleStrength] as AxisTriple,
     }));
     const [paletteNudgeStrength, setPaletteNudgeStrength] = useState(0);
+    const [paletteMagnetRadiusOut, setPaletteMagnetRadiusOut] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.radiusOut);
+    const [paletteMagnetRadiusDir, setPaletteMagnetRadiusDir] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.radiusDir);
+    const [paletteMagnetAmbiguityPower, setPaletteMagnetAmbiguityPower] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kAmb);
+    const [paletteMagnetOutPower, setPaletteMagnetOutPower] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kOut);
+    const [paletteMagnetNearestCount, setPaletteMagnetNearestCount] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kNearest);
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -228,6 +240,22 @@ export default function DitherGradientPage() {
     const reductionSwatches = parsedReductionPalette.swatches;
     const hasReductionPalette = reductionSwatches.length > 0;
     const paletteNudgeActive = paletteNudgeStrength > 0 && hasReductionPalette && reductionMode === "palette";
+    const paletteMagnetParams = useMemo<PaletteMagnetParams>(
+        () => ({
+            radiusOut: paletteMagnetRadiusOut,
+            radiusDir: paletteMagnetRadiusDir,
+            kAmb: paletteMagnetAmbiguityPower,
+            kOut: paletteMagnetOutPower,
+            kNearest: paletteMagnetNearestCount,
+        }),
+        [
+            paletteMagnetRadiusOut,
+            paletteMagnetRadiusDir,
+            paletteMagnetAmbiguityPower,
+            paletteMagnetOutPower,
+            paletteMagnetNearestCount,
+        ]
+    );
 
     const derivedCornerHexes = useMemo(() => deriveCornerHexes(gradientSwatches, cornerAssignments), [gradientSwatches, cornerAssignments]);
     const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
@@ -338,7 +366,8 @@ export default function DitherGradientPage() {
                     adjusted,
                     reductionPaletteEntries,
                     distanceColorSpace,
-                    paletteNudgeStrength
+                    paletteNudgeStrength,
+                    paletteMagnetParams
                 );
             }
             return buildScatterPointFromRgb(adjusted, distanceColorSpace);
@@ -350,6 +379,7 @@ export default function DitherGradientPage() {
         paletteNudgeActive,
         paletteNudgeStrength,
         reductionPaletteEntries,
+        paletteMagnetParams,
     ]);
     const sourceAdjustmentsActive = Boolean((gamutTransform && gamutTransform.isActive) || paletteNudgeActive);
     const gamutPreviewAvailable = sourceAdjustmentsActive;
@@ -443,6 +473,7 @@ export default function DitherGradientPage() {
             strength: ditherMaskStrength,
         },
         paletteNudgeStrength,
+        paletteMagnetParams,
         gamutTransform,
         sourceAdjustmentsActive,
         showSourcePreview,
@@ -643,9 +674,81 @@ export default function DitherGradientPage() {
                                         step={0.01}
                                         value={paletteNudgeStrength}
                                         onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
-                                        disabled={!hasReductionPalette}
+                                        disabled={!hasReductionPalette || reductionMode !== "palette"}
                                     />
                                 </label>
+                                <div className="palette-nudge-controls__grid">
+                                    <Tooltip title="Distance a pixel must drift from its closest palette color before magnets start pulling. Larger radius nudges more of the image; smaller only grabs extreme outliers.">
+                                        <label>
+                                            Out-of-Gamut Radius ({paletteMagnetRadiusOut.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0.05}
+                                                max={1}
+                                                step={0.01}
+                                                value={paletteMagnetRadiusOut}
+                                                onChange={(event) => setPaletteMagnetRadiusOut(event.target.valueAsNumber)}
+                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                            />
+                                        </label>
+                                    </Tooltip>
+                                    <Tooltip title="How far to look for palette neighbors when establishing a pull direction. Bigger values blend more swatches; smaller values stay laser-focused on the nearest entries.">
+                                        <label>
+                                            Direction Radius ({paletteMagnetRadiusDir.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0.05}
+                                                max={1}
+                                                step={0.01}
+                                                value={paletteMagnetRadiusDir}
+                                                onChange={(event) => setPaletteMagnetRadiusDir(event.target.valueAsNumber)}
+                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                            />
+                                        </label>
+                                    </Tooltip>
+                                    <Tooltip title="Boosts pixels that sit between multiple palette colors. Higher values wait for truly ambiguous colors; lower values tug even when the best and second-best colors are far apart.">
+                                        <label>
+                                            Ambiguity Curve ({paletteMagnetAmbiguityPower.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={4}
+                                                step={0.05}
+                                                value={paletteMagnetAmbiguityPower}
+                                                onChange={(event) => setPaletteMagnetAmbiguityPower(event.target.valueAsNumber)}
+                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                            />
+                                        </label>
+                                    </Tooltip>
+                                    <Tooltip title="Shapes how quickly magnets ramp up with distance. Higher curves reserve full force for the farthest out-of-gamut pixels; lower curves apply force earlier.">
+                                        <label>
+                                            Out-of-Gamut Curve ({paletteMagnetOutPower.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={4}
+                                                step={0.05}
+                                                value={paletteMagnetOutPower}
+                                                onChange={(event) => setPaletteMagnetOutPower(event.target.valueAsNumber)}
+                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                            />
+                                        </label>
+                                    </Tooltip>
+                                    <Tooltip title="Maximum number of nearby palette entries that contribute to the pull direction. Increase to average more neighbors; decrease to favor only the very closest colors.">
+                                        <label>
+                                            Nearest Colors ({paletteMagnetNearestCount})
+                                            <input
+                                                type="range"
+                                                min={1}
+                                                max={6}
+                                                step={1}
+                                                value={paletteMagnetNearestCount}
+                                                onChange={(event) => setPaletteMagnetNearestCount(event.target.valueAsNumber)}
+                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                            />
+                                        </label>
+                                    </Tooltip>
+                                </div>
                                 <p className="dither-gradient-note">
                                     Pulls source pixels toward their nearest palette entry before dithering, helping them resist harsh palette jumps.
                                 </p>

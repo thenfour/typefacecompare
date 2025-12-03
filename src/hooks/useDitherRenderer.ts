@@ -13,7 +13,13 @@ import {
     type DitherType,
     type ErrorDiffusionKernelId,
 } from "@/utils/dithering";
-import { applyReduction, blendColorTowardPalette, clampRgb255, type ReductionPaletteEntry } from "@/utils/paletteDistance";
+import {
+    applyReduction,
+    blendColorTowardPalette,
+    clampRgb255,
+    type PaletteMagnetParams,
+    type ReductionPaletteEntry,
+} from "@/utils/paletteDistance";
 import type { ReductionMode, SourceType } from "@/types/dither";
 
 export type PreviewStageKey = "source" | "gamut" | "dither" | "reduced";
@@ -57,6 +63,7 @@ export interface UseDitherRendererOptions {
         strength: number;
     };
     paletteNudgeStrength: number;
+    paletteMagnetParams: PaletteMagnetParams;
     gamutTransform: GamutTransform | null;
     sourceAdjustmentsActive: boolean;
     showSourcePreview: boolean;
@@ -84,6 +91,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         errorDiffusionKernelId,
         ditherMask,
         paletteNudgeStrength,
+        paletteMagnetParams,
         gamutTransform,
         sourceAdjustmentsActive,
         showSourcePreview,
@@ -196,7 +204,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                         pipelineSourceBase,
                         reductionPaletteEntries,
                         distanceColorSpace,
-                        paletteNudgeStrength
+                        paletteNudgeStrength,
+                        paletteMagnetParams
                     )
                     : pipelineSourceBase;
                 const sourceColor = clampRgb255(base);
@@ -267,6 +276,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         ditherMask?.blurRadius,
         ditherMask?.strength,
         paletteNudgeStrength,
+        paletteMagnetParams,
         sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,

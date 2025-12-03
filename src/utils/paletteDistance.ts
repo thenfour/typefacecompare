@@ -1,5 +1,6 @@
 import { ColorInterpolationMode, convertHexToVector, rgb255ToVector } from "./colorSpaces";
 import type { ReductionMode } from "@/types/dither";
+import { applyAxisTripleToRgb, extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 
 const OKLCH_CHROMA_NORMALIZER = 0.4;
 
@@ -41,22 +42,99 @@ export function quantizeToPalette(
     return { ...closest.rgb };
 }
 
+export interface PaletteMagnetParams {
+    radiusOut: number;
+    radiusDir: number;
+    kAmb: number;
+    kOut: number;
+    kNearest: number;
+}
+
+export const DEFAULT_PALETTE_MAGNET_PARAMS: PaletteMagnetParams = {
+    radiusOut: 0.25,
+    radiusDir: 0.35,
+    kAmb: 2,
+    kOut: 1,
+    kNearest: 3,
+};
+
 export function blendColorTowardPalette(
     rgb: { r: number; g: number; b: number },
     palette: ReductionPaletteEntry[],
     distanceMode: ColorInterpolationMode,
-    strength: number
+    baseStrength: number,
+    magnetOverrides?: Partial<PaletteMagnetParams>
 ) {
-    if (strength <= 0 || palette.length === 0) {
+    if (baseStrength <= 0 || palette.length === 0) {
         return rgb;
     }
-    const target = quantizeToPalette(rgb, palette, distanceMode);
-    const clampedStrength = Math.max(0, Math.min(1, strength));
-    return {
-        r: rgb.r + (target.r - rgb.r) * clampedStrength,
-        g: rgb.g + (target.g - rgb.g) * clampedStrength,
-        b: rgb.b + (target.b - rgb.b) * clampedStrength,
+    const params: PaletteMagnetParams = {
+        ...DEFAULT_PALETTE_MAGNET_PARAMS,
+        ...magnetOverrides,
     };
+    const sourceAxes = extractAxisTriple(rgb, distanceMode);
+    const paletteAxes = palette.map((entry) => extractAxisTriple(entry.rgb, distanceMode));
+    const distances = paletteAxes.map((axes, idx) => ({ idx, d: Math.sqrt(distanceSqAxes(sourceAxes, axes)) }));
+    distances.sort((a, b) => a.d - b.d);
+
+    const nearest = distances[0];
+    if (!nearest) {
+        return rgb;
+    }
+    const second = distances[1];
+    const d1 = nearest.d;
+    const d2 = second?.d ?? Infinity;
+    const outRaw = clamp01(params.radiusOut > 0 ? d1 / params.radiusOut : 1);
+    const outFactor = Math.pow(outRaw, params.kOut);
+    let ambiguity = 0;
+    if (Number.isFinite(d2) && d2 > 1e-6) {
+        const diff = Math.abs(d2 - d1);
+        const rel = clamp01(1 - diff / d2);
+        ambiguity = Math.pow(rel, params.kAmb);
+    }
+    const magnetAmount = baseStrength * outFactor * ambiguity;
+    if (magnetAmount < 1e-4) {
+        return rgb;
+    }
+    const chosen: { idx: number; d: number }[] = [];
+    for (const item of distances) {
+        if (item.d <= params.radiusDir) {
+            chosen.push(item);
+        }
+        if (chosen.length >= params.kNearest) {
+            break;
+        }
+    }
+    if (chosen.length === 0) {
+        return rgb;
+    }
+    let sumWeights = 0;
+    const targetAxes: AxisTriple = [0, 0, 0];
+    for (const { idx, d } of chosen) {
+        const falloff = params.radiusDir > 0 ? 1 - d / params.radiusDir : 0;
+        const weight = Math.max(0, falloff);
+        if (weight <= 0) {
+            continue;
+        }
+        sumWeights += weight;
+        const axes = paletteAxes[idx];
+        targetAxes[0] += axes[0] * weight;
+        targetAxes[1] += axes[1] * weight;
+        targetAxes[2] += axes[2] * weight;
+    }
+    if (sumWeights <= 0) {
+        return rgb;
+    }
+    targetAxes[0] /= sumWeights;
+    targetAxes[1] /= sumWeights;
+    targetAxes[2] /= sumWeights;
+    const t = clamp01(magnetAmount);
+    const blendedAxes: AxisTriple = [
+        sourceAxes[0] + (targetAxes[0] - sourceAxes[0]) * t,
+        sourceAxes[1] + (targetAxes[1] - sourceAxes[1]) * t,
+        sourceAxes[2] + (targetAxes[2] - sourceAxes[2]) * t,
+    ];
+    return applyAxisTripleToRgb(rgb, blendedAxes, distanceMode);
 }
 
 export function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode) {
@@ -140,6 +218,15 @@ export function distanceSq(a: number[], b: number[]) {
     }
     return total;
 }
+
+function distanceSqAxes(a: AxisTriple, b: AxisTriple) {
+    const dx = (a[0] ?? 0) - (b[0] ?? 0);
+    const dy = (a[1] ?? 0) - (b[1] ?? 0);
+    const dz = (a[2] ?? 0) - (b[2] ?? 0);
+    return dx * dx + dy * dy + dz * dz;
+}
+
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
 export function clampRgb255(rgb: { r: number; g: number; b: number }) {
     return {
