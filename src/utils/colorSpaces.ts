@@ -65,11 +65,7 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
                 b: lerp((a as RGB).b, (b as RGB).b)
             } satisfies RGB;
         case "hsl":
-            return {
-                h: lerpAngle((a as HSLVector).h, (b as HSLVector).h, t),
-                s: lerp((a as HSLVector).s, (b as HSLVector).s),
-                l: lerp((a as HSLVector).l, (b as HSLVector).l)
-            } satisfies HSLVector;
+            return mixPolarHsl(a as HSLVector, b as HSLVector, lerp);
         case "cmyk":
             return {
                 c: lerp((a as CMYKVector).c, (b as CMYKVector).c),
@@ -90,14 +86,36 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
                 cr: lerp((a as YCbCrVector).cr, (b as YCbCrVector).cr)
             } satisfies YCbCrVector;
         case "oklch":
-            return {
-                L: lerp((a as OklchVector).L, (b as OklchVector).L),
-                C: lerp((a as OklchVector).C, (b as OklchVector).C),
-                h: lerpAngle((a as OklchVector).h, (b as OklchVector).h, t)
-            } satisfies OklchVector;
+            return mixPolarOklch(a as OklchVector, b as OklchVector, lerp);
         default:
             return a;
     }
+}
+
+function mixPolarHsl(a: HSLVector, b: HSLVector, lerp: (start: number, end: number) => number): HSLVector {
+    const [ax, ay] = polarToCartesian(a.s, a.h);
+    const [bx, by] = polarToCartesian(b.s, b.h);
+    const mx = lerp(ax, bx);
+    const my = lerp(ay, by);
+    const { radius, angleDegrees } = cartesianToPolar(mx, my);
+    return {
+        h: angleDegrees,
+        s: clamp01(radius),
+        l: lerp(a.l, b.l)
+    } satisfies HSLVector;
+}
+
+function mixPolarOklch(a: OklchVector, b: OklchVector, lerp: (start: number, end: number) => number): OklchVector {
+    const [ax, ay] = polarToCartesian(a.C, a.h);
+    const [bx, by] = polarToCartesian(b.C, b.h);
+    const mx = lerp(ax, bx);
+    const my = lerp(ay, by);
+    const { radius, angleDegrees } = cartesianToPolar(mx, my);
+    return {
+        L: lerp(a.L, b.L),
+        C: Math.max(0, radius),
+        h: angleDegrees
+    } satisfies OklchVector;
 }
 
 function lerpAngle(a: number, b: number, t: number) {
@@ -228,6 +246,17 @@ function hueToRgb(p: number, q: number, t: number) {
     if (temp < 2 / 3) return p + (q - p) * (2 / 3 - temp) * 6;
     return p;
 }
+
+    function polarToCartesian(radius: number, degrees: number) {
+        const radians = (((degrees ?? 0) % 360) + 360) % 360 * (Math.PI / 180);
+        return [radius * Math.cos(radians), radius * Math.sin(radians)];
+    }
+
+    function cartesianToPolar(x: number, y: number) {
+        const radius = Math.sqrt(x * x + y * y);
+        const angleDegrees = (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360;
+        return { radius, angleDegrees };
+    }
 
 // CMYK helpers
 function rgbToCmyk(rgb: RGB): CMYKVector {
