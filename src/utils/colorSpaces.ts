@@ -8,6 +8,9 @@ export type ColorInterpolationMode =
     | "ryb"
     | "cmy"
     | "cmyk"
+    | "luma-rgb"
+    | "luma-lab"
+    | "luma-oklab"
     | "lab"
     | "ycbcr"
     | "oklab"
@@ -29,6 +32,7 @@ interface LabVector { l: number; a: number; b: number; }
 interface YCbCrVector { y: number; cb: number; cr: number; }
 interface OklabVector { L: number; a: number; b: number; }
 interface OklchVector { L: number; C: number; h: number; }
+interface LumaVector { l: number; }
 
 type ColorVector =
     | RGB
@@ -38,6 +42,7 @@ type ColorVector =
     | RYBVector
     | CMYVector
     | CMYKVector
+    | LumaVector
     | LabVector
     | YCbCrVector
     | OklabVector
@@ -105,6 +110,12 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
                 m: lerp((a as CMYVector).m, (b as CMYVector).m),
                 y: lerp((a as CMYVector).y, (b as CMYVector).y)
             } satisfies CMYVector;
+        case "luma-rgb":
+        case "luma-lab":
+        case "luma-oklab":
+            return {
+                l: lerp((a as LumaVector).l, (b as LumaVector).l)
+            } satisfies LumaVector;
         case "cmyk":
             return {
                 c: lerp((a as CMYKVector).c, (b as CMYKVector).c),
@@ -242,6 +253,12 @@ function rgbToVector(rgb: RGB, mode: ColorInterpolationMode): ColorVector {
             return rgbToCmy(rgb);
         case "cmyk":
             return rgbToCmyk(rgb);
+        case "luma-rgb":
+            return rgbToLumaRgb(rgb);
+        case "luma-lab":
+            return rgbToLumaLab(rgb);
+        case "luma-oklab":
+            return rgbToLumaOklab(rgb);
         case "lab":
             return rgbToLab(rgb);
         case "oklab":
@@ -271,6 +288,10 @@ export function vectorToRgb(vector: ColorVector, mode: ColorInterpolationMode): 
             return clampRgb(cmyToRgb(vector as CMYVector));
         case "cmyk":
             return clampRgb(cmykToRgb(vector as CMYKVector));
+        case "luma-rgb":
+        case "luma-lab":
+        case "luma-oklab":
+            return clampRgb(lumaToRgb(vector as LumaVector));
         case "lab":
             return clampRgb(labToRgb(vector as LabVector));
         case "oklab":
@@ -556,6 +577,26 @@ function cmyToRgb(cmy: CMYVector): RGB {
         g: clamp01(1 - cmy.m),
         b: clamp01(1 - cmy.y)
     } satisfies RGB;
+}
+
+function rgbToLumaRgb(rgb: RGB): LumaVector {
+    const l = clamp01(0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b);
+    return { l } satisfies LumaVector;
+}
+
+function rgbToLumaLab(rgb: RGB): LumaVector {
+    const lab = rgbToLab(rgb);
+    return { l: clamp01(lab.l / 100) } satisfies LumaVector;
+}
+
+function rgbToLumaOklab(rgb: RGB): LumaVector {
+    const oklab = rgbToOklab(rgb);
+    return { l: clamp01(oklab.L) } satisfies LumaVector;
+}
+
+function lumaToRgb(vec: LumaVector): RGB {
+    const value = clamp01(vec.l);
+    return { r: value, g: value, b: value } satisfies RGB;
 }
 
 function rgbToCmyk(rgb: RGB): CMYKVector {

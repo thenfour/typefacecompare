@@ -30,7 +30,10 @@ export function isDistanceFeatureSupported(mode: ColorInterpolationMode, feature
                 mode === "ycbcr" ||
                 mode === "hsl" ||
                 mode === "hsv" ||
-                mode === "ryb"
+                mode === "ryb" ||
+                mode === "luma-rgb" ||
+                mode === "luma-lab" ||
+                mode === "luma-oklab"
             );
         case "hsl-saturation":
         case "hsl-lightness":
@@ -128,6 +131,10 @@ function projectDistanceFeature(
                 const rybVector = vector as { v?: number };
                 return [rybVector.v ?? 0];
             }
+            if (mode === "luma-rgb" || mode === "luma-lab" || mode === "luma-oklab") {
+                const lumaVector = vector as { l?: number };
+                return [lumaVector.l ?? 0];
+            }
             break;
         case "hsl-saturation": {
             const hslVector = vector as { s?: number };
@@ -172,6 +179,12 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             const ryb = vector as { h: number; s: number; v: number };
             const [hx, hy] = hueToCartesian(ryb.h);
             return [hx, hy, ryb.s, ryb.v];
+        }
+        case "luma-rgb":
+        case "luma-lab":
+        case "luma-oklab": {
+            const luma = vector as { l: number };
+            return [luma.l];
         }
         case "cmyk": {
             const cmyk = vector as { c: number; m: number; y: number; k: number };
