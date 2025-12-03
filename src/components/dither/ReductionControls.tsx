@@ -1,7 +1,7 @@
-import type { ChangeEvent } from "react";
 import type { ColorInterpolationMode } from "@/utils/colorSpaces";
 import type { DistanceFeature, ReductionMode } from "@/types/dither";
 import { DISTANCE_FEATURE_LABELS } from "@/utils/paletteDistance";
+import { OptionButtonGroup } from "@/components/dither/OptionButtonGroup";
 
 interface ReductionControlsProps {
     reductionMode: ReductionMode;
@@ -11,7 +11,7 @@ interface ReductionControlsProps {
     binaryThreshold: number;
     onBinaryThresholdChange: (value: number) => void;
     distanceColorSpace: ColorInterpolationMode;
-    onDistanceColorSpaceChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+    onDistanceColorSpaceChange: (mode: ColorInterpolationMode) => void;
     distanceFeature: DistanceFeature;
     onDistanceFeatureChange: (feature: DistanceFeature) => void;
     supportedDistanceFeatures: DistanceFeature[];
@@ -32,16 +32,19 @@ export function ReductionControls({
 }: ReductionControlsProps) {
     return (
         <>
-            <label>
-                Palette Reduction
-                <select value={reductionMode} onChange={(event) => onReductionModeChange(event.target.value as ReductionMode)}>
-                    <option value="none">Disabled</option>
-                    <option value="binary">Binary (per channel)</option>
-                    <option value="palette" disabled={!hasReductionPalette}>
-                        Use palette ({reductionSwatchCount} colors)
-                    </option>
-                </select>
-            </label>
+            <div>
+                <span style={{ fontSize: 12, color: "#555" }}>Palette Reduction</span>
+                <OptionButtonGroup
+                    value={reductionMode}
+                    onChange={onReductionModeChange}
+                    ariaLabel="Palette reduction mode"
+                    options={[
+                        { value: "none", label: "Disabled" },
+                        { value: "binary", label: "Binary" },
+                        { value: "palette", label: `Palette (${reductionSwatchCount})`, disabled: !hasReductionPalette },
+                    ]}
+                />
+            </div>
             {reductionMode === "binary" && (
                 <label>
                     Binary Threshold ({binaryThreshold})
@@ -57,30 +60,34 @@ export function ReductionControls({
             )}
             {reductionMode === "palette" && (
                 <>
-                    <label>
-                        Palette Distance Space
-                        <select value={distanceColorSpace} onChange={onDistanceColorSpaceChange}>
-                            <option value="rgb">RGB</option>
-                            <option value="hsl">HSL</option>
-                            <option value="cmyk">CMYK</option>
-                            <option value="lab">LAB</option>
-                            <option value="ycbcr">YCbCr</option>
-                            <option value="oklch">OKLCH</option>
-                        </select>
-                    </label>
-                    <label>
-                        Distance Feature
-                        <select
+                    <div>
+                        <span style={{ fontSize: 12, color: "#555" }}>Palette Distance Space</span>
+                        <OptionButtonGroup
+                            value={distanceColorSpace}
+                            onChange={onDistanceColorSpaceChange}
+                            ariaLabel="Palette distance space"
+                            options={[
+                                { value: "rgb", label: "RGB" },
+                                { value: "hsl", label: "HSL" },
+                                { value: "cmyk", label: "CMYK" },
+                                { value: "lab", label: "LAB" },
+                                { value: "ycbcr", label: "YCbCr" },
+                                { value: "oklch", label: "OKLCH" },
+                            ]}
+                        />
+                    </div>
+                    <div>
+                        <span style={{ fontSize: 12, color: "#555" }}>Distance Feature</span>
+                        <OptionButtonGroup
                             value={distanceFeature}
-                            onChange={(event) => onDistanceFeatureChange(event.target.value as DistanceFeature)}
-                        >
-                            {supportedDistanceFeatures.map((feature) => (
-                                <option value={feature} key={feature}>
-                                    {DISTANCE_FEATURE_LABELS[feature]}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+                            onChange={onDistanceFeatureChange}
+                            ariaLabel="Palette distance feature"
+                            options={supportedDistanceFeatures.map((feature) => ({
+                                value: feature,
+                                label: DISTANCE_FEATURE_LABELS[feature],
+                            }))}
+                        />
+                    </div>
                 </>
             )}
         </>

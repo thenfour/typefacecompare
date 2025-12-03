@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { ChangeEvent, useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
 import { ColorInterpolationMode, rgbUnitTo255 } from "../utils/colorSpaces";
 import { hexToRgb } from "../utils/color";
@@ -175,8 +175,7 @@ export default function DitherGradientPage() {
         [ditherType, ditherSeed, voronoiCellsPerAxis, voronoiJitter]
     );
 
-    const handleDistanceColorSpaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
-        const nextMode = event.target.value as ColorInterpolationMode;
+    const handleDistanceColorSpaceChange = (nextMode: ColorInterpolationMode) => {
         setDistanceColorSpace(nextMode);
         setDistanceFeature((previous: DistanceFeature) => {
             if (isDistanceFeatureSupported(nextMode, previous)) {
@@ -261,7 +260,7 @@ export default function DitherGradientPage() {
                                     <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
                                 ) : null,
                             interpolationMode,
-                            onInterpolationModeChange: (next) => setInterpolationMode(next as ColorInterpolationMode),
+                            onInterpolationModeChange: setInterpolationMode,
                         }}
                         imageControls={{
                             imageUrlInput,

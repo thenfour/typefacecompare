@@ -2,8 +2,10 @@ import { ChangeEvent, ReactNode } from "react";
 import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
 import { PalettePresetButtons } from "@/components/PalettePresetButtons";
 import { LospecPaletteImporter } from "@/components/LospecPaletteImporter";
+import { OptionButtonGroup } from "@/components/dither/OptionButtonGroup";
 import type { PaletteRow, PaletteSwatchDefinition } from "@/types/paletteDefinition";
 import type { SourceType } from "@/types/dither";
+import type { ColorInterpolationMode } from "@/utils/colorSpaces";
 import { ImageSourceControls, type ImageSourceControlsProps } from "@/components/dither/ImageSourceControls";
 
 interface GradientControlsProps {
@@ -17,8 +19,8 @@ interface GradientControlsProps {
     swatches: PaletteSwatchDefinition[];
     rows: PaletteRow[];
     footer?: ReactNode;
-    interpolationMode: string;
-    onInterpolationModeChange: (value: string) => void;
+    interpolationMode: ColorInterpolationMode;
+    onInterpolationModeChange: (mode: ColorInterpolationMode) => void;
 }
 
 interface SourceControlsCardProps {
@@ -79,20 +81,27 @@ function renderGradientControls({
     interpolationMode,
     onInterpolationModeChange,
 }: GradientControlsProps) {
+    const interpolationOptions: { value: ColorInterpolationMode; label: string }[] = [
+        { value: "rgb", label: "RGB" },
+        { value: "hsl", label: "HSL" },
+        { value: "cmyk", label: "CMYK" },
+        { value: "lab", label: "LAB" },
+        { value: "ycbcr", label: "YCbCr" },
+        { value: "oklch", label: "OKLCH" },
+    ];
+
     return (
         <div className="source-card__gradient-panel">
             <div className="source-card__meta">{swatchCountLabel}</div>
-            <label className="source-card__interpolation">
-                Interpolation Space
-                <select value={interpolationMode} onChange={(event) => onInterpolationModeChange(event.target.value)}>
-                    <option value="rgb">RGB</option>
-                    <option value="hsl">HSL</option>
-                    <option value="cmyk">CMYK</option>
-                    <option value="lab">LAB</option>
-                    <option value="ycbcr">YCbCr</option>
-                    <option value="oklch">OKLCH</option>
-                </select>
-            </label>
+            <div className="source-card__interpolation">
+                <span>Interpolation Space</span>
+                <OptionButtonGroup
+                    value={interpolationMode}
+                    onChange={onInterpolationModeChange}
+                    options={interpolationOptions}
+                    ariaLabel="Interpolation space"
+                />
+            </div>
             <PalettePresetButtons presets={presets} onSelect={onSelectPreset} />
             <LospecPaletteImporter targetLabel={lospecTargetLabel} onApplyPalette={onChangeValue} />
             <div className="source-card__gradient-editor">
