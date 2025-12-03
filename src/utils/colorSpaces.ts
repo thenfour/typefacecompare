@@ -110,6 +110,19 @@ function lerpAngle(a: number, b: number, t: number) {
 
 export function convertHexToVector(hex: string, mode: ColorInterpolationMode): ColorVector {
     const rgb = hexToRgb(hex);
+    return rgbToVector(rgb, mode);
+}
+
+export function rgbUnitToVector(rgb: RGB, mode: ColorInterpolationMode): ColorVector {
+    return rgbToVector(rgb, mode);
+}
+
+export function rgb255ToVector(color: RGBColor, mode: ColorInterpolationMode): ColorVector {
+    const unit = rgb255ToUnit(color);
+    return rgbToVector(unit, mode);
+}
+
+function rgbToVector(rgb: RGB, mode: ColorInterpolationMode): ColorVector {
     switch (mode) {
         case "rgb":
             return { ...rgb } satisfies RGB;

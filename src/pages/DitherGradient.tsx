@@ -2,12 +2,14 @@ import Head from "next/head";
 import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
-import { ColorInterpolationMode, interpolateGradientColor } from "../utils/colorSpaces";
+import { ColorInterpolationMode, convertHexToVector, interpolateGradientColor, rgb255ToVector, rgbUnitTo255 } from "../utils/colorSpaces";
+import { hexToRgb } from "../utils/color";
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 import type { PaletteSwatchDefinition } from "../types/paletteDefinition";
 import "../styles/DitherGradient.css";
 
 type DitherType = "none" | "bayer2" | "bayer4" | "bayer8";
+type ReductionMode = "binary" | "palette" | "none";
 
 const DEFAULT_PALETTE = `#1B1F3B // midnight
 #F56476 // coral peak
@@ -19,6 +21,10 @@ const DEFAULT_PALETTE = `#1B1F3B // midnight
 #00C49A // aqua`;
 
 const CORNER_LABELS = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"] as const;
+interface ReductionPaletteEntry {
+    rgb: { r: number; g: number; b: number };
+    coords: number[];
+}
 
 const BAYER_MATRICES: Record<Exclude<DitherType, "none">, number[][]> = {
     bayer2: [
@@ -44,22 +50,30 @@ const BAYER_MATRICES: Record<Exclude<DitherType, "none">, number[][]> = {
 };
 
 export default function DitherGradientPage() {
-    const [paletteText, setPaletteText] = useState(DEFAULT_PALETTE);
-    const [cornerAssignments, setCornerAssignments] = useState<number[]>([0, 1, 2, 3]);
+    const [gradientPaletteText, setGradientPaletteText] = useState(DEFAULT_PALETTE);
+    const [reductionPaletteText, setReductionPaletteText] = useState(DEFAULT_PALETTE);
+    const [cornerAssignments] = useState<number[]>([0, 1, 2, 3]);
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.35);
+    const [reductionMode, setReductionMode] = useState<ReductionMode>("binary");
+    const [binaryThreshold, setBinaryThreshold] = useState(127);
+    const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
     const [width, setWidth] = useState(240);
     const [height, setHeight] = useState(180);
     const [previewScale, setPreviewScale] = useState(2);
     const devicePixelRatio = useDevicePixelRatio();
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const parsedPalette = useMemo(() => parsePaletteDefinition(paletteText), [paletteText]);
-    const swatches = parsedPalette.swatches;
+    const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
+    const gradientSwatches = parsedGradientPalette.swatches;
+
+    const parsedReductionPalette = useMemo(() => parsePaletteDefinition(reductionPaletteText), [reductionPaletteText]);
+    const reductionSwatches = parsedReductionPalette.swatches;
+    const hasReductionPalette = reductionSwatches.length > 0;
 
     useEffect(() => {
-        if (swatches.length === 0) {
+        if (gradientSwatches.length === 0) {
             return;
         }
         // setCornerAssignments((prev) => {
@@ -67,9 +81,23 @@ export default function DitherGradientPage() {
         //     const changed = next.some((value, index) => value !== prev[index]);
         //     return changed ? next : prev;
         // });
-    }, [swatches]);
+    }, [gradientSwatches]);
 
-    const derivedCorners = useMemo(() => deriveCornerHexes(swatches, cornerAssignments), [swatches, cornerAssignments]);
+    const derivedCorners = useMemo(() => deriveCornerHexes(gradientSwatches, cornerAssignments), [gradientSwatches, cornerAssignments]);
+    const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
+        () =>
+            reductionSwatches.map((swatch) => ({
+                rgb: rgbUnitTo255(hexToRgb(swatch.hex)),
+                coords: vectorToTuple(convertHexToVector(swatch.hex, distanceColorSpace), distanceColorSpace),
+            })),
+        [reductionSwatches, distanceColorSpace]
+    );
+
+    useEffect(() => {
+        if (!hasReductionPalette && reductionMode === "palette") {
+            setReductionMode("none");
+        }
+    }, [hasReductionPalette, reductionMode]);
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -92,13 +120,9 @@ export default function DitherGradientPage() {
                 const u = width === 1 ? 0 : x / (width - 1);
                 const rgb = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
                 const jittered = applyDitherJitter(rgb, x, y, ditherType, ditherStrength);
+                const reducedColor = applyReduction(jittered, reductionMode, binaryThreshold, reductionPaletteEntries, distanceColorSpace);
 
-                const reducedColor = stepRgb(jittered, 127);
-
-                // hard-step to demonstrate dithering effect over limited palette.
-                // TODO: allow user-defined palette reduction.
                 const dithered = clampRgb255(reducedColor);
-
                 const offset = (y * width + x) * 4;
                 data[offset] = dithered.r;
                 data[offset + 1] = dithered.g;
@@ -108,7 +132,7 @@ export default function DitherGradientPage() {
         }
 
         ctx.putImageData(imageData, 0, 0);
-    }, [derivedCorners.hexes, width, height, interpolationMode, ditherType, ditherStrength]);
+    }, [derivedCorners.hexes, width, height, interpolationMode, ditherType, ditherStrength, reductionMode, binaryThreshold, distanceColorSpace, reductionPaletteEntries]);
 
     // const handleCornerChange = (cornerIndex: number, swatchIndex: number) => {
     //     setCornerAssignments((prev) => {
@@ -138,15 +162,31 @@ export default function DitherGradientPage() {
                     <section className="dither-gradient-card palette">
                         <header>
                             <strong>Palette Definition</strong>
-                            <span>{swatches.length} swatch{swatches.length === 1 ? "" : "es"}</span>
+                            <span>{gradientSwatches.length} swatch{gradientSwatches.length === 1 ? "" : "es"}</span>
                         </header>
                         <textarea
-                            value={paletteText}
-                            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setPaletteText(event.target.value)}
+                            value={gradientPaletteText}
+                            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setGradientPaletteText(event.target.value)}
                             spellCheck={false}
                         />
-                        {swatches.length === 0 && (
+                        {gradientSwatches.length === 0 && (
                             <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
+                        )}
+                    </section>
+
+                    <section className="dither-gradient-card palette">
+                        <header>
+                            <strong>Reduction Palette</strong>
+                            <span>{reductionSwatches.length} swatch{reductionSwatches.length === 1 ? "" : "es"}</span>
+                        </header>
+                        <textarea
+                            value={reductionPaletteText}
+                            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setReductionPaletteText(event.target.value)}
+                            spellCheck={false}
+                            placeholder="Leave empty to disable palette reduction"
+                        />
+                        {reductionMode === "palette" && reductionSwatches.length === 0 && (
+                            <p className="dither-gradient-warning">Provide at least one valid color before enabling palette reduction.</p>
                         )}
                     </section>
 
@@ -187,6 +227,40 @@ export default function DitherGradientPage() {
                                     disabled={ditherType === "none"}
                                 />
                             </label>
+                            <label>
+                                Palette Reduction
+                                <select value={reductionMode} onChange={(event) => setReductionMode(event.target.value as ReductionMode)}>
+                                    <option value="none">Disabled</option>
+                                    <option value="binary">Binary (per channel)</option>
+                                    <option value="palette" disabled={!hasReductionPalette}>Use palette ({reductionSwatches.length} colors)</option>
+                                </select>
+                            </label>
+                            {reductionMode === "binary" && (
+                                <label>
+                                    Binary Threshold ({binaryThreshold})
+                                    <input
+                                        type="range"
+                                        min={16}
+                                        max={240}
+                                        step={1}
+                                        value={binaryThreshold}
+                                        onChange={(event) => setBinaryThreshold(event.target.valueAsNumber)}
+                                    />
+                                </label>
+                            )}
+                            {reductionMode === "palette" && (
+                                <label>
+                                    Palette Distance Space
+                                    <select value={distanceColorSpace} onChange={(event) => setDistanceColorSpace(event.target.value as ColorInterpolationMode)}>
+                                        <option value="rgb">RGB</option>
+                                        <option value="hsl">HSL</option>
+                                        <option value="cmyk">CMYK</option>
+                                        <option value="lab">LAB</option>
+                                        <option value="ycbcr">YCbCr</option>
+                                        <option value="oklch">OKLCH</option>
+                                    </select>
+                                </label>
+                            )}
                             <label>
                                 Canvas Width ({width}px)
                                 <input type="range" min={64} max={512} step={8} value={width} onChange={(event) => setWidth(event.target.valueAsNumber)} />
@@ -297,6 +371,94 @@ function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: numbe
         }
     }
     return { hexes };
+}
+
+const OKLCH_CHROMA_NORMALIZER = 0.4;
+
+function applyReduction(
+    rgb: { r: number; g: number; b: number },
+    mode: ReductionMode,
+    binaryThreshold: number,
+    palette: ReductionPaletteEntry[],
+    distanceMode: ColorInterpolationMode
+) {
+    if (mode === "binary") {
+        return stepRgb(rgb, binaryThreshold);
+    }
+    if (mode === "palette" && palette.length > 0) {
+        return quantizeToPalette(rgb, palette, distanceMode);
+    }
+    return rgb;
+}
+
+function quantizeToPalette(rgb: { r: number; g: number; b: number }, palette: ReductionPaletteEntry[], distanceMode: ColorInterpolationMode) {
+    if (palette.length === 0) {
+        return rgb;
+    }
+    const targetCoords = rgbToCoords(rgb, distanceMode);
+    let closest = palette[0];
+    let minDistance = Infinity;
+    for (const swatch of palette) {
+        const distance = distanceSq(targetCoords, swatch.coords);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closest = swatch;
+        }
+    }
+    return { ...closest.rgb };
+}
+
+function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode) {
+    const vector = rgb255ToVector(rgb, mode);
+    return vectorToTuple(vector, mode);
+}
+
+function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: ColorInterpolationMode): number[] {
+    switch (mode) {
+        case "rgb": {
+            const rgb = vector as { r: number; g: number; b: number };
+            return [rgb.r, rgb.g, rgb.b];
+        }
+        case "hsl": {
+            const hsl = vector as { h: number; s: number; l: number };
+            const [hx, hy] = hueToCartesian(hsl.h);
+            return [hx, hy, hsl.s, hsl.l];
+        }
+        case "cmyk": {
+            const cmyk = vector as { c: number; m: number; y: number; k: number };
+            return [cmyk.c, cmyk.m, cmyk.y, cmyk.k];
+        }
+        case "lab": {
+            const lab = vector as { l: number; a: number; b: number };
+            return [lab.l / 100, lab.a / 128, lab.b / 128];
+        }
+        case "ycbcr": {
+            const ycbcr = vector as { y: number; cb: number; cr: number };
+            return [ycbcr.y, ycbcr.cb, ycbcr.cr];
+        }
+        case "oklch": {
+            const oklch = vector as { L: number; C: number; h: number };
+            const [hx, hy] = hueToCartesian(oklch.h);
+            return [oklch.L, oklch.C / OKLCH_CHROMA_NORMALIZER, hx, hy];
+        }
+        default:
+            return [];
+    }
+}
+
+function hueToCartesian(degrees: number) {
+    const radians = (((degrees ?? 0) % 360) + 360) % 360 * (Math.PI / 180);
+    return [Math.cos(radians), Math.sin(radians)];
+}
+
+function distanceSq(a: number[], b: number[]) {
+    const length = Math.min(a.length, b.length);
+    let total = 0;
+    for (let index = 0; index < length; index++) {
+        const delta = (a[index] ?? 0) - (b[index] ?? 0);
+        total += delta * delta;
+    }
+    return total;
 }
 
 function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
