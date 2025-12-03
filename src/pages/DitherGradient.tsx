@@ -17,7 +17,7 @@ import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
 import { ReductionControls } from "@/components/dither/ReductionControls";
 import { PreviewSection } from "@/components/dither/PreviewSection";
-import { ColorSpaceScatterPlot, type RGBPoint } from "@/components/dither/ColorSpaceScatterPlot";
+import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
 import {
     buildProceduralDitherTile,
     DEFAULT_ERROR_DIFFUSION_KERNEL,
@@ -88,6 +88,10 @@ const PALETTE_PRESETS = [
     {
         label: "RGB Levels (3)",
         value: buildRgbLevelPalette(RGB_THREE_LEVELS),
+    },
+    {
+        label: "RGB Levels (4)",
+        value: buildRgbLevelPalette(RGB_FOUR_LEVELS),
     },
     {
         label: "Pastels",
@@ -210,10 +214,23 @@ export default function DitherGradientPage() {
                 width,
                 height,
                 maxPoints: MAX_SCATTER_SOURCE_POINTS,
+                colorSpace: distanceColorSpace,
             }),
-        [sourceType, sourceImageData, derivedCornerHexes, interpolationMode, width, height]
+        [
+            sourceType,
+            sourceImageData,
+            derivedCornerHexes,
+            interpolationMode,
+            width,
+            height,
+            distanceColorSpace,
+        ]
     );
-    const paletteScatterPoints = useMemo(() => paletteEntriesToRgbPoints(reductionPaletteEntries), [reductionPaletteEntries]);
+    const paletteScatterPoints = useMemo(
+        () => paletteEntriesToScatterPoints(reductionPaletteEntries, distanceColorSpace),
+        [reductionPaletteEntries, distanceColorSpace]
+    );
+    const scatterAxisLabels = useMemo(() => getColorSpaceAxisLabels(distanceColorSpace), [distanceColorSpace]);
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -433,17 +450,21 @@ export default function DitherGradientPage() {
                     <section className="dither-gradient-card preview">
                         <header>
                             <strong>Color Space Scatter</strong>
-                            <span>RGB sample distribution</span>
+                            <span>{distanceColorSpace.toUpperCase()} sample distribution</span>
                         </header>
                         {sourceScatterPoints.length === 0 && paletteScatterPoints.length === 0 ? (
                             <div className="color-scatter-container--empty">Import an image or define a reduction palette to preview color samples.</div>
                         ) : (
                             <div className="color-scatter-container">
-                                <ColorSpaceScatterPlot sourcePoints={sourceScatterPoints} palettePoints={paletteScatterPoints} />
+                                <ColorSpaceScatterPlot
+                                    sourcePoints={sourceScatterPoints}
+                                    palettePoints={paletteScatterPoints}
+                                    axisLabels={scatterAxisLabels}
+                                />
                             </div>
                         )}
                         <p className="dither-gradient-note">
-                            Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} pixels are sampled from the source image; palette points show every reduction swatch.
+                            Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} samples are plotted in the current reduction color space ({distanceColorSpace.toUpperCase()}).
                         </p>
                     </section>
                 </div>
@@ -481,20 +502,21 @@ interface SourceScatterSampleOptions {
     width: number;
     height: number;
     maxPoints: number;
+    colorSpace: ColorInterpolationMode;
 }
 
-function sampleSourceScatterPoints(options: SourceScatterSampleOptions): RGBPoint[] {
-    const { sourceType, sourceImageData, derivedCornerHexes, interpolationMode, width, height, maxPoints } = options;
+function sampleSourceScatterPoints(options: SourceScatterSampleOptions): ScatterPoint[] {
+    const { sourceType, sourceImageData, derivedCornerHexes, interpolationMode, width, height, maxPoints, colorSpace } = options;
     if (sourceType === "image") {
-        return sampleImageRgbPoints(sourceImageData, maxPoints);
+        return sampleImageScatterPoints(sourceImageData, maxPoints, colorSpace);
     }
     if (sourceType === "gradient") {
-        return sampleGradientRgbPoints(derivedCornerHexes, interpolationMode, width, height, maxPoints);
+        return sampleGradientScatterPoints(derivedCornerHexes, interpolationMode, width, height, maxPoints, colorSpace);
     }
     return [];
 }
 
-function sampleImageRgbPoints(imageData: ImageData | null, maxPoints: number): RGBPoint[] {
+function sampleImageScatterPoints(imageData: ImageData | null, maxPoints: number, colorSpace: ColorInterpolationMode): ScatterPoint[] {
     if (!imageData || maxPoints <= 0) {
         return [];
     }
@@ -504,41 +526,84 @@ function sampleImageRgbPoints(imageData: ImageData | null, maxPoints: number): R
     }
     const clampMaxPoints = Math.min(maxPoints, totalPixels);
     const step = Math.max(1, Math.floor(totalPixels / clampMaxPoints));
-    const result: RGBPoint[] = [];
+    const result: ScatterPoint[] = [];
     const { data } = imageData;
     for (let pixelIndex = 0; pixelIndex < totalPixels && result.length < clampMaxPoints; pixelIndex += step) {
         const dataIndex = pixelIndex * 4;
-        result.push([data[dataIndex], data[dataIndex + 1], data[dataIndex + 2]]);
+        result.push(
+            buildScatterPointFromRgb(
+                { r: data[dataIndex], g: data[dataIndex + 1], b: data[dataIndex + 2] },
+                colorSpace
+            )
+        );
     }
     return result;
 }
 
-function sampleGradientRgbPoints(
+function sampleGradientScatterPoints(
     cornerHexes: string[],
     interpolationMode: ColorInterpolationMode,
     width: number,
     height: number,
-    maxPoints: number
-): RGBPoint[] {
+    maxPoints: number,
+    colorSpace: ColorInterpolationMode
+): ScatterPoint[] {
     if (cornerHexes.length < 4 || maxPoints <= 0 || width <= 0 || height <= 0) {
         return [];
     }
     const totalPixels = width * height;
     const clampMaxPoints = Math.min(maxPoints, totalPixels);
     const step = Math.max(1, Math.floor(totalPixels / clampMaxPoints));
-    const result: RGBPoint[] = [];
+    const result: ScatterPoint[] = [];
     for (let pixelIndex = 0; pixelIndex < totalPixels && result.length < clampMaxPoints; pixelIndex += step) {
         const x = pixelIndex % width;
         const y = Math.floor(pixelIndex / width);
         const u = width === 1 ? 0 : x / (width - 1);
         const v = height === 1 ? 0 : y / (height - 1);
         const color = interpolateGradientColor(cornerHexes, u, v, interpolationMode);
-        result.push([color.r, color.g, color.b]);
+        result.push(buildScatterPointFromRgb(color, colorSpace));
     }
     return result;
 }
 
-function paletteEntriesToRgbPoints(entries: ReductionPaletteEntry[]): RGBPoint[] {
-    return entries.map((entry) => [entry.rgb.r, entry.rgb.g, entry.rgb.b]);
+function paletteEntriesToScatterPoints(entries: ReductionPaletteEntry[], colorSpace: ColorInterpolationMode): ScatterPoint[] {
+    return entries.map((entry) => buildScatterPointFromRgb(entry.rgb, colorSpace));
 }
+
+function buildScatterPointFromRgb(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode): ScatterPoint {
+    return {
+        coords: projectRgbToColorSpace(rgb, mode),
+        color: [rgb.r, rgb.g, rgb.b],
+    };
+}
+
+function projectRgbToColorSpace(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode): [number, number, number] {
+    const coords = rgbToCoords(rgb, mode);
+    return [coords[0] ?? 0, coords[1] ?? 0, coords[2] ?? 0];
+}
+
+function getColorSpaceAxisLabels(mode: ColorInterpolationMode): [string, string, string] {
+    const labels = COLOR_SPACE_AXIS_LABELS[mode];
+    if (labels) {
+        return labels;
+    }
+    return ["Axis 1", "Axis 2", "Axis 3"];
+}
+
+const COLOR_SPACE_AXIS_LABELS: Partial<Record<ColorInterpolationMode, [string, string, string]>> = {
+    rgb: ["Red", "Green", "Blue"],
+    hsl: ["Hue X", "Hue Y", "Saturation"],
+    hsv: ["Hue X", "Hue Y", "Value"],
+    hwb: ["Hue X", "Hue Y", "Whiteness"],
+    ryb: ["Hue X", "Hue Y", "Value"],
+    "luma-rgb": ["Luma", "Axis 2", "Axis 3"],
+    "luma-lab": ["Luma", "Axis 2", "Axis 3"],
+    "luma-oklab": ["Luma", "Axis 2", "Axis 3"],
+    cmy: ["Cyan", "Magenta", "Yellow"],
+    cmyk: ["Cyan", "Magenta", "Yellow"],
+    lab: ["L*", "a*", "b*"],
+    oklab: ["L", "a", "b"],
+    ycbcr: ["Y", "Cb", "Cr"],
+    oklch: ["L", "Chroma", "Hue X"],
+};
 
