@@ -189,6 +189,32 @@
     border: 1px solid #e0e0e0;
 }
 
+.gradient-preview-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gradient-preview-panel header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.preview-canvas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+}
+
+.preview-toggle-list {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    font-size: 12px;
+}
+
 .corner-summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

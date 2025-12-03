@@ -1,12 +1,13 @@
 import Head from "next/head";
 import Link from "next/link";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
 import { ColorInterpolationMode, convertHexToVector, interpolateGradientColor, rgb255ToVector, rgbUnitTo255 } from "../utils/colorSpaces";
 import { hexToRgb } from "../utils/color";
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 import type { PaletteSwatchDefinition } from "../types/paletteDefinition";
 import { PalettePresetButtons } from "../components/PalettePresetButtons";
+import { GradientPreviewCanvas } from "../components/GradientPreviewCanvas";
 import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
@@ -52,6 +53,20 @@ interface ReductionPaletteEntry {
     coords: number[];
 }
 
+type PreviewStageKey = "source" | "dither" | "reduced";
+
+interface PreviewStageConfig {
+    key: PreviewStageKey;
+    enabled: boolean;
+    ref: MutableRefObject<HTMLCanvasElement | null>;
+}
+
+interface ActivePreviewStage {
+    key: PreviewStageKey;
+    ctx: CanvasRenderingContext2D;
+    imageData: ImageData;
+}
+
 const BAYER_MATRICES: Record<Exclude<DitherType, "none">, number[][]> = {
     bayer2: [
         [0, 2],
@@ -88,9 +103,14 @@ export default function DitherGradientPage() {
     const [width, setWidth] = useState(240);
     const [height, setHeight] = useState(180);
     const [previewScale, setPreviewScale] = useState(2);
+    const [showSourcePreview, setShowSourcePreview] = useState(true);
+    const [showDitherPreview, setShowDitherPreview] = useState(true);
+    const [showReducedPreview, setShowReducedPreview] = useState(true);
     const devicePixelRatio = useDevicePixelRatio();
 
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const ditherCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const reducedCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
 
@@ -115,39 +135,91 @@ export default function DitherGradientPage() {
     }, [hasReductionPalette, reductionMode]);
 
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        const previewStages: PreviewStageConfig[] = [
+            { key: "source", enabled: showSourcePreview, ref: sourceCanvasRef },
+            { key: "dither", enabled: showDitherPreview, ref: ditherCanvasRef },
+            { key: "reduced", enabled: showReducedPreview, ref: reducedCanvasRef },
+        ];
+
         if (derivedCorners.hexes.length < 4) {
-            ctx.clearRect(0, 0, width, height);
+            previewStages.forEach((stage) => {
+                const canvas = stage.ref.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext("2d");
+                ctx?.clearRect(0, 0, canvas.width, canvas.height);
+            });
             return;
         }
 
-        canvas.width = width;
-        canvas.height = height;
-        const imageData = ctx.createImageData(width, height);
-        const data = imageData.data;
+        const activeStages = previewStages
+            .map((stage) => {
+                if (!stage.enabled) return null;
+                const canvas = stage.ref.current;
+                if (!canvas) return null;
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return null;
+                return {
+                    key: stage.key,
+                    ctx,
+                    imageData: ctx.createImageData(width, height),
+                } satisfies ActivePreviewStage;
+            })
+            .filter((stage): stage is ActivePreviewStage => stage !== null);
+
+        if (activeStages.length === 0) {
+            return;
+        }
+
+        const stageMap = activeStages.reduce((acc, stage) => {
+            acc[stage.key] = stage;
+            return acc;
+        }, {} as Partial<Record<PreviewStageKey, ActivePreviewStage>>);
 
         for (let y = 0; y < height; y++) {
             const v = height === 1 ? 0 : y / (height - 1);
             for (let x = 0; x < width; x++) {
                 const u = width === 1 ? 0 : x / (width - 1);
-                const rgb = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
-                const jittered = applyDitherJitter(rgb, x, y, ditherType, ditherStrength);
-                const reducedColor = applyReduction(jittered, reductionMode, binaryThreshold, reductionPaletteEntries, distanceColorSpace);
+                const base = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
+                const sourceColor = clampRgb255(base);
+                const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength);
+                const ditheredColor = clampRgb255(jittered);
+                const reducedColor = clampRgb255(
+                    applyReduction(jittered, reductionMode, binaryThreshold, reductionPaletteEntries, distanceColorSpace)
+                );
 
-                const dithered = clampRgb255(reducedColor);
                 const offset = (y * width + x) * 4;
-                data[offset] = dithered.r;
-                data[offset + 1] = dithered.g;
-                data[offset + 2] = dithered.b;
-                data[offset + 3] = 255;
+                if (stageMap.source) {
+                    writePixel(stageMap.source.imageData.data, offset, sourceColor);
+                }
+                if (stageMap.dither) {
+                    writePixel(stageMap.dither.imageData.data, offset, ditheredColor);
+                }
+                if (stageMap.reduced) {
+                    writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
+                }
             }
         }
 
-        ctx.putImageData(imageData, 0, 0);
-    }, [derivedCorners.hexes, width, height, interpolationMode, ditherType, ditherStrength, reductionMode, binaryThreshold, distanceColorSpace, reductionPaletteEntries]);
+        activeStages.forEach((stage) => {
+            stage.ctx.putImageData(stage.imageData, 0, 0);
+        });
+    }, [
+        derivedCorners.hexes,
+        width,
+        height,
+        interpolationMode,
+        ditherType,
+        ditherStrength,
+        reductionMode,
+        binaryThreshold,
+        distanceColorSpace,
+        reductionPaletteEntries,
+        showSourcePreview,
+        showDitherPreview,
+        showReducedPreview,
+    ]);
 
     // const handleCornerChange = (cornerIndex: number, swatchIndex: number) => {
     //     setCornerAssignments((prev) => {
@@ -335,15 +407,51 @@ export default function DitherGradientPage() {
                             <strong>Gradient Preview</strong>
                             <span>{interpolationMode.toUpperCase()} • {ditherType === "none" ? "No dithering" : ditherType.toUpperCase()}</span>
                         </header>
-                        <div className="preview-stage">
-                            <canvas
-                                ref={canvasRef}
-                                style={{
-                                    width: (width * previewScale) / (devicePixelRatio || 1),
-                                    height: (height * previewScale) / (devicePixelRatio || 1),
-                                    imageRendering: "pixelated"
-                                }}
-                            />
+                        <div className="preview-toggle-list">
+                            <label>
+                                <input type="checkbox" checked={showSourcePreview} onChange={(event) => setShowSourcePreview(event.target.checked)} /> Source
+                            </label>
+                            <label>
+                                <input type="checkbox" checked={showDitherPreview} onChange={(event) => setShowDitherPreview(event.target.checked)} /> Dithered
+                            </label>
+                            <label>
+                                <input type="checkbox" checked={showReducedPreview} onChange={(event) => setShowReducedPreview(event.target.checked)} /> Palette Reduced
+                            </label>
+                        </div>
+                        <div className="preview-canvas-grid">
+                            {showSourcePreview && (
+                                <GradientPreviewCanvas
+                                    ref={sourceCanvasRef}
+                                    title="Source Gradient"
+                                    description="Interpolated"
+                                    width={width}
+                                    height={height}
+                                    previewScale={previewScale}
+                                    devicePixelRatio={devicePixelRatio}
+                                />
+                            )}
+                            {showDitherPreview && (
+                                <GradientPreviewCanvas
+                                    ref={ditherCanvasRef}
+                                    title="Dither Applied"
+                                    description={ditherType === "none" ? "No jitter" : `${ditherType.toUpperCase()} pattern`}
+                                    width={width}
+                                    height={height}
+                                    previewScale={previewScale}
+                                    devicePixelRatio={devicePixelRatio}
+                                />
+                            )}
+                            {showReducedPreview && (
+                                <GradientPreviewCanvas
+                                    ref={reducedCanvasRef}
+                                    title="Palette Reduced"
+                                    description={reductionMode === "none" ? "Disabled" : reductionMode === "binary" ? "Binary channels" : `Palette (${reductionSwatches.length})`}
+                                    width={width}
+                                    height={height}
+                                    previewScale={previewScale}
+                                    devicePixelRatio={devicePixelRatio}
+                                />
+                            )}
                         </div>
                         <div className="corner-summary">
                             {derivedCorners.hexes.length === 4 ? (
@@ -495,6 +603,13 @@ function distanceSq(a: number[], b: number[]) {
         total += delta * delta;
     }
     return total;
+}
+
+function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: number; g: number; b: number }) {
+    buffer[offset] = color.r;
+    buffer[offset + 1] = color.g;
+    buffer[offset + 2] = color.b;
+    buffer[offset + 3] = 255;
 }
 
 function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
