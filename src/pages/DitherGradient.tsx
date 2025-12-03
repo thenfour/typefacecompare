@@ -444,10 +444,8 @@ export default function DitherGradientPage() {
                         reductionMode={reductionMode}
                         reductionSwatchCount={reductionSwatches.length}
                     />
-                </div>
 
-                <div className="dither-gradient-layout">
-                    <section className="dither-gradient-card preview">
+                    <section className="dither-gradient-card preview color-scatter-card">
                         <header>
                             <strong>Color Space Scatter</strong>
                             <span>{distanceColorSpace.toUpperCase()} sample distribution</span>
