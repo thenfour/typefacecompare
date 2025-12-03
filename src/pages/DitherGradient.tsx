@@ -15,35 +15,34 @@ import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
 type DitherType = "none" | "bayer2" | "bayer4" | "bayer8";
 type ReductionMode = "binary" | "palette" | "none";
 
-const DEFAULT_PALETTE = `#1B1F3B // midnight
-#F56476 // coral peak
-#6C64FB // violet beam
-#FEE440 // signal yellow
------
-#0D1321 // deep navy
-#FF6978 // rose
-#00C49A // aqua`;
-
 const PALETTE_PRESETS = [
     {
-        label: "Default",
-        value: DEFAULT_PALETTE,
+        label: "B&W",
+        value: `#0\n#f`,
+    },
+    {
+        label: "Grayscale4",
+        value: `#000000\n#555555\n#AAAAAA\n#FFFFFF`,
+    },
+    {
+        label: "Grayscale8",
+        value: `#000000\n#242424\n#484848\n#6D6D6D\n#919191\n#B6B6B6\n#DADADA\n#FFFFFF`,
+    },
+    {
+        label: "Grayscale16",
+        value: `#000000\n#111111\n#222222\n#333333\n#444444\n#555555\n#666666\n#777777\n-----\n#888888\n#999999\n#AAAAAA\n#BBBBBB\n#CCCCCC\n#DDDDDD\n#EEEEEE\n#FFFFFF`,
+    },
+    {
+        label: "RGB Primaries",
+        value: `#FF0000 // red\n#00FF00 // green\n#0000FF // blue\n-----\n#00FFFF // cyan\n#FF00FF // magenta\n#FFFF00 // yellow\n#000000 // black\n#FFFFFF // white`,
     },
     {
         label: "Pastel Stack",
         value: `#F6BD60 // sherbet\n#F7EDE2 // linen\n#F5CAC3 // blush\n#84A59D // sage\n-----\n#F28482 // grapefruit\n#B8F2E6 // mint\n#CDB4DB // lavender`,
     },
     {
-        label: "Retro CRT",
-        value: `#0F0F0F\n#1EE814\n#30B7FF\n#F7F05B\n-----\n#FF7F11\n#FA1E44\n#C201E2`,
-    },
-    {
-        label: "B&W",
-        value: `#0\n#f`,
-    },
-    {
-        label: "Gray7",
-        value: `#050505\n#2B2B2B\n#555555\n#808080\n-----\n#AAAAAA\n#D5D5D5\n#F5F5F5`,
+        label: "C64",
+        value: `#000000 // black\n#FFFFFF // white\n#813338 // red\n#75CEC8 // cyan\n#8E3C97 // purple\n#56AC4D // green\n#2E2C9B // blue\n#EDF171 // yellow\n#8E5029 // orange\n#553800 // brown\n#C46C71 // light red\n#4A4A4A // dark gray\n#7B7B7B // medium gray\n#A9FF9F // light green\n#706DEB // light blue\n#B2B2B2 // light gray`,
     },
 ] as const;
 
@@ -91,13 +90,13 @@ const BAYER_MATRICES: Record<Exclude<DitherType, "none">, number[][]> = {
 };
 
 export default function DitherGradientPage() {
-    const [gradientPaletteText, setGradientPaletteText] = useState(DEFAULT_PALETTE);
-    const [reductionPaletteText, setReductionPaletteText] = useState(DEFAULT_PALETTE);
+    const [gradientPaletteText, setGradientPaletteText] = useState<string>(PALETTE_PRESETS[0].value);
+    const [reductionPaletteText, setReductionPaletteText] = useState<string>(PALETTE_PRESETS[1].value);
     const [cornerAssignments] = useState<number[]>([0, 1, 2, 3]);
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
-    const [ditherStrength, setDitherStrength] = useState(0.35);
-    const [reductionMode, setReductionMode] = useState<ReductionMode>("binary");
+    const [ditherStrength, setDitherStrength] = useState(0.5);
+    const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [binaryThreshold, setBinaryThreshold] = useState(127);
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
     const [width, setWidth] = useState(240);
