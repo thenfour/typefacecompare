@@ -17,6 +17,8 @@ interface GradientControlsProps {
     swatches: PaletteSwatchDefinition[];
     rows: PaletteRow[];
     footer?: ReactNode;
+    interpolationMode: string;
+    onInterpolationModeChange: (value: string) => void;
 }
 
 interface SourceControlsCardProps {
@@ -74,10 +76,23 @@ function renderGradientControls({
     swatches,
     rows,
     footer,
+    interpolationMode,
+    onInterpolationModeChange,
 }: GradientControlsProps) {
     return (
         <div className="source-card__gradient-panel">
             <div className="source-card__meta">{swatchCountLabel}</div>
+            <label className="source-card__interpolation">
+                Interpolation Space
+                <select value={interpolationMode} onChange={(event) => onInterpolationModeChange(event.target.value)}>
+                    <option value="rgb">RGB</option>
+                    <option value="hsl">HSL</option>
+                    <option value="cmyk">CMYK</option>
+                    <option value="lab">LAB</option>
+                    <option value="ycbcr">YCbCr</option>
+                    <option value="oklch">OKLCH</option>
+                </select>
+            </label>
             <PalettePresetButtons presets={presets} onSelect={onSelectPreset} />
             <LospecPaletteImporter targetLabel={lospecTargetLabel} onApplyPalette={onChangeValue} />
             <div className="source-card__gradient-editor">

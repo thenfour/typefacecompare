@@ -260,6 +260,8 @@ export default function DitherGradientPage() {
                                 gradientSwatches.length === 0 ? (
                                     <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
                                 ) : null,
+                            interpolationMode,
+                            onInterpolationModeChange: (next) => setInterpolationMode(next as ColorInterpolationMode),
                         }}
                         imageControls={{
                             imageUrlInput,
@@ -298,61 +300,73 @@ export default function DitherGradientPage() {
                         <header>
                             <strong>Controls</strong>
                         </header>
-                        <div className="control-grid">
-                            <label>
-                                Interpolation Space
-                                <select value={interpolationMode} onChange={(event) => setInterpolationMode(event.target.value as ColorInterpolationMode)}>
-                                    <option value="rgb">RGB</option>
-                                    <option value="hsl">HSL</option>
-                                    <option value="cmyk">CMYK</option>
-                                    <option value="lab">LAB</option>
-                                    <option value="ycbcr">YCbCr</option>
-                                    <option value="oklch">OKLCH</option>
-                                </select>
-                            </label>
-                            <DitherControls
-                                ditherType={ditherType}
-                                onDitherTypeChange={setDitherType}
-                                ditherStrength={ditherStrength}
-                                onDitherStrengthChange={setDitherStrength}
-                                ditherSeed={ditherSeed}
-                                onDitherSeedChange={setDitherSeed}
-                                seedEnabled={seedEnabled}
-                                isErrorDiffusion={isErrorDiffusion}
-                                errorDiffusionKernelId={errorDiffusionKernelId}
-                                onErrorDiffusionKernelChange={setErrorDiffusionKernelId}
-                                isVoronoiDither={isVoronoiDither}
-                                voronoiCellsPerAxis={voronoiCellsPerAxis}
-                                onVoronoiCellsChange={setVoronoiCellsPerAxis}
-                                voronoiCellOptions={VORONOI_CELL_OPTIONS}
-                                voronoiJitter={voronoiJitter}
-                                onVoronoiJitterChange={setVoronoiJitter}
-                            />
-                            <ReductionControls
-                                reductionMode={reductionMode}
-                                onReductionModeChange={setReductionMode}
-                                hasReductionPalette={hasReductionPalette}
-                                reductionSwatchCount={reductionSwatches.length}
-                                binaryThreshold={binaryThreshold}
-                                onBinaryThresholdChange={setBinaryThreshold}
-                                distanceColorSpace={distanceColorSpace}
-                                onDistanceColorSpaceChange={handleDistanceColorSpaceChange}
-                                distanceFeature={distanceFeature}
-                                onDistanceFeatureChange={setDistanceFeature}
-                                supportedDistanceFeatures={supportedDistanceFeatures}
-                            />
-                            <label>
-                                Canvas Width ({width}px)
-                                <input type="range" min={64} max={512} step={8} value={width} onChange={(event) => setWidth(event.target.valueAsNumber)} />
-                            </label>
-                            <label>
-                                Canvas Height ({height}px)
-                                <input type="range" min={64} max={512} step={8} value={height} onChange={(event) => setHeight(event.target.valueAsNumber)} />
-                            </label>
-                            <label>
-                                Preview Scale ({previewScale}×)
-                                <input type="range" min={1} max={4} step={1} value={previewScale} onChange={(event) => setPreviewScale(event.target.valueAsNumber)} />
-                            </label>
+                        <div className="controls-section-grid">
+                            <div className="controls-panel controls-panel--wide">
+                                <div className="controls-panel__header">
+                                    <h3>Dither</h3>
+                                </div>
+                                <div className="controls-panel__fields">
+                                    <DitherControls
+                                        ditherType={ditherType}
+                                        onDitherTypeChange={setDitherType}
+                                        ditherStrength={ditherStrength}
+                                        onDitherStrengthChange={setDitherStrength}
+                                        ditherSeed={ditherSeed}
+                                        onDitherSeedChange={setDitherSeed}
+                                        seedEnabled={seedEnabled}
+                                        isErrorDiffusion={isErrorDiffusion}
+                                        errorDiffusionKernelId={errorDiffusionKernelId}
+                                        onErrorDiffusionKernelChange={setErrorDiffusionKernelId}
+                                        isVoronoiDither={isVoronoiDither}
+                                        voronoiCellsPerAxis={voronoiCellsPerAxis}
+                                        onVoronoiCellsChange={setVoronoiCellsPerAxis}
+                                        voronoiCellOptions={VORONOI_CELL_OPTIONS}
+                                        voronoiJitter={voronoiJitter}
+                                        onVoronoiJitterChange={setVoronoiJitter}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="controls-panel controls-panel--wide">
+                                <div className="controls-panel__header">
+                                    <h3>Reduction</h3>
+                                </div>
+                                <div className="controls-panel__fields">
+                                    <ReductionControls
+                                        reductionMode={reductionMode}
+                                        onReductionModeChange={setReductionMode}
+                                        hasReductionPalette={hasReductionPalette}
+                                        reductionSwatchCount={reductionSwatches.length}
+                                        binaryThreshold={binaryThreshold}
+                                        onBinaryThresholdChange={setBinaryThreshold}
+                                        distanceColorSpace={distanceColorSpace}
+                                        onDistanceColorSpaceChange={handleDistanceColorSpaceChange}
+                                        distanceFeature={distanceFeature}
+                                        onDistanceFeatureChange={setDistanceFeature}
+                                        supportedDistanceFeatures={supportedDistanceFeatures}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="controls-panel">
+                                <div className="controls-panel__header">
+                                    <h3>Canvas & Preview</h3>
+                                </div>
+                                <div className="controls-panel__fields">
+                                    <label>
+                                        Canvas Width ({width}px)
+                                        <input type="range" min={64} max={512} step={8} value={width} onChange={(event) => setWidth(event.target.valueAsNumber)} />
+                                    </label>
+                                    <label>
+                                        Canvas Height ({height}px)
+                                        <input type="range" min={64} max={512} step={8} value={height} onChange={(event) => setHeight(event.target.valueAsNumber)} />
+                                    </label>
+                                    <label>
+                                        Preview Scale ({previewScale}×)
+                                        <input type="range" min={1} max={4} step={1} value={previewScale} onChange={(event) => setPreviewScale(event.target.valueAsNumber)} />
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </section>
                 </div>
