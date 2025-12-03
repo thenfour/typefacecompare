@@ -60,11 +60,11 @@ export default function DitherGradientPage() {
         if (swatches.length === 0) {
             return;
         }
-        setCornerAssignments((prev) => {
-            const next = buildCornerIndices(swatches, prev);
-            const changed = next.some((value, index) => value !== prev[index]);
-            return changed ? next : prev;
-        });
+        // setCornerAssignments((prev) => {
+        //     const next = buildCornerIndices(swatches, prev);
+        //     const changed = next.some((value, index) => value !== prev[index]);
+        //     return changed ? next : prev;
+        // });
     }, [swatches]);
 
     const derivedCorners = useMemo(() => deriveCornerHexes(swatches, cornerAssignments), [swatches, cornerAssignments]);
@@ -89,8 +89,15 @@ export default function DitherGradientPage() {
             for (let x = 0; x < width; x++) {
                 const u = width === 1 ? 0 : x / (width - 1);
                 const rgb = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
+                const jittered = applyDitherJitter(rgb, x, y, ditherType, ditherStrength);
+
+                const reducedColor = stepRgb(jittered, 127);
+
+                // hard-step to demonstrate dithering effect over limited palette.
+                // TODO: allow user-defined palette reduction.
+                const dithered = clampRgb255(reducedColor);
+
                 const offset = (y * width + x) * 4;
-                const dithered = applyDither(rgb, x, y, ditherType, ditherStrength);
                 data[offset] = dithered.r;
                 data[offset + 1] = dithered.g;
                 data[offset + 2] = dithered.b;
@@ -101,15 +108,13 @@ export default function DitherGradientPage() {
         ctx.putImageData(imageData, 0, 0);
     }, [derivedCorners.hexes, width, height, interpolationMode, ditherType, ditherStrength]);
 
-    const handleCornerChange = (cornerIndex: number, swatchIndex: number) => {
-        setCornerAssignments((prev) => {
-            const next = [...prev];
-            next[cornerIndex] = swatchIndex;
-            return next;
-        });
-    };
-
-    const autoRepeatActive = swatches.length > 0 && swatches.length < 4;
+    // const handleCornerChange = (cornerIndex: number, swatchIndex: number) => {
+    //     setCornerAssignments((prev) => {
+    //         const next = [...prev];
+    //         next[cornerIndex] = swatchIndex;
+    //         return next;
+    //     });
+    // };
 
     return (
         <>
@@ -138,11 +143,6 @@ export default function DitherGradientPage() {
                             onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setPaletteText(event.target.value)}
                             spellCheck={false}
                         />
-                        {autoRepeatActive && (
-                            <p className="dither-gradient-hint">
-                                Only {swatches.length} color{swatches.length === 1 ? "" : "s"} supplied — repeating across the whole palette to fill the four corners.
-                            </p>
-                        )}
                         {swatches.length === 0 && (
                             <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
                         )}
@@ -262,19 +262,19 @@ export default function DitherGradientPage() {
     );
 }
 
-function buildCornerIndices(swatches: PaletteSwatchDefinition[], previous: number[]): number[] {
-    if (swatches.length === 0) {
-        return previous;
-    }
-    const next = new Array(4).fill(0).map((_, index) => {
-        const candidate = previous[index];
-        if (typeof candidate === "number" && swatches[candidate]) {
-            return candidate;
-        }
-        return index % swatches.length;
-    });
-    return next;
-}
+// function buildCornerIndices(swatches: PaletteSwatchDefinition[], previous: number[]): number[] {
+//     if (swatches.length === 0) {
+//         return previous;
+//     }
+//     const next = new Array(4).fill(0).map((_, index) => {
+//         const candidate = previous[index];
+//         if (typeof candidate === "number" && swatches[candidate]) {
+//             return candidate;
+//         }
+//         return index % swatches.length;
+//     });
+//     return next;
+// }
 
 function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: number[]) {
     if (swatches.length === 0) {
@@ -293,25 +293,45 @@ function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: numbe
     return { hexes };
 }
 
-function applyDither(rgb255: { r: number; g: number; b: number }, x: number, y: number, type: DitherType, strength: number) {
-    if (type === "none" || strength <= 0) {
+function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
+    return {
+        r: rgb.r + offset,
+        g: rgb.g + offset,
+        b: rgb.b + offset,
+    };
+}
+
+function applyDitherJitter(rgb255: { r: number; g: number; b: number }, x: number, y: number, type: DitherType, strength: number) {
+    if (type === "none") {
         return rgb255;
     }
     const matrix = BAYER_MATRICES[type];
     const size = matrix.length;
     const denominator = size * size;
-    const threshold = (matrix[y % size][x % size] + 0.5) / denominator - 0.5;
-    const jitter = threshold * strength * 255;
+    // matrix source is scaled 0..(N*N-1); we convert to -0.5..+0.5 range for easier centering
+    const matrixSrcValue = matrix[y % size][x % size];
+    const threshold = (matrixSrcValue + 0.5) / denominator - 0.5;
+    const jitter = threshold * strength * 255; // convert threshold (0,1) to RGB channel offset (-128,128) scaled by strength
 
+    const jitteredColor = addRgb(rgb255, jitter);
+    return jitteredColor;
+}
+
+// applies hard step function to each RGB channel (if n < step, return 0 else return 255)
+function stepRgb(rgb: { r: number; g: number; b: number }, step: number) {
     return {
-        r: clampChannel(rgb255.r + jitter),
-        g: clampChannel(rgb255.g + jitter),
-        b: clampChannel(rgb255.b + jitter),
+        r: rgb.r < step ? 0 : 255,
+        g: rgb.g < step ? 0 : 255,
+        b: rgb.b < step ? 0 : 255,
     };
 }
 
-function clampChannel(value: number): number {
-    if (value < 0) return 0;
-    if (value > 255) return 255;
-    return Math.round(value);
+
+function clampRgb255(rgb: { r: number; g: number; b: number }) {
+    return {
+        r: Math.min(255, Math.max(0, Math.round(rgb.r))),
+        g: Math.min(255, Math.max(0, Math.round(rgb.g))),
+        b: Math.min(255, Math.max(0, Math.round(rgb.b))),
+    };
 }
+
