@@ -8,10 +8,27 @@ export type DitherType =
     | "rgb-noise"
     | "color-noise"
     | "blue-noise"
-    | "voronoi-cluster";
+    | "voronoi-cluster"
+    | "error-diffusion-kernel";
 export type BayerDitherType = "bayer2" | "bayer4" | "bayer8";
 export type RandomNoiseDitherType = "bw-noise" | "grayscale-noise" | "rgb-noise" | "color-noise";
 export type ProceduralTileDitherType = "blue-noise" | "voronoi-cluster";
+export type ErrorDiffusionKernelId =
+    | "floyd-steinberg"
+    | "jarvis-judice-ninke"
+    | "stucki"
+    | "atkinson"
+    | "burkes"
+    | "sierra"
+    | "sierra-lite";
+
+export interface ErrorDiffusionKernel {
+    id: ErrorDiffusionKernelId;
+    label: string;
+    offsets: Array<{ dx: number; dy: number; weight: number }>;
+    divisor: number;
+    maxDy: number;
+}
 
 export interface DitherThresholdTile {
     size: number;
@@ -29,6 +46,7 @@ export const DITHER_LABELS: Record<DitherType, string> = {
     "color-noise": "Random color noise",
     "blue-noise": "Blue-noise tile",
     "voronoi-cluster": "Voronoi cluster",
+    "error-diffusion-kernel": "Error diffusion (kernel)",
 };
 
 export const DITHER_DESCRIPTIONS: Record<DitherType, string> = {
@@ -42,6 +60,7 @@ export const DITHER_DESCRIPTIONS: Record<DitherType, string> = {
     "color-noise": "Channel-wise random jitter",
     "blue-noise": "Tiled blue-noise thresholds",
     "voronoi-cluster": "Clustered Voronoi thresholds",
+    "error-diffusion-kernel": "Kernel-based error diffusion",
 };
 
 export const DITHER_TYPE_ORDER: DitherType[] = [
@@ -55,6 +74,7 @@ export const DITHER_TYPE_ORDER: DitherType[] = [
     "color-noise",
     "blue-noise",
     "voronoi-cluster",
+    "error-diffusion-kernel",
 ];
 
 export interface ProceduralDitherOptions {
@@ -68,6 +88,124 @@ const BAYER_DITHER_TYPES: BayerDitherType[] = ["bayer2", "bayer4", "bayer8"];
 const RANDOM_NOISE_TYPES: RandomNoiseDitherType[] = ["bw-noise", "grayscale-noise", "rgb-noise", "color-noise"];
 const PROCEDURAL_TILE_TYPES: ProceduralTileDitherType[] = ["blue-noise", "voronoi-cluster"];
 const SEEDED_DITHER_TYPES: DitherType[] = [...RANDOM_NOISE_TYPES, ...PROCEDURAL_TILE_TYPES];
+
+const ERROR_DIFFUSION_KERNEL_DATA: Array<Omit<ErrorDiffusionKernel, "maxDy">> = [
+    {
+        id: "floyd-steinberg",
+        label: "Floyd–Steinberg",
+        divisor: 16,
+        offsets: [
+            { dx: 1, dy: 0, weight: 7 },
+            { dx: -1, dy: 1, weight: 3 },
+            { dx: 0, dy: 1, weight: 5 },
+            { dx: 1, dy: 1, weight: 1 },
+        ],
+    },
+    {
+        id: "jarvis-judice-ninke",
+        label: "Jarvis–Judice–Ninke",
+        divisor: 48,
+        offsets: [
+            { dx: 1, dy: 0, weight: 7 },
+            { dx: 2, dy: 0, weight: 5 },
+            { dx: -2, dy: 1, weight: 3 },
+            { dx: -1, dy: 1, weight: 5 },
+            { dx: 0, dy: 1, weight: 7 },
+            { dx: 1, dy: 1, weight: 5 },
+            { dx: 2, dy: 1, weight: 3 },
+            { dx: -2, dy: 2, weight: 1 },
+            { dx: -1, dy: 2, weight: 3 },
+            { dx: 0, dy: 2, weight: 5 },
+            { dx: 1, dy: 2, weight: 3 },
+            { dx: 2, dy: 2, weight: 1 },
+        ],
+    },
+    {
+        id: "stucki",
+        label: "Stucki",
+        divisor: 42,
+        offsets: [
+            { dx: 1, dy: 0, weight: 8 },
+            { dx: 2, dy: 0, weight: 4 },
+            { dx: -2, dy: 1, weight: 2 },
+            { dx: -1, dy: 1, weight: 4 },
+            { dx: 0, dy: 1, weight: 8 },
+            { dx: 1, dy: 1, weight: 4 },
+            { dx: 2, dy: 1, weight: 2 },
+            { dx: -2, dy: 2, weight: 1 },
+            { dx: -1, dy: 2, weight: 2 },
+            { dx: 0, dy: 2, weight: 4 },
+            { dx: 1, dy: 2, weight: 2 },
+            { dx: 2, dy: 2, weight: 1 },
+        ],
+    },
+    {
+        id: "atkinson",
+        label: "Atkinson",
+        divisor: 8,
+        offsets: [
+            { dx: 1, dy: 0, weight: 1 },
+            { dx: 2, dy: 0, weight: 1 },
+            { dx: -1, dy: 1, weight: 1 },
+            { dx: 0, dy: 1, weight: 1 },
+            { dx: 1, dy: 1, weight: 1 },
+            { dx: 0, dy: 2, weight: 1 },
+        ],
+    },
+    {
+        id: "burkes",
+        label: "Burkes",
+        divisor: 32,
+        offsets: [
+            { dx: 1, dy: 0, weight: 8 },
+            { dx: 2, dy: 0, weight: 4 },
+            { dx: -2, dy: 1, weight: 2 },
+            { dx: -1, dy: 1, weight: 4 },
+            { dx: 0, dy: 1, weight: 8 },
+            { dx: 1, dy: 1, weight: 4 },
+            { dx: 2, dy: 1, weight: 2 },
+        ],
+    },
+    {
+        id: "sierra",
+        label: "Sierra",
+        divisor: 32,
+        offsets: [
+            { dx: 1, dy: 0, weight: 5 },
+            { dx: 2, dy: 0, weight: 3 },
+            { dx: -2, dy: 1, weight: 2 },
+            { dx: -1, dy: 1, weight: 4 },
+            { dx: 0, dy: 1, weight: 5 },
+            { dx: 1, dy: 1, weight: 4 },
+            { dx: 2, dy: 1, weight: 2 },
+            { dx: -1, dy: 2, weight: 2 },
+            { dx: 0, dy: 2, weight: 3 },
+            { dx: 1, dy: 2, weight: 2 },
+        ],
+    },
+    {
+        id: "sierra-lite",
+        label: "Sierra Lite",
+        divisor: 4,
+        offsets: [
+            { dx: 1, dy: 0, weight: 2 },
+            { dx: -1, dy: 1, weight: 1 },
+            { dx: 0, dy: 1, weight: 1 },
+            { dx: 1, dy: 1, weight: 1 },
+        ],
+    },
+];
+
+export const ERROR_DIFFUSION_KERNELS: ErrorDiffusionKernel[] = ERROR_DIFFUSION_KERNEL_DATA.map((kernel) => ({
+    ...kernel,
+    maxDy: Math.max(0, ...kernel.offsets.map((offset) => offset.dy)),
+}));
+
+export const DEFAULT_ERROR_DIFFUSION_KERNEL: ErrorDiffusionKernelId = "floyd-steinberg";
+
+const ERROR_DIFFUSION_KERNEL_MAP = new Map<ErrorDiffusionKernelId, ErrorDiffusionKernel>(
+    ERROR_DIFFUSION_KERNELS.map((kernel) => [kernel.id, kernel])
+);
 
 const RANDOM_VARIANT_OFFSETS: Record<RandomNoiseDitherType, number> = {
     "bw-noise": 101,
@@ -149,12 +287,20 @@ export function buildProceduralDitherTile(
     return null;
 }
 
+export function getErrorDiffusionKernel(id: ErrorDiffusionKernelId): ErrorDiffusionKernel {
+    return ERROR_DIFFUSION_KERNEL_MAP.get(id) ?? ERROR_DIFFUSION_KERNEL_MAP.get(DEFAULT_ERROR_DIFFUSION_KERNEL)!;
+}
+
 export function usesSeededDither(type: DitherType) {
     return SEEDED_DITHER_TYPES.includes(type);
 }
 
 export function isProceduralTileType(type: DitherType): type is ProceduralTileDitherType {
     return PROCEDURAL_TILE_TYPES.includes(type as ProceduralTileDitherType);
+}
+
+export function isErrorDiffusionDither(type: DitherType) {
+    return type === "error-diffusion-kernel";
 }
 
 function applyRandomNoiseDither(

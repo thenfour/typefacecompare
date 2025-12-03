@@ -13,6 +13,10 @@ import "../styles/PaletteDefinition.css";
 import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
 import {
     buildProceduralDitherTile,
+    DEFAULT_ERROR_DIFFUSION_KERNEL,
+    ERROR_DIFFUSION_KERNELS,
+    ErrorDiffusionKernel,
+    ErrorDiffusionKernelId,
     DitherThresholdTile,
     DitherType,
     DITHER_DESCRIPTIONS,
@@ -21,6 +25,8 @@ import {
     applyDitherJitter,
     DEFAULT_VORONOI_CELLS,
     DEFAULT_VORONOI_JITTER,
+    getErrorDiffusionKernel,
+    isErrorDiffusionDither,
     usesSeededDither,
 } from "../utils/dithering";
 type ReductionMode = "binary" | "palette" | "none";
@@ -167,6 +173,7 @@ export default function DitherGradientPage() {
     const [ditherSeed, setDitherSeed] = useState<number>(1);
     const [voronoiCellsPerAxis, setVoronoiCellsPerAxis] = useState<number>(DEFAULT_VORONOI_CELLS);
     const [voronoiJitter, setVoronoiJitter] = useState<number>(DEFAULT_VORONOI_JITTER);
+    const [errorDiffusionKernelId, setErrorDiffusionKernelId] = useState<ErrorDiffusionKernelId>(DEFAULT_ERROR_DIFFUSION_KERNEL);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [binaryThreshold, setBinaryThreshold] = useState(127);
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
@@ -235,6 +242,11 @@ export default function DitherGradientPage() {
             { key: "projected", enabled: showProjectedPreview, ref: projectedCanvasRef },
         ];
 
+        const useErrorDiffusion = isErrorDiffusion && selectedErrorDiffusionKernel;
+        const errorDiffusionContext = useErrorDiffusion
+            ? createErrorDiffusionContext(width, height, selectedErrorDiffusionKernel)
+            : null;
+
         if (derivedCorners.hexes.length < 4) {
             previewStages.forEach((stage) => {
                 const canvas = stage.ref.current;
@@ -277,18 +289,37 @@ export default function DitherGradientPage() {
                 const u = width === 1 ? 0 : x / (width - 1);
                 const base = interpolateGradientColor(derivedCorners.hexes, u, v, interpolationMode);
                 const sourceColor = clampRgb255(base);
-                const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed, proceduralDitherTile);
-                const ditheredColor = clampRgb255(jittered);
-                const reducedColor = clampRgb255(
-                    applyReduction(
-                        jittered,
+                let ditheredColor: { r: number; g: number; b: number };
+                let reducedColor: { r: number; g: number; b: number };
+                if (errorDiffusionContext) {
+                    const result = applyErrorDiffusionToPixel(
+                        base,
+                        x,
+                        y,
+                        errorDiffusionContext,
+                        ditherStrength,
                         reductionMode,
                         binaryThreshold,
                         reductionPaletteEntries,
                         distanceColorSpace,
                         distanceFeature
-                    )
-                );
+                    );
+                    ditheredColor = result.ditheredColor;
+                    reducedColor = result.quantizedColor;
+                } else {
+                    const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength, ditherSeed, proceduralDitherTile);
+                    ditheredColor = clampRgb255(jittered);
+                    reducedColor = clampRgb255(
+                        applyReduction(
+                            jittered,
+                            reductionMode,
+                            binaryThreshold,
+                            reductionPaletteEntries,
+                            distanceColorSpace,
+                            distanceFeature
+                        )
+                    );
+                }
                 let projectedColor: { r: number; g: number; b: number } | null = null;
                 if (stageMap.projected) {
                     projectedColor =
@@ -311,6 +342,9 @@ export default function DitherGradientPage() {
                     writePixel(stageMap.projected.imageData.data, offset, projectedColor);
                 }
             }
+            if (errorDiffusionContext) {
+                advanceErrorDiffusionRow(errorDiffusionContext);
+            }
         }
 
         activeStages.forEach((stage) => {
@@ -329,6 +363,7 @@ export default function DitherGradientPage() {
         distanceColorSpace,
         reductionPaletteEntries,
         proceduralDitherTile,
+        errorDiffusionKernelId,
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
@@ -347,6 +382,8 @@ export default function DitherGradientPage() {
     const projectedPreviewDescription = distanceFeature === "all" ? "Same as source" : `${DISTANCE_FEATURE_LABELS[distanceFeature]} projection`;
     const seedEnabled = usesSeededDither(ditherType);
     const isVoronoiDither = ditherType === "voronoi-cluster";
+    const isErrorDiffusion = isErrorDiffusionDither(ditherType);
+    const selectedErrorDiffusionKernel = getErrorDiffusionKernel(errorDiffusionKernelId);
 
     return (
         <>
@@ -453,6 +490,23 @@ export default function DitherGradientPage() {
                                     disabled={!seedEnabled}
                                 />
                             </label>
+                            {isErrorDiffusion && (
+                                <label>
+                                    Error Diffusion Kernel
+                                    <select
+                                        value={errorDiffusionKernelId}
+                                        onChange={(event) =>
+                                            setErrorDiffusionKernelId(event.target.value as ErrorDiffusionKernelId)
+                                        }
+                                    >
+                                        {ERROR_DIFFUSION_KERNELS.map((kernel) => (
+                                            <option value={kernel.id} key={kernel.id}>
+                                                {kernel.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            )}
                             {isVoronoiDither && (
                                 <>
                                     <label>
@@ -882,6 +936,104 @@ function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: numbe
     buffer[offset + 1] = color.g;
     buffer[offset + 2] = color.b;
     buffer[offset + 3] = 255;
+}
+
+interface ErrorDiffusionContext {
+    kernel: ErrorDiffusionKernel;
+    rowBuffers: Float32Array[];
+    width: number;
+    height: number;
+}
+
+function createErrorDiffusionContext(width: number, height: number, kernel: ErrorDiffusionKernel): ErrorDiffusionContext {
+    const bufferCount = Math.max(1, kernel.maxDy + 1);
+    const rowBuffers = Array.from({ length: bufferCount }, () => new Float32Array(width * 3));
+    return { kernel, rowBuffers, width, height };
+}
+
+function advanceErrorDiffusionRow(context: ErrorDiffusionContext) {
+    if (context.rowBuffers.length === 0) {
+        return;
+    }
+    const finished = context.rowBuffers.shift();
+    if (!finished) {
+        return;
+    }
+    finished.fill(0);
+    context.rowBuffers.push(finished);
+}
+
+function applyErrorDiffusionToPixel(
+    baseColor: { r: number; g: number; b: number },
+    x: number,
+    y: number,
+    context: ErrorDiffusionContext,
+    strength: number,
+    reductionMode: ReductionMode,
+    binaryThreshold: number,
+    palette: ReductionPaletteEntry[],
+    distanceMode: ColorInterpolationMode,
+    distanceFeature: DistanceFeature
+) {
+    const currentRow = context.rowBuffers[0];
+    const index = x * 3;
+    const adjusted = {
+        r: baseColor.r + (currentRow[index] ?? 0),
+        g: baseColor.g + (currentRow[index + 1] ?? 0),
+        b: baseColor.b + (currentRow[index + 2] ?? 0),
+    };
+    currentRow[index] = 0;
+    currentRow[index + 1] = 0;
+    currentRow[index + 2] = 0;
+
+    const ditheredColor = clampRgb255(adjusted);
+    const quantizedColor = clampRgb255(
+        applyReduction(ditheredColor, reductionMode, binaryThreshold, palette, distanceMode, distanceFeature)
+    );
+    const error = {
+        r: ditheredColor.r - quantizedColor.r,
+        g: ditheredColor.g - quantizedColor.g,
+        b: ditheredColor.b - quantizedColor.b,
+    };
+    if (strength > 0) {
+        diffuseError(error, x, y, context, strength);
+    }
+    return { ditheredColor, quantizedColor };
+}
+
+function diffuseError(
+    error: { r: number; g: number; b: number },
+    x: number,
+    y: number,
+    context: ErrorDiffusionContext,
+    strength: number
+) {
+    const { kernel, rowBuffers, width, height } = context;
+    if (kernel.divisor === 0) {
+        return;
+    }
+    for (const offset of kernel.offsets) {
+        const targetX = x + offset.dx;
+        const targetY = y + offset.dy;
+        if (targetX < 0 || targetX >= width) {
+            continue;
+        }
+        if (targetY < 0 || targetY >= height) {
+            continue;
+        }
+        const buffer = rowBuffers[offset.dy];
+        if (!buffer) {
+            continue;
+        }
+        const contribution = (offset.weight / kernel.divisor) * strength;
+        if (contribution === 0) {
+            continue;
+        }
+        const idx = targetX * 3;
+        buffer[idx] += error.r * contribution;
+        buffer[idx + 1] += error.g * contribution;
+        buffer[idx + 2] += error.b * contribution;
+    }
 }
 
 
