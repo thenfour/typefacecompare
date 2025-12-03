@@ -14,6 +14,14 @@ import { PaletteDefinitionViewer } from "@/components/PaletteDefinitionViewer";
 
 type DitherType = "none" | "bayer2" | "bayer4" | "bayer8";
 type ReductionMode = "binary" | "palette" | "none";
+type DistanceFeature = "all" | "luminance" | "hsl-saturation" | "hsl-lightness" | "oklch-chroma";
+const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
+    all: "All components",
+    luminance: "Luminance / Lightness",
+    "hsl-saturation": "HSL Saturation",
+    "hsl-lightness": "HSL Lightness",
+    "oklch-chroma": "OKLCH Chroma",
+};
 
 const PALETTE_PRESETS = [
     {
@@ -66,6 +74,31 @@ interface ActivePreviewStage {
     imageData: ImageData;
 }
 
+// Returns whether the requested feature projection can be computed in the given color space.
+function isDistanceFeatureSupported(mode: ColorInterpolationMode, feature: DistanceFeature) {
+    if (feature === "all" || feature === "luminance") {
+        return true;
+    }
+    if (feature === "hsl-saturation" || feature === "hsl-lightness") {
+        return mode === "hsl";
+    }
+    if (feature === "oklch-chroma") {
+        return mode === "oklch";
+    }
+    return false;
+}
+
+// Provides a short UI hint for feature-specific prerequisites.
+function describeFeatureRequirement(feature: DistanceFeature): string | null {
+    if (feature === "hsl-saturation" || feature === "hsl-lightness") {
+        return "requires HSL space";
+    }
+    if (feature === "oklch-chroma") {
+        return "requires OKLCH space";
+    }
+    return null;
+}
+
 const BAYER_MATRICES: Record<Exclude<DitherType, "none">, number[][]> = {
     bayer2: [
         [0, 2],
@@ -99,6 +132,7 @@ export default function DitherGradientPage() {
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [binaryThreshold, setBinaryThreshold] = useState(127);
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("lab");
+    const [distanceFeature, setDistanceFeature] = useState<DistanceFeature>("all");
     const [width, setWidth] = useState(240);
     const [height, setHeight] = useState(180);
     const [previewScale, setPreviewScale] = useState(2);
@@ -120,11 +154,14 @@ export default function DitherGradientPage() {
     const derivedCorners = useMemo(() => deriveCornerHexes(gradientSwatches, cornerAssignments), [gradientSwatches, cornerAssignments]);
     const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
         () =>
-            reductionSwatches.map((swatch) => ({
-                rgb: rgbUnitTo255(hexToRgb(swatch.hex)),
-                coords: vectorToTuple(convertHexToVector(swatch.hex, distanceColorSpace), distanceColorSpace),
-            })),
-        [reductionSwatches, distanceColorSpace]
+            reductionSwatches.map((swatch) => {
+                const rgb255 = rgbUnitTo255(hexToRgb(swatch.hex));
+                return {
+                    rgb: rgb255,
+                    coords: rgbToCoords(rgb255, distanceColorSpace, distanceFeature),
+                };
+            }),
+        [reductionSwatches, distanceColorSpace, distanceFeature]
     );
 
     useEffect(() => {
@@ -132,6 +169,12 @@ export default function DitherGradientPage() {
             setReductionMode("none");
         }
     }, [hasReductionPalette, reductionMode]);
+
+    useEffect(() => {
+        if (!isDistanceFeatureSupported(distanceColorSpace, distanceFeature)) {
+            setDistanceFeature("all");
+        }
+    }, [distanceColorSpace, distanceFeature]);
 
     useEffect(() => {
         const previewStages: PreviewStageConfig[] = [
@@ -185,7 +228,14 @@ export default function DitherGradientPage() {
                 const jittered = applyDitherJitter(base, x, y, ditherType, ditherStrength);
                 const ditheredColor = clampRgb255(jittered);
                 const reducedColor = clampRgb255(
-                    applyReduction(jittered, reductionMode, binaryThreshold, reductionPaletteEntries, distanceColorSpace)
+                    applyReduction(
+                        jittered,
+                        reductionMode,
+                        binaryThreshold,
+                        reductionPaletteEntries,
+                        distanceColorSpace,
+                        distanceFeature
+                    )
                 );
 
                 const offset = (y * width + x) * 4;
@@ -218,6 +268,7 @@ export default function DitherGradientPage() {
         showSourcePreview,
         showDitherPreview,
         showReducedPreview,
+        distanceFeature,
     ]);
 
     // const handleCornerChange = (cornerIndex: number, swatchIndex: number) => {
@@ -352,6 +403,24 @@ export default function DitherGradientPage() {
                                         <option value="lab">LAB</option>
                                         <option value="ycbcr">YCbCr</option>
                                         <option value="oklch">OKLCH</option>
+                                    </select>
+                                </label>
+                            )}
+                            {reductionMode === "palette" && (
+                                <label>
+                                    Distance Feature
+                                    <select value={distanceFeature} onChange={(event) => setDistanceFeature(event.target.value as DistanceFeature)}>
+                                        {Object.entries(DISTANCE_FEATURE_LABELS).map(([value, labelText]) => {
+                                            const feature = value as DistanceFeature;
+                                            const supported = isDistanceFeatureSupported(distanceColorSpace, feature);
+                                            const requirement = describeFeatureRequirement(feature);
+                                            const fullLabel = requirement ? `${labelText} — ${requirement}` : labelText;
+                                            return (
+                                                <option value={feature} key={feature} disabled={!supported}>
+                                                    {fullLabel}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
                                 </label>
                             )}
@@ -499,6 +568,10 @@ export default function DitherGradientPage() {
 //     return next;
 // }
 
+/**
+ * Resolves the four corner colors to hex strings.
+ * Missing indices wrap through the available swatches so gradients still render with short palettes.
+ */
 function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: number[]) {
     if (swatches.length === 0) {
         return { hexes: [] as string[] };
@@ -518,27 +591,41 @@ function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: numbe
 
 const OKLCH_CHROMA_NORMALIZER = 0.4;
 
+/**
+ * Applies the currently selected reduction strategy to a single RGB pixel.
+ * rgb values are in 0-255 range, binaryThreshold is also 0-255, palette entries carry cached coordinates.
+ */
 function applyReduction(
     rgb: { r: number; g: number; b: number },
     mode: ReductionMode,
     binaryThreshold: number,
     palette: ReductionPaletteEntry[],
-    distanceMode: ColorInterpolationMode
+    distanceMode: ColorInterpolationMode,
+    distanceFeature: DistanceFeature
 ) {
     if (mode === "binary") {
         return stepRgb(rgb, binaryThreshold);
     }
     if (mode === "palette" && palette.length > 0) {
-        return quantizeToPalette(rgb, palette, distanceMode);
+        return quantizeToPalette(rgb, palette, distanceMode, distanceFeature);
     }
     return rgb;
 }
 
-function quantizeToPalette(rgb: { r: number; g: number; b: number }, palette: ReductionPaletteEntry[], distanceMode: ColorInterpolationMode) {
+/**
+ * Snaps the provided RGB pixel to the closest palette entry using the chosen color space + feature projection.
+ * Returns the palette RGB (0-255) for the best match, or the input when the palette is empty.
+ */
+function quantizeToPalette(
+    rgb: { r: number; g: number; b: number },
+    palette: ReductionPaletteEntry[],
+    distanceMode: ColorInterpolationMode,
+    distanceFeature: DistanceFeature
+) {
     if (palette.length === 0) {
         return rgb;
     }
-    const targetCoords = rgbToCoords(rgb, distanceMode);
+    const targetCoords = rgbToCoords(rgb, distanceMode, distanceFeature);
     let closest = palette[0];
     let minDistance = Infinity;
     for (const swatch of palette) {
@@ -551,9 +638,67 @@ function quantizeToPalette(rgb: { r: number; g: number; b: number }, palette: Re
     return { ...closest.rgb };
 }
 
-function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode) {
+/**
+ * Converts an sRGB pixel (0-255) into a unit-space vector for the requested color space and optional feature.
+ * Returns a numeric tuple (0-1-ish values) suitable for Euclidean distance comparisons.
+ */
+function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode, feature: DistanceFeature) {
     const vector = rgb255ToVector(rgb, mode);
-    return vectorToTuple(vector, mode);
+    const coords = vectorToTuple(vector, mode);
+    return projectDistanceFeature(vector, coords, mode, feature);
+}
+
+/**
+ * Projects the coordinate list onto a specific feature (e.g., luminance) when requested.
+ * Input vector is whatever structure convertHexToVector emitted for the given color space.
+ */
+function projectDistanceFeature(
+    vector: ReturnType<typeof convertHexToVector>,
+    coords: number[],
+    mode: ColorInterpolationMode,
+    feature: DistanceFeature
+): number[] {
+    if (feature === "all") {
+        return coords;
+    }
+    if (feature === "luminance") {
+        if (mode === "lab") {
+            const labVector = vector as { l?: number };
+            return [Math.max(0, Math.min(1, (labVector.l ?? 0) / 100))];
+        }
+        if (mode === "oklch") {
+            const oklchVector = vector as { L?: number };
+            return [oklchVector.L ?? 0];
+        }
+        if (mode === "ycbcr") {
+            const ycbcrVector = vector as { y?: number };
+            return [ycbcrVector.y ?? 0];
+        }
+        if (mode === "hsl") {
+            console.log(`yooo`);
+            const hslVector = vector as { l?: number };
+            return [hslVector.l ?? 0];
+        }
+        if (mode === "rgb") {
+            const rgbVector = vector as { r?: number; g?: number; b?: number };
+            const y = 0.2126 * (rgbVector.r ?? 0) + 0.7152 * (rgbVector.g ?? 0) + 0.0722 * (rgbVector.b ?? 0);
+            return [y];
+        }
+        return [coords[0] ?? 0];
+    }
+    if (feature === "hsl-saturation" && mode === "hsl") {
+        const hslVector = vector as { s?: number };
+        return [hslVector.s ?? 0];
+    }
+    if (feature === "hsl-lightness" && mode === "hsl") {
+        const hslVector = vector as { l?: number };
+        return [hslVector.l ?? 0];
+    }
+    if (feature === "oklch-chroma" && mode === "oklch") {
+        const oklchVector = vector as { C?: number };
+        return [Math.max(0, (oklchVector.C ?? 0) / OKLCH_CHROMA_NORMALIZER)];
+    }
+    return coords;
 }
 
 function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: ColorInterpolationMode): number[] {
@@ -594,6 +739,7 @@ function hueToCartesian(degrees: number) {
     return [Math.cos(radians), Math.sin(radians)];
 }
 
+// Simple squared Euclidean distance between tuples of equal (or truncated) length.
 function distanceSq(a: number[], b: number[]) {
     const length = Math.min(a.length, b.length);
     let total = 0;
@@ -604,6 +750,7 @@ function distanceSq(a: number[], b: number[]) {
     return total;
 }
 
+// Writes a single pixel into an ImageData buffer using 0-255 channel ranges.
 function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: number; g: number; b: number }) {
     buffer[offset] = color.r;
     buffer[offset + 1] = color.g;
@@ -611,6 +758,7 @@ function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: numbe
     buffer[offset + 3] = 255;
 }
 
+// Adds a constant offset to each RGB channel; used to shift pixels by the dither threshold.
 function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
     return {
         r: rgb.r + offset,
@@ -619,6 +767,10 @@ function addRgb(rgb: { r: number; g: number; b: number }, offset: number) {
     };
 }
 
+/**
+ * Adds ordered dither jitter to an RGB pixel using the selected Bayer matrix.
+ * Input and output are 0-255 RGB values; strength is 0-1 and scales the threshold offset.
+ */
 function applyDitherJitter(rgb255: { r: number; g: number; b: number }, x: number, y: number, type: DitherType, strength: number) {
     if (type === "none") {
         return rgb255;
@@ -636,6 +788,7 @@ function applyDitherJitter(rgb255: { r: number; g: number; b: number }, x: numbe
 }
 
 // applies hard step function to each RGB channel (if n < step, return 0 else return 255)
+// Binary per-channel threshold (0-255 inputs/threshold) used by the "binary" reduction mode.
 function stepRgb(rgb: { r: number; g: number; b: number }, step: number) {
     return {
         r: rgb.r < step ? 0 : 255,
@@ -645,6 +798,7 @@ function stepRgb(rgb: { r: number; g: number; b: number }, step: number) {
 }
 
 
+// Rounds and clamps intermediate floating-point channel values into valid 0-255 integers.
 function clampRgb255(rgb: { r: number; g: number; b: number }) {
     return {
         r: Math.min(255, Math.max(0, Math.round(rgb.r))),
