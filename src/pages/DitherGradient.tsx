@@ -12,7 +12,7 @@ import { useDitherRenderer } from "@/hooks/useDitherRenderer";
 import type { DistanceFeature, ReductionMode, SourceType } from "@/types/dither";
 import { DISTANCE_FEATURE_LABELS, getSupportedDistanceFeatures, isDistanceFeatureSupported, rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
-import { ImageSourceControls } from "@/components/dither/ImageSourceControls";
+import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
 import { ReductionControls } from "@/components/dither/ReductionControls";
 import { PreviewSection } from "@/components/dither/PreviewSection";
@@ -243,22 +243,35 @@ export default function DitherGradientPage() {
                 </div>
 
                 <div className="dither-gradient-layout">
-                    <PaletteEditorCard
-                        title="Gradient Palette"
-                        subtitle="(should be 4 colors)"
-                        swatchCountLabel={`${gradientSwatches.length} swatch${gradientSwatches.length === 1 ? "" : "es"}`}
-                        presets={PALETTE_PRESETS}
-                        onSelectPreset={setGradientPaletteText}
-                        lospecTargetLabel="gradient palette"
-                        value={gradientPaletteText}
-                        onChangeValue={setGradientPaletteText}
-                        swatches={gradientSwatches}
-                        rows={parsedGradientPalette.rows}
-                        footer={
-                            gradientSwatches.length === 0 ? (
-                                <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
-                            ) : null
-                        }
+                    <SourceControlsCard
+                        sourceType={sourceType}
+                        onSourceTypeChange={setSourceType}
+                        sourceSummary={sourceSummaryLabel}
+                        gradientControls={{
+                            swatchCountLabel: `${gradientSwatches.length} swatch${gradientSwatches.length === 1 ? "" : "es"}`,
+                            presets: PALETTE_PRESETS,
+                            onSelectPreset: setGradientPaletteText,
+                            lospecTargetLabel: "gradient palette",
+                            value: gradientPaletteText,
+                            onChangeValue: setGradientPaletteText,
+                            swatches: gradientSwatches,
+                            rows: parsedGradientPalette.rows,
+                            footer:
+                                gradientSwatches.length === 0 ? (
+                                    <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
+                                ) : null,
+                        }}
+                        imageControls={{
+                            imageUrlInput,
+                            onImageUrlChange: setImageUrlInput,
+                            onImportImage: importImageFromUrl,
+                            isImportingImage,
+                            imageScaleMode,
+                            onImageScaleModeChange: setImageScaleMode,
+                            imageSource,
+                            imageImportError,
+                            imageSourceReady,
+                        }}
                     />
 
                     <PaletteEditorCard
@@ -286,19 +299,6 @@ export default function DitherGradientPage() {
                             <strong>Controls</strong>
                         </header>
                         <div className="control-grid">
-                            <ImageSourceControls
-                                sourceType={sourceType}
-                                onSourceTypeChange={setSourceType}
-                                imageUrlInput={imageUrlInput}
-                                onImageUrlChange={setImageUrlInput}
-                                onImportImage={importImageFromUrl}
-                                isImportingImage={isImportingImage}
-                                imageScaleMode={imageScaleMode}
-                                onImageScaleModeChange={setImageScaleMode}
-                                imageSource={imageSource}
-                                imageImportError={imageImportError}
-                                imageSourceReady={imageSourceReady}
-                            />
                             <label>
                                 Interpolation Space
                                 <select value={interpolationMode} onChange={(event) => setInterpolationMode(event.target.value as ColorInterpolationMode)}>
