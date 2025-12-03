@@ -9,7 +9,7 @@ import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { fetchDitherSourceExamples, type ExampleImage } from "@/data/ditherSourceExamples";
 import { useImageSource } from "@/hooks/useImageSource";
-import { useDitherRenderer } from "@/hooks/useDitherRenderer";
+import { useDitherRenderer, type GamutTransform } from "@/hooks/useDitherRenderer";
 import type { ReductionMode, SourceType } from "@/types/dither";
 import { rgbToCoords, type ReductionPaletteEntry } from "@/utils/paletteDistance";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
@@ -18,6 +18,7 @@ import { DitherControls } from "@/components/dither/DitherControls";
 import { ReductionControls } from "@/components/dither/ReductionControls";
 import { PreviewSection } from "@/components/dither/PreviewSection";
 import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
+import { extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 import {
     buildProceduralDitherTile,
     DEFAULT_ERROR_DIFFUSION_KERNEL,
@@ -131,6 +132,9 @@ export default function DitherGradientPage() {
     const [previewScale, setPreviewScale] = useState(2);
     const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(3);
     const [ditherMaskStrength, setDitherMaskStrength] = useState(0);
+    const [gamutOverallStrength, setGamutOverallStrength] = useState(1);
+    const [gamutTranslationStrength, setGamutTranslationStrength] = useState(0);
+    const [gamutScaleStrength, setGamutScaleStrength] = useState<AxisTriple>([0, 0, 0]);
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -180,11 +184,13 @@ export default function DitherGradientPage() {
         };
     }, []);
     const [showSourcePreview, setShowSourcePreview] = useState(true);
+    const [showGamutPreview, setShowGamutPreview] = useState(false);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const gamutCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const ditherCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const reducedCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
@@ -233,6 +239,55 @@ export default function DitherGradientPage() {
         [reductionPaletteEntries, distanceColorSpace]
     );
     const scatterAxisLabels = useMemo(() => getColorSpaceAxisLabels(distanceColorSpace), [distanceColorSpace]);
+    const sourceAxisStats = useMemo(
+        () => computeAxisStats(sourceScatterPoints, distanceColorSpace),
+        [sourceScatterPoints, distanceColorSpace]
+    );
+    const paletteAxisStats = useMemo(
+        () => computeAxisStats(paletteScatterPoints, distanceColorSpace),
+        [paletteScatterPoints, distanceColorSpace]
+    );
+    const gamutTransform = useMemo(() => {
+        if (!sourceAxisStats || !paletteAxisStats) {
+            return null;
+        }
+        const translationDelta: AxisTriple = [
+            paletteAxisStats.mean[0] - sourceAxisStats.mean[0],
+            paletteAxisStats.mean[1] - sourceAxisStats.mean[1],
+            paletteAxisStats.mean[2] - sourceAxisStats.mean[2],
+        ];
+        const effectiveTranslationStrength = gamutOverallStrength * gamutTranslationStrength;
+        const desiredMean: AxisTriple = [
+            sourceAxisStats.mean[0] + translationDelta[0] * effectiveTranslationStrength,
+            sourceAxisStats.mean[1] + translationDelta[1] * effectiveTranslationStrength,
+            sourceAxisStats.mean[2] + translationDelta[2] * effectiveTranslationStrength,
+        ];
+        const scale: AxisTriple = [0, 0, 0];
+        const translationActive = Math.abs(effectiveTranslationStrength) > 0.0001;
+        for (let index = 0; index < 3; index++) {
+            const sourceStd = sourceAxisStats.stdDev[index];
+            const targetStd = paletteAxisStats.stdDev[index];
+            const ratio = sourceStd > 1e-6 ? (targetStd > 0 ? targetStd / sourceStd : 1) : 1;
+            const axisStrength = gamutScaleStrength[index] * gamutOverallStrength;
+            scale[index] = 1 + axisStrength * (ratio - 1);
+        }
+        const scalingActive = gamutScaleStrength.some((value) => Math.abs(value * gamutOverallStrength) > 0.0001);
+        const isActive = translationActive || scalingActive;
+        return {
+            sourceMean: sourceAxisStats.mean,
+            desiredMean,
+            scale,
+            isActive,
+        } satisfies GamutTransform;
+    }, [
+        sourceAxisStats,
+        paletteAxisStats,
+        gamutOverallStrength,
+        gamutTranslationStrength,
+        gamutScaleStrength,
+    ]);
+    const gamutPreviewAvailable = Boolean(gamutTransform);
+    const gamutControlsDisabled = !sourceAxisStats || !paletteAxisStats;
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -246,6 +301,22 @@ export default function DitherGradientPage() {
 
     const handleDistanceColorSpaceChange = (nextMode: ColorInterpolationMode) => {
         setDistanceColorSpace(nextMode);
+    };
+    const handleGamutOverallStrengthChange = (nextValue: number) => {
+        const clamped = Math.max(0, Math.min(1, nextValue));
+        setGamutOverallStrength(clamped);
+    };
+    const handleGamutTranslationChange = (nextValue: number) => {
+        const clamped = Math.max(0, Math.min(1, nextValue));
+        setGamutTranslationStrength(clamped);
+    };
+    const handleGamutScaleSliderChange = (axisIndex: number, nextValue: number) => {
+        const clamped = Math.max(0, Math.min(1, nextValue));
+        setGamutScaleStrength((previous) => {
+            const next: AxisTriple = [previous[0], previous[1], previous[2]];
+            next[axisIndex] = clamped;
+            return next;
+        });
     };
 
     useDitherRenderer({
@@ -267,11 +338,14 @@ export default function DitherGradientPage() {
             blurRadius: ditherMaskBlurRadius,
             strength: ditherMaskStrength,
         },
+        gamutTransform,
         showSourcePreview,
+        showGamutPreview,
         showDitherPreview,
         showReducedPreview,
         canvasRefs: {
             source: sourceCanvasRef,
+            gamut: gamutCanvasRef,
             dither: ditherCanvasRef,
             reduced: reducedCanvasRef,
         },
@@ -389,6 +463,54 @@ export default function DitherGradientPage() {
                             <p className="dither-gradient-note">
                                 High-frequency areas (sharp edges / details) receive less dithering as the mask effect increases.
                             </p>
+                            <div className="gamut-fit-controls">
+                                <h4>Gamut Fit</h4>
+                                <label>
+                                    Overall Strength ({Math.round(gamutOverallStrength * 100)}%)
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={1}
+                                        step={0.01}
+                                        value={gamutOverallStrength}
+                                        onChange={(event) => handleGamutOverallStrengthChange(event.target.valueAsNumber)}
+                                        disabled={gamutControlsDisabled}
+                                    />
+                                </label>
+                                <label>
+                                    Translation Strength ({Math.round(gamutTranslationStrength * 100)}%)
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={1}
+                                        step={0.01}
+                                        value={gamutTranslationStrength}
+                                        onChange={(event) => handleGamutTranslationChange(event.target.valueAsNumber)}
+                                        disabled={gamutControlsDisabled}
+                                    />
+                                </label>
+                                <div className="gamut-fit-controls__scale-grid">
+                                    {scatterAxisLabels.map((axisLabel, axisIndex) => (
+                                        <label key={`${axisLabel}-${axisIndex}`}>
+                                            {axisLabel} Scaling ({Math.round(gamutScaleStrength[axisIndex] * 100)}%)
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={1}
+                                                step={0.01}
+                                                value={gamutScaleStrength[axisIndex]}
+                                                onChange={(event) => handleGamutScaleSliderChange(axisIndex, event.target.valueAsNumber)}
+                                                disabled={gamutControlsDisabled}
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                                <p className="dither-gradient-note">
+                                    {gamutControlsDisabled
+                                        ? "Preview source and palette colors to enable gamut fitting."
+                                        : "Use the sliders to blend toward the palette stats, then toggle the Gamut Fit preview to inspect the adjustment."}
+                                </p>
+                            </div>
                         </div>
                     </section>
 
@@ -468,11 +590,15 @@ export default function DitherGradientPage() {
                         ditherType={ditherType}
                         showSourcePreview={showSourcePreview}
                         onToggleSourcePreview={setShowSourcePreview}
+                        showGamutPreview={showGamutPreview}
+                        onToggleGamutPreview={setShowGamutPreview}
+                        gamutPreviewAvailable={gamutPreviewAvailable}
                         showDitherPreview={showDitherPreview}
                         onToggleDitherPreview={setShowDitherPreview}
                         showReducedPreview={showReducedPreview}
                         onToggleReducedPreview={setShowReducedPreview}
                         sourceCanvasRef={sourceCanvasRef}
+                        gamutCanvasRef={gamutCanvasRef}
                         ditherCanvasRef={ditherCanvasRef}
                         reducedCanvasRef={reducedCanvasRef}
                         width={width}
@@ -644,4 +770,40 @@ const COLOR_SPACE_AXIS_LABELS: Partial<Record<ColorInterpolationMode, [string, s
     ycbcr: ["Y", "Cb", "Cr"],
     oklch: ["L", "Chroma", "Hue X"],
 };
+
+type AxisStats = {
+    mean: AxisTriple;
+    stdDev: AxisTriple;
+};
+
+function computeAxisStats(points: ScatterPoint[], colorSpace: ColorInterpolationMode): AxisStats | null {
+    if (!points.length) {
+        return null;
+    }
+    const axesList = points.map((point) =>
+        extractAxisTriple(
+            { r: point.color[0] ?? 0, g: point.color[1] ?? 0, b: point.color[2] ?? 0 },
+            colorSpace
+        )
+    );
+    const sum: AxisTriple = [0, 0, 0];
+    for (const axes of axesList) {
+        sum[0] += axes[0];
+        sum[1] += axes[1];
+        sum[2] += axes[2];
+    }
+    const mean: AxisTriple = [sum[0] / axesList.length, sum[1] / axesList.length, sum[2] / axesList.length];
+    const variance: AxisTriple = [0, 0, 0];
+    for (const axes of axesList) {
+        variance[0] += Math.pow(axes[0] - mean[0], 2);
+        variance[1] += Math.pow(axes[1] - mean[1], 2);
+        variance[2] += Math.pow(axes[2] - mean[2], 2);
+    }
+    const stdDev: AxisTriple = [
+        Math.sqrt(variance[0] / axesList.length),
+        Math.sqrt(variance[1] / axesList.length),
+        Math.sqrt(variance[2] / axesList.length),
+    ];
+    return { mean, stdDev };
+}
 

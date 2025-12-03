@@ -1,6 +1,7 @@
 import { useEffect, type MutableRefObject } from "react";
-import type { ColorInterpolationMode } from "@/utils/colorSpaces";
+import type { ColorInterpolationMode, RGBColor } from "@/utils/colorSpaces";
 import { interpolateGradientColor } from "@/utils/colorSpaces";
+import { applyAxisTripleToRgb, extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 import {
     applyDitherJitter,
     applyErrorDiffusionToPixel,
@@ -15,12 +16,20 @@ import {
 import { applyReduction, clampRgb255, type ReductionPaletteEntry } from "@/utils/paletteDistance";
 import type { ReductionMode, SourceType } from "@/types/dither";
 
-export type PreviewStageKey = "source" | "dither" | "reduced";
+export type PreviewStageKey = "source" | "gamut" | "dither" | "reduced";
 
 export interface PreviewCanvasRefs {
     source: MutableRefObject<HTMLCanvasElement | null>;
+    gamut: MutableRefObject<HTMLCanvasElement | null>;
     dither: MutableRefObject<HTMLCanvasElement | null>;
     reduced: MutableRefObject<HTMLCanvasElement | null>;
+}
+
+export interface GamutTransform {
+    sourceMean: AxisTriple;
+    desiredMean: AxisTriple;
+    scale: AxisTriple;
+    isActive: boolean;
 }
 
 interface PreviewStageConfig {
@@ -54,7 +63,9 @@ export interface UseDitherRendererOptions {
         blurRadius: number;
         strength: number;
     };
+    gamutTransform: GamutTransform | null;
     showSourcePreview: boolean;
+    showGamutPreview: boolean;
     showDitherPreview: boolean;
     showReducedPreview: boolean;
     canvasRefs: PreviewCanvasRefs;
@@ -77,7 +88,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         distanceColorSpace,
         errorDiffusionKernelId,
         ditherMask,
+        gamutTransform,
         showSourcePreview,
+        showGamutPreview,
         showDitherPreview,
         showReducedPreview,
         canvasRefs,
@@ -86,6 +99,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
     useEffect(() => {
         const previewStages: PreviewStageConfig[] = [
             { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
+            { key: "gamut", enabled: showGamutPreview && Boolean(gamutTransform), ref: canvasRefs.gamut },
             { key: "dither", enabled: showDitherPreview, ref: canvasRefs.dither },
             { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
         ];
@@ -164,6 +178,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             ditherMask?.strength ?? 0
         );
 
+        const shouldApplyGamut = Boolean(gamutTransform && gamutTransform.isActive);
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const pixelIndex = y * width + x;
@@ -173,7 +188,12 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     g: baseColorBuffer[baseOffset + 1],
                     b: baseColorBuffer[baseOffset + 2],
                 };
+                const gamutAdjustedColor = shouldApplyGamut && gamutTransform
+                    ? applyGamutTransformToColor(base, gamutTransform, distanceColorSpace)
+                    : base;
+                const pipelineSource = shouldApplyGamut ? gamutAdjustedColor : base;
                 const sourceColor = clampRgb255(base);
+                const gamutPreviewColor = clampRgb255(gamutTransform ? gamutAdjustedColor : base);
                 const maskFactor = maskBuffer ? maskBuffer[pixelIndex] : 1;
                 const effectiveDitherStrength = ditherStrength * maskFactor;
                 let ditheredColor: { r: number; g: number; b: number };
@@ -181,7 +201,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
 
                 if (errorDiffusionContext) {
                     const result = applyErrorDiffusionToPixel(
-                        base,
+                        pipelineSource,
                         x,
                         y,
                         errorDiffusionContext,
@@ -193,7 +213,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     ditheredColor = result.ditheredColor;
                     reducedColor = result.quantizedColor;
                 } else {
-                    const jittered = applyDitherJitter(base, x, y, ditherType, effectiveDitherStrength, ditherSeed, proceduralDitherTile);
+                    const jittered = applyDitherJitter(pipelineSource, x, y, ditherType, effectiveDitherStrength, ditherSeed, proceduralDitherTile);
                     ditheredColor = clampRgb255(jittered);
                     reducedColor = clampRgb255(
                         applyReduction(jittered, reductionMode, reductionPaletteEntries, distanceColorSpace)
@@ -203,6 +223,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 const offset = pixelIndex * 4;
                 if (stageMap.source) {
                     writePixel(stageMap.source.imageData.data, offset, sourceColor);
+                }
+                if (stageMap.gamut) {
+                    writePixel(stageMap.gamut.imageData.data, offset, gamutPreviewColor);
                 }
                 if (stageMap.dither) {
                     writePixel(stageMap.dither.imageData.data, offset, ditheredColor);
@@ -237,12 +260,25 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         ditherMask?.blurRadius,
         ditherMask?.strength,
         showSourcePreview,
+        showGamutPreview,
         showDitherPreview,
         showReducedPreview,
+        gamutTransform,
         canvasRefs.source,
+        canvasRefs.gamut,
         canvasRefs.dither,
         canvasRefs.reduced,
     ]);
+}
+
+function applyGamutTransformToColor(color: RGBColor, transform: GamutTransform, mode: ColorInterpolationMode): RGBColor {
+    const axes = extractAxisTriple(color, mode);
+    const adjusted: AxisTriple = [
+        transform.desiredMean[0] + (axes[0] - transform.sourceMean[0]) * transform.scale[0],
+        transform.desiredMean[1] + (axes[1] - transform.sourceMean[1]) * transform.scale[1],
+        transform.desiredMean[2] + (axes[2] - transform.sourceMean[2]) * transform.scale[2],
+    ];
+    return applyAxisTripleToRgb(color, adjusted, mode);
 }
 
 function sampleSourceColor(

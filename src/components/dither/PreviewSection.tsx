@@ -9,11 +9,15 @@ interface PreviewSectionProps {
     ditherType: DitherType;
     showSourcePreview: boolean;
     onToggleSourcePreview: (value: boolean) => void;
+    showGamutPreview: boolean;
+    onToggleGamutPreview: (value: boolean) => void;
+    gamutPreviewAvailable: boolean;
     showDitherPreview: boolean;
     onToggleDitherPreview: (value: boolean) => void;
     showReducedPreview: boolean;
     onToggleReducedPreview: (value: boolean) => void;
     sourceCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    gamutCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     ditherCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     reducedCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     width: number;
@@ -31,11 +35,15 @@ export function PreviewSection({
     ditherType,
     showSourcePreview,
     onToggleSourcePreview,
+    showGamutPreview,
+    onToggleGamutPreview,
+    gamutPreviewAvailable,
     showDitherPreview,
     onToggleDitherPreview,
     showReducedPreview,
     onToggleReducedPreview,
     sourceCanvasRef,
+    gamutCanvasRef,
     ditherCanvasRef,
     reducedCanvasRef,
     width,
@@ -61,6 +69,17 @@ export function PreviewSection({
                         ref={sourceCanvasRef}
                         title={sourceCanvasTitle}
                         description={sourceCanvasDescription}
+                        width={width}
+                        height={height}
+                        previewScale={previewScale}
+                        devicePixelRatio={devicePixelRatio}
+                    />
+                )}
+                {showGamutPreview && gamutPreviewAvailable && (
+                    <GradientPreviewCanvas
+                        ref={gamutCanvasRef}
+                        title="Gamut Fit"
+                        description="Translation + scaling applied"
                         width={width}
                         height={height}
                         previewScale={previewScale}
@@ -97,6 +116,15 @@ export function PreviewSection({
             <div className="preview-toggle-list">
                 <label>
                     <input type="checkbox" checked={showSourcePreview} onChange={(event) => onToggleSourcePreview(event.target.checked)} /> Source
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showGamutPreview && gamutPreviewAvailable}
+                        disabled={!gamutPreviewAvailable}
+                        onChange={(event) => onToggleGamutPreview(event.target.checked)}
+                    />
+                    Gamut Fit
                 </label>
                 <label>
                     <input type="checkbox" checked={showDitherPreview} onChange={(event) => onToggleDitherPreview(event.target.checked)} /> Dithered
