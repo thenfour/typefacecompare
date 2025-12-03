@@ -162,6 +162,7 @@ export default function DitherGradientPage() {
         rotation: gamutRotationStrength,
         scale: [...gamutScaleStrength] as AxisTriple,
     }));
+    const [paletteNudgeStrength, setPaletteNudgeStrength] = useState(0);
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -375,6 +376,10 @@ export default function DitherGradientPage() {
             return next;
         });
     };
+    const handlePaletteNudgeChange = (nextValue: number) => {
+        const clamped = Math.max(0, Math.min(1, nextValue));
+        setPaletteNudgeStrength(clamped);
+    };
     const handleGamutFitToggle = (nextEnabled: boolean) => {
         setGamutFitEnabled(nextEnabled);
         if (nextEnabled) {
@@ -424,6 +429,7 @@ export default function DitherGradientPage() {
             blurRadius: ditherMaskBlurRadius,
             strength: ditherMaskStrength,
         },
+        paletteNudgeStrength,
         gamutTransform,
         showSourcePreview,
         showGamutPreview,
@@ -609,6 +615,24 @@ export default function DitherGradientPage() {
                                         </label>
                                     ))}
                                 </div>
+                            </div>
+                            <div className="palette-nudge-controls">
+                                <h4>Palette Nudge</h4>
+                                <label>
+                                    Strength ({Math.round(paletteNudgeStrength * 100)}%)
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={1}
+                                        step={0.01}
+                                        value={paletteNudgeStrength}
+                                        onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
+                                        disabled={!hasReductionPalette}
+                                    />
+                                </label>
+                                <p className="dither-gradient-note">
+                                    Pulls source pixels toward their nearest palette entry before dithering, helping them resist harsh palette jumps.
+                                </p>
                             </div>
                         </div>
                     </section>
