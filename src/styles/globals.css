@@ -2,10 +2,10 @@
   font-family: "TheSerif-Plain";
   src: url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.eot");
   src: url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.eot?#iefix")format("embedded-opentype"),
-  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.woff2")format("woff2"),
-  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.woff")format("woff"),
-  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.ttf")format("truetype"),
-  url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.svg#TheSerif-Plain")format("svg");
+    url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.woff2")format("woff2"),
+    url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.woff")format("woff"),
+    url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.ttf")format("truetype"),
+    url("https://db.onlinewebfonts.com/t/424f402a9a14e321c594fead84b89bc3.svg#TheSerif-Plain")format("svg");
 }
 
 html,
@@ -25,68 +25,64 @@ body {
 }
 
 
-input[type="range"]
-{
-  width:400px;
+input[type="range"] {
+  width: 400px;
 }
 
-textarea{
-  width:400px;
-  height:100px;
+textarea {
+  width: 400px;
+  height: 100px;
 }
 
 .specimenCard {
-  margin:15px;
+  margin: 15px;
   background-color: #f9f9f9;
-  padding:20px;
+  padding: 20px;
   border-radius: 4px;
-  border:1px solid #ccc;
-  width:800px;
-  position:relative;
+  border: 1px solid #ccc;
+  width: 800px;
+  position: relative;
 }
 
 .staff {
-  width:270px;
+  width: 270px;
 }
 
 
-.rehearsal-mark
-{
-    border: 2px solid black;
-font-size: 30px;
-width: 40px;
-height: 40px;
-display: inline-flex
-;
-align-items: center;
-justify-content: center;
-margin-right: 26px;
-margin-bottom:15px;
-margin-top: 10px;
+.rehearsal-mark {
+  border: 2px solid black;
+  font-size: 30px;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 26px;
+  margin-bottom: 15px;
+  margin-top: 10px;
 }
 
 
-.specimenCardFontNameContainer
-{
+.specimenCardFontNameContainer {
   position: absolute;
-  top:4px;
-  right:10px;
+  top: 4px;
+  right: 10px;
   font-size: 48px;
   user-select: none;
 }
 
 
-.specimenCardFontName
-{
+.specimenCardFontName {
   opacity: 12%;
 }
 
-.SpecimenOneLiner{
+.SpecimenOneLiner {
   background-color: #f8f8f8;
   padding: 6px;
   display: flex;
   align-items: center;
 }
+
 .SpecimenOneLiner:hover {
   background-color: #0001;
 }
@@ -95,6 +91,7 @@ margin-top: 10px;
   display: flex;
   justify-content: space-between;
 }
+
 .SpecimenOneLinerText {
   white-space: nowrap;
 }
@@ -102,18 +99,19 @@ margin-top: 10px;
 .SpecimenOneLinerFontName {
   opacity: 10%;
   white-space: nowrap;
-  margin-left:20px;
+  margin-left: 20px;
 }
 
 .SpecimenOneLinerContainer {
   display: flex;
-    flex-direction: column;
-    width: min-content;
+  flex-direction: column;
+  width: min-content;
 }
 
 .toggleButton {
-  padding:4px;
+  padding: 4px;
 }
+
 .toggleButton.valueTrue {
   background-color: #f8f;
 }
@@ -121,7 +119,7 @@ margin-top: 10px;
 .fontSpecEditor.open {
   /* margin:6px; */
   background-color: #0001;
-  padding:4px;
+  padding: 4px;
 }
 
 .dragHandle {
@@ -130,7 +128,7 @@ margin-top: 10px;
   font-family: 'Courier New', Courier, monospace;
   font-weight: normal;
   font-size: 20px;
-  padding:0 10px;
+  padding: 0 10px;
 }
 
 .dragHandle:hover {
@@ -138,14 +136,16 @@ margin-top: 10px;
 }
 
 .globalNotesTextArea {
-  width:800px;
-  height:200px;
+  width: 800px;
+  height: 200px;
 }
 
-.fontConfigContainer, .specimenConfigContainer, .globalContainer {
-  padding:15px;
+.fontConfigContainer,
+.specimenConfigContainer,
+.globalContainer {
+  padding: 15px;
   background-color: khaki;
-  margin:6px;
+  margin: 6px;
 }
 
 .globalContainer {
@@ -158,13 +158,13 @@ margin-top: 10px;
 }
 
 .markdownEditor {
-  margin:10px;
-  padding:10px;
+  margin: 10px;
+  padding: 10px;
   background-color: #fee;
 }
 
 .twoColumn {
-  display:flex;
+  display: flex;
 }
 
 .specimenCardFontNameContainer .CCButton {
@@ -176,7 +176,7 @@ margin-top: 10px;
 }
 
 .CCButton:hover {
-  color:white;
+  color: white;
   background-color: #66f;
   opacity: 100%;
 }
@@ -196,3 +196,170 @@ margin-top: 10px;
   filter: saturate(100%);
 }
 
+.tooltip-root {
+  position: absolute;
+  z-index: 1300;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.tooltip-root[data-interactive="true"] {
+  pointer-events: auto;
+}
+
+.tooltip-content {
+  background-color: rgba(66, 66, 66, 0.92);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  padding: 6px 8px;
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  max-width: 240px;
+  transform-origin: center top;
+  opacity: 1;
+}
+
+.tooltip-arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: inherit;
+  transform: rotate(45deg);
+}
+
+.tooltip-root[data-placement="top"] .tooltip-arrow {
+  bottom: -4px;
+  left: calc(50% - 4px);
+}
+
+.tooltip-root[data-placement="bottom"] .tooltip-arrow {
+  top: -4px;
+  left: calc(50% - 4px);
+}
+
+.tooltip-root[data-placement="left"] .tooltip-arrow {
+  right: -4px;
+  top: calc(50% - 4px);
+}
+
+.tooltip-root[data-placement="right"] .tooltip-arrow {
+  left: -4px;
+  top: calc(50% - 4px);
+}
+
+.componentTesterMain {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.componentTesterCard {
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+.tooltipPlayground {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.tooltipControls {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.controlField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.controlField textarea,
+.controlField select,
+.controlField input[type="number"] {
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+}
+
+.controlCheckbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.controlInline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.controlHint {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.tooltipPreview {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.previewTarget {
+  border: 1px solid #777;
+  border-radius: 6px;
+  padding: 12px 16px;
+  background-color: #fafafa;
+  cursor: pointer;
+}
+
+.eventLog {
+  width: 100%;
+  border: 1px dashed #b3b3ff;
+  border-radius: 6px;
+  padding: 12px;
+  background-color: #f7f7ff;
+  min-height: 80px;
+}
+
+.placementGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.placementButton {
+  border: 1px solid #bbb;
+  background-color: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.tooltipInteractive {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tooltipInteractive button {
+  border: none;
+  background-color: #4d7ef7;
+  color: #fff;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+}

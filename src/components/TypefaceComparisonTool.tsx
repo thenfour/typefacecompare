@@ -47,6 +47,7 @@ import { ToggleButton } from "./ToggleButton";
 import * as ReactSmoothDnd /*{ Container, Draggable, DropResult }*/ from "react-smooth-dnd";
 import { Markdown, MarkdownControl, MarkdownEditor } from "./MarkdownWrapper";
 import { useKeyCommand } from "./KeyCommand";
+import Link from "next/link";
 
 
 
@@ -163,8 +164,8 @@ const SpecimenOneLiner = (props: SpecimenOneLinerProps) => {
             {gCharMap.Hamburger()}
         </div>
         <span className={`CCButton star ${!!props.font.starred ? "enabled" : "disabled"}`} onClick={() => {
-                //props.onFontChanged({...props.font, starred: !props.font.starred});
-            }}>⭐</span>
+            //props.onFontChanged({...props.font, starred: !props.font.starred});
+        }}>⭐</span>
 
         <div className="SpecimenOneLinerContent">
             <span className="SpecimenOneLinerText">{props.specimen.text}</span>
@@ -317,9 +318,9 @@ CD | GABc | defg | ab |
             <span className="specimenCardFontName">{props.font.fontFamily}</span>
             <span className="CCButton" onClick={() => setFontConfigOpen(!fontConfigOpen)}>⚙️</span>
             <span className={`CCButton star ${props.font.starred ? "enabled" : "disabled"}`} onClick={() => {
-                props.onFontChanged({...props.font, starred: !props.font.starred});
+                props.onFontChanged({ ...props.font, starred: !props.font.starred });
             }}>⭐</span>
-            </div>}
+        </div>}
         {props.specimens.filter(s => s.enabled).map((specimen, i) => <SpecimenCardSection key={i} font={props.font} fontSize={props.fontSize} fontWeight={props.fontWeight} specimen={specimen} />)}
 
         {props.showRehearsalMarks && <RehearsalMarksSpecimen />}
@@ -483,6 +484,8 @@ export const TypefaceComparisonTool = () => {
     });
 
     return <div>
+
+        <Link href="/PaletteLab">&#8592; Palette Lab</Link>
 
         <MarkdownControl initialValue={globalNotes} onCancel={() => { }} onSave={x => setGlobalNotes(x)} />
 
