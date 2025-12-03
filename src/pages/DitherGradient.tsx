@@ -22,6 +22,31 @@ const DISTANCE_FEATURE_LABELS: Record<DistanceFeature, string> = {
     "hsl-lightness": "HSL Lightness",
     "oklch-chroma": "OKLCH Chroma",
 };
+const DISTANCE_FEATURE_ORDER: DistanceFeature[] = ["all", "luminance", "hsl-saturation", "hsl-lightness", "oklch-chroma"];
+const LUMINANCE_SUPPORTED_SPACES: ColorInterpolationMode[] = ["lab", "oklch", "ycbcr", "hsl"];
+
+const RGB_THREE_LEVELS = [0, 128, 255] as const;
+const RGB_FOUR_LEVELS = [0, 85, 170, 255] as const;
+
+function buildRgbLevelPalette(levels: readonly number[], chunkSize = 8) {
+    const toHex = (value: number) => value.toString(16).padStart(2, "0").toUpperCase();
+    const entries: string[] = [];
+    for (const r of levels) {
+        for (const g of levels) {
+            for (const b of levels) {
+                entries.push(`#${toHex(r)}${toHex(g)}${toHex(b)}`);
+            }
+        }
+    }
+    if (entries.length <= chunkSize) {
+        return entries.join("\n");
+    }
+    const chunks: string[] = [];
+    for (let i = 0; i < entries.length; i += chunkSize) {
+        chunks.push(entries.slice(i, i + chunkSize).join("\n"));
+    }
+    return chunks.join("\n-----\n");
+}
 
 const PALETTE_PRESETS = [
     {
@@ -45,12 +70,28 @@ const PALETTE_PRESETS = [
         value: `#FF0000 // red\n#00FF00 // green\n#0000FF // blue\n-----\n#00FFFF // cyan\n#FF00FF // magenta\n#FFFF00 // yellow\n#000000 // black\n#FFFFFF // white`,
     },
     {
-        label: "Pastel Stack",
+        label: "RGB Levels (3)",
+        value: buildRgbLevelPalette(RGB_THREE_LEVELS),
+    },
+    {
+        label: "RGB Levels (4)",
+        value: buildRgbLevelPalette(RGB_FOUR_LEVELS),
+    },
+    {
+        label: "Pastels",
         value: `#F6BD60 // sherbet\n#F7EDE2 // linen\n#F5CAC3 // blush\n#84A59D // sage\n-----\n#F28482 // grapefruit\n#B8F2E6 // mint\n#CDB4DB // lavender`,
     },
     {
         label: "C64",
         value: `#000000 // black\n#FFFFFF // white\n#813338 // red\n#75CEC8 // cyan\n#8E3C97 // purple\n#56AC4D // green\n#2E2C9B // blue\n#EDF171 // yellow\n#8E5029 // orange\n#553800 // brown\n#C46C71 // light red\n#4A4A4A // dark gray\n#7B7B7B // medium gray\n#A9FF9F // light green\n#706DEB // light blue\n#B2B2B2 // light gray`,
+    },
+    {
+        label: "PICO-8",
+        value: `#000000\n#1D2B53\n#7E2553\n#008751\n#AB5236\n#5F574F\n#C2C3C7\n#FFF1E8\n#FF004D\n#FFA300\n#FFEC27\n#00E436\n#29ADFF\n#83769C\n#FF77A8\n#FFCCAA`,
+    },
+    {
+        label: "SWEETIE 16",
+        value: `#1A1423\n#372549\n#774C60\n#B75D69\n#EACDC2\n#F4EBC3\n#F6F7D7\n#F1B5A4\n#E43A19\n#9E0031\n#4C2A85\n#67597A\n#424B54\n#2A2D34\n#1A1A1D\n#0F0A0A`,
     },
 ] as const;
 
@@ -76,8 +117,11 @@ interface ActivePreviewStage {
 
 // Returns whether the requested feature projection can be computed in the given color space.
 function isDistanceFeatureSupported(mode: ColorInterpolationMode, feature: DistanceFeature) {
-    if (feature === "all" || feature === "luminance") {
+    if (feature === "all") {
         return true;
+    }
+    if (feature === "luminance") {
+        return LUMINANCE_SUPPORTED_SPACES.includes(mode);
     }
     if (feature === "hsl-saturation" || feature === "hsl-lightness") {
         return mode === "hsl";
@@ -88,15 +132,8 @@ function isDistanceFeatureSupported(mode: ColorInterpolationMode, feature: Dista
     return false;
 }
 
-// Provides a short UI hint for feature-specific prerequisites.
-function describeFeatureRequirement(feature: DistanceFeature): string | null {
-    if (feature === "hsl-saturation" || feature === "hsl-lightness") {
-        return "requires HSL space";
-    }
-    if (feature === "oklch-chroma") {
-        return "requires OKLCH space";
-    }
-    return null;
+function getSupportedDistanceFeatures(mode: ColorInterpolationMode): DistanceFeature[] {
+    return DISTANCE_FEATURE_ORDER.filter((feature) => isDistanceFeatureSupported(mode, feature));
 }
 
 const BAYER_MATRICES: Record<Exclude<DitherType, "none">, number[][]> = {
@@ -137,7 +174,7 @@ export default function DitherGradientPage() {
     const [height, setHeight] = useState(180);
     const [previewScale, setPreviewScale] = useState(2);
     const [showSourcePreview, setShowSourcePreview] = useState(true);
-    const [showDitherPreview, setShowDitherPreview] = useState(true);
+    const [showDitherPreview, setShowDitherPreview] = useState(false);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
     const [showProjectedPreview, setShowProjectedPreview] = useState(false);
     const devicePixelRatio = useDevicePixelRatio();
@@ -165,18 +202,25 @@ export default function DitherGradientPage() {
             }),
         [reductionSwatches, distanceColorSpace, distanceFeature]
     );
+    const supportedDistanceFeatures = useMemo(() => getSupportedDistanceFeatures(distanceColorSpace), [distanceColorSpace]);
+
+    const handleDistanceColorSpaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
+        const nextMode = event.target.value as ColorInterpolationMode;
+        setDistanceColorSpace(nextMode);
+        setDistanceFeature((previous: DistanceFeature) => {
+            if (isDistanceFeatureSupported(nextMode, previous)) {
+                return previous;
+            }
+            const nextFeatures = getSupportedDistanceFeatures(nextMode);
+            return nextFeatures[0] ?? "all";
+        });
+    };
 
     useEffect(() => {
         if (!hasReductionPalette && reductionMode === "palette") {
             setReductionMode("none");
         }
     }, [hasReductionPalette, reductionMode]);
-
-    useEffect(() => {
-        if (!isDistanceFeatureSupported(distanceColorSpace, distanceFeature)) {
-            setDistanceFeature("all");
-        }
-    }, [distanceColorSpace, distanceFeature]);
 
     useEffect(() => {
         const previewStages: PreviewStageConfig[] = [
@@ -314,7 +358,7 @@ export default function DitherGradientPage() {
                 <div className="dither-gradient-layout">
                     <section className="dither-gradient-card palette">
                         <header>
-                            <strong>Palette Definition</strong>
+                            <strong>Gradient Palette (should be 4 colors)</strong>
                             <span>{gradientSwatches.length} swatch{gradientSwatches.length === 1 ? "" : "es"}</span>
                         </header>
                         <PalettePresetButtons presets={PALETTE_PRESETS} onSelect={setGradientPaletteText} />
@@ -412,7 +456,7 @@ export default function DitherGradientPage() {
                             {reductionMode === "palette" && (
                                 <label>
                                     Palette Distance Space
-                                    <select value={distanceColorSpace} onChange={(event) => setDistanceColorSpace(event.target.value as ColorInterpolationMode)}>
+                                    <select value={distanceColorSpace} onChange={handleDistanceColorSpaceChange}>
                                         <option value="rgb">RGB</option>
                                         <option value="hsl">HSL</option>
                                         <option value="cmyk">CMYK</option>
@@ -426,17 +470,11 @@ export default function DitherGradientPage() {
                                 <label>
                                     Distance Feature
                                     <select value={distanceFeature} onChange={(event) => setDistanceFeature(event.target.value as DistanceFeature)}>
-                                        {Object.entries(DISTANCE_FEATURE_LABELS).map(([value, labelText]) => {
-                                            const feature = value as DistanceFeature;
-                                            const supported = isDistanceFeatureSupported(distanceColorSpace, feature);
-                                            const requirement = describeFeatureRequirement(feature);
-                                            const fullLabel = requirement ? `${labelText} — ${requirement}` : labelText;
-                                            return (
-                                                <option value={feature} key={feature} disabled={!supported}>
-                                                    {fullLabel}
-                                                </option>
-                                            );
-                                        })}
+                                        {supportedDistanceFeatures.map((feature) => (
+                                            <option value={feature} key={feature}>
+                                                {DISTANCE_FEATURE_LABELS[feature]}
+                                            </option>
+                                        ))}
                                     </select>
                                 </label>
                             )}
@@ -688,6 +726,9 @@ function projectDistanceFeature(
     mode: ColorInterpolationMode,
     feature: DistanceFeature
 ): number[] {
+    if (!isDistanceFeatureSupported(mode, feature)) {
+        throw new Error(`Distance feature ${feature} is not supported in ${mode}`);
+    }
     if (feature === "all") {
         return coords;
     }
@@ -705,16 +746,10 @@ function projectDistanceFeature(
             return [ycbcrVector.y ?? 0];
         }
         if (mode === "hsl") {
-            console.log(`yooo`);
             const hslVector = vector as { l?: number };
             return [hslVector.l ?? 0];
         }
-        if (mode === "rgb") {
-            const rgbVector = vector as { r?: number; g?: number; b?: number };
-            const y = 0.2126 * (rgbVector.r ?? 0) + 0.7152 * (rgbVector.g ?? 0) + 0.0722 * (rgbVector.b ?? 0);
-            return [y];
-        }
-        return [coords[0] ?? 0];
+        throw new Error(`Unhandled luminance mode: ${mode}`);
     }
     if (feature === "hsl-saturation" && mode === "hsl") {
         const hslVector = vector as { s?: number };
@@ -738,6 +773,7 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             return [rgb.r, rgb.g, rgb.b];
         }
         case "hsl": {
+            //console.log(vector);
             const hsl = vector as { h: number; s: number; l: number };
             const [hx, hy] = hueToCartesian(hsl.h);
             return [hx, hy, hsl.s, hsl.l];
