@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
 import { ColorInterpolationMode, interpolateGradientColor } from "../utils/colorSpaces";
+import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 import type { PaletteSwatchDefinition } from "../types/paletteDefinition";
 import "../styles/DitherGradient.css";
 
@@ -51,6 +52,7 @@ export default function DitherGradientPage() {
     const [width, setWidth] = useState(240);
     const [height, setHeight] = useState(180);
     const [previewScale, setPreviewScale] = useState(2);
+    const devicePixelRatio = useDevicePixelRatio();
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedPalette = useMemo(() => parsePaletteDefinition(paletteText), [paletteText]);
@@ -237,7 +239,11 @@ export default function DitherGradientPage() {
                         <div className="preview-stage">
                             <canvas
                                 ref={canvasRef}
-                                style={{ width: width * previewScale, height: height * previewScale, imageRendering: "pixelated" }}
+                                style={{
+                                    width: (width * previewScale) / (devicePixelRatio || 1),
+                                    height: (height * previewScale) / (devicePixelRatio || 1),
+                                    imageRendering: "pixelated"
+                                }}
                             />
                         </div>
                         <div className="corner-summary">
