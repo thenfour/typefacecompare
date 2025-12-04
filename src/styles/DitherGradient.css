@@ -317,6 +317,8 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-width: var(--preview-panel-min-width, 240px);
+    min-height: var(--preview-panel-min-height, auto);
 }
 
 .gradient-preview-panel header {
@@ -325,10 +327,18 @@
     gap: 4px;
 }
 
+.preview-canvas-grid-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
 .preview-canvas-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(var(--preview-panel-min-width, 240px), 1fr));
     gap: 16px;
+    width: max-content;
+    min-width: 100%;
 }
 
 .preview-toggle-list {

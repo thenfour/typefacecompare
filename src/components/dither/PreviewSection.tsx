@@ -1,4 +1,4 @@
-import type { MutableRefObject } from "react";
+import type { CSSProperties, MutableRefObject } from "react";
 import { GradientPreviewCanvas } from "@/components/GradientPreviewCanvas";
 import type { DitherType } from "@/utils/dithering";
 import { DITHER_DESCRIPTIONS, DITHER_LABELS } from "@/utils/dithering";
@@ -79,6 +79,16 @@ export function PreviewSection({
     reductionMode,
     reductionSwatchCount,
 }: PreviewSectionProps) {
+    const pixelRatio = devicePixelRatio || 1;
+    const scaledWidth = (width * previewScale) / pixelRatio;
+    const scaledHeight = (height * previewScale) / pixelRatio;
+    const minPanelWidth = Math.max(240, Math.ceil(scaledWidth + 48));
+    const minPanelHeight = Math.max(220, Math.ceil(scaledHeight + 96));
+    const previewGridStyle: CSSProperties = {
+        ["--preview-panel-min-width" as const]: `${minPanelWidth}px`,
+        ["--preview-panel-min-height" as const]: `${minPanelHeight}px`,
+    };
+
     return (
         <section className="dither-gradient-card preview">
             <header>
@@ -87,88 +97,90 @@ export function PreviewSection({
                     {sourceSummaryLabel} • {ditherType === "none" ? "No dithering" : DITHER_LABELS[ditherType]}
                 </span>
             </header>
-            <div className="preview-canvas-grid">
-                {showSourcePreview && (
-                    <GradientPreviewCanvas
-                        ref={sourceCanvasRef}
-                        title={sourceCanvasTitle}
-                        description={sourceCanvasDescription}
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
-                {showGamutPreview && gamutPreviewAvailable && (
-                    <GradientPreviewCanvas
-                        ref={gamutCanvasRef}
-                        title="Gamut Fit"
-                        description="Translation + scaling applied"
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
-                {showDitherPreview && (
-                    <GradientPreviewCanvas
-                        ref={ditherCanvasRef}
-                        title="Dither Applied"
-                        description={DITHER_DESCRIPTIONS[ditherType]}
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
-                {showReducedPreview && (
-                    <GradientPreviewCanvas
-                        ref={reducedCanvasRef}
-                        title="Palette Reduced"
-                        description={
-                            reductionMode === "palette"
-                                ? `Palette (${reductionSwatchCount})`
-                                : "Disabled"
-                        }
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
-                {showPaletteErrorPreview && paletteErrorPreviewAvailable && (
-                    <GradientPreviewCanvas
-                        ref={paletteErrorCanvasRef}
-                        title="Palette Error"
-                        description="Normalized palette distance"
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
-                {showPaletteAmbiguityPreview && paletteAmbiguityPreviewAvailable && (
-                    <GradientPreviewCanvas
-                        ref={paletteAmbiguityCanvasRef}
-                        title="Palette Ambiguity"
-                        description="Similarity between nearest colors"
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
-                {showPaletteModulationPreview && paletteModulationPreviewAvailable && (
-                    <GradientPreviewCanvas
-                        ref={paletteModulationCanvasRef}
-                        title="Palette Modulation"
-                        description="Effective dither multiplier"
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                    />
-                )}
+            <div className="preview-canvas-grid-wrapper">
+                <div className="preview-canvas-grid" style={previewGridStyle}>
+                    {showSourcePreview && (
+                        <GradientPreviewCanvas
+                            ref={sourceCanvasRef}
+                            title={sourceCanvasTitle}
+                            description={sourceCanvasDescription}
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showGamutPreview && gamutPreviewAvailable && (
+                        <GradientPreviewCanvas
+                            ref={gamutCanvasRef}
+                            title="Gamut Fit"
+                            description="Translation + scaling applied"
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showDitherPreview && (
+                        <GradientPreviewCanvas
+                            ref={ditherCanvasRef}
+                            title="Dither Applied"
+                            description={DITHER_DESCRIPTIONS[ditherType]}
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showReducedPreview && (
+                        <GradientPreviewCanvas
+                            ref={reducedCanvasRef}
+                            title="Palette Reduced"
+                            description={
+                                reductionMode === "palette"
+                                    ? `Palette (${reductionSwatchCount})`
+                                    : "Disabled"
+                            }
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showPaletteErrorPreview && paletteErrorPreviewAvailable && (
+                        <GradientPreviewCanvas
+                            ref={paletteErrorCanvasRef}
+                            title="Palette Error"
+                            description="Normalized palette distance"
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showPaletteAmbiguityPreview && paletteAmbiguityPreviewAvailable && (
+                        <GradientPreviewCanvas
+                            ref={paletteAmbiguityCanvasRef}
+                            title="Palette Ambiguity"
+                            description="Similarity between nearest colors"
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showPaletteModulationPreview && paletteModulationPreviewAvailable && (
+                        <GradientPreviewCanvas
+                            ref={paletteModulationCanvasRef}
+                            title="Palette Modulation"
+                            description="Effective dither multiplier"
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                </div>
             </div>
             <div className="preview-toggle-list">
                 <label>
