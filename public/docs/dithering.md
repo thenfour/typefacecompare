@@ -144,6 +144,17 @@ Faces are a good example.
 Probably keep it small; basically the rough size of detail you want. With ordered dithering, we're talking pixel art so probably 3-8 pixels. Too much and the loss of detail spills out into
 low frequency areas.
 
+### Dither Masking based on error & ambiguity.
+
+This modulates dither strength by error & ambiguity metrics. These metrics are similar to the palette nudging system.
+Error is the distance from a source color to the nearest target palette entry. Ambiguity is whether multiple colors are competing for a match.
+
+The idea is that when a source color is very close to the target palette (low error), then we don't need much dithering.
+
+And ambiguity is mixed in, amplifying dither strength so the dither jitter is allowed to reach the candidate colors.
+
+The is effective in allowing higher dither strength without the image getting overly "stipply".
+
 # TODO
 
 - figure out why many color models don't play nicely at all with distance functions when i'd expect them to. Gamut plot feels wrong as well.

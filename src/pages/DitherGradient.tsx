@@ -160,6 +160,11 @@ export default function DitherGradientPage() {
     const [previewScale, setPreviewScale] = useState(2);
     const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(4);
     const [ditherMaskStrength, setDitherMaskStrength] = useState(3);
+    const [paletteMaskEnabled, setPaletteMaskEnabled] = useState(true);
+    const [ditherErrorScale, setDitherErrorScale] = useState(35);
+    const [ditherErrorExponent, setDitherErrorExponent] = useState(1.2);
+    const [ditherAmbiguityExponent, setDitherAmbiguityExponent] = useState(1);
+    const [ditherAmbiguityBias, setDitherAmbiguityBias] = useState(0.5);
     const [sourceAdjustmentsEnabled, setSourceAdjustmentsEnabled] = useState(true);
     const [gamutOverallStrength, setGamutOverallStrength] = useState(0.3);
     const [gamutTranslationStrength, setGamutTranslationStrength] = useState(1);
@@ -230,12 +235,16 @@ export default function DitherGradientPage() {
     const [showGamutPreview, setShowGamutPreview] = useState(false);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
+    const [showPaletteErrorPreview, setShowPaletteErrorPreview] = useState(false);
+    const [showPaletteAmbiguityPreview, setShowPaletteAmbiguityPreview] = useState(false);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const gamutCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const ditherCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const reducedCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const paletteErrorCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const paletteAmbiguityCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
 
@@ -389,6 +398,10 @@ export default function DitherGradientPage() {
     const paletteNudgeToggleDisabled = !sourceAdjustmentsEnabled || !hasReductionPalette || reductionMode !== "palette";
     const paletteNudgeControlsDisabled = paletteNudgeToggleDisabled || !paletteNudgeEnabled;
     const ditherMaskControlsDisabled = !sourceAdjustmentsEnabled;
+    const paletteMaskAvailable = hasReductionPalette && reductionMode === "palette";
+    const paletteMaskToggleDisabled = ditherMaskControlsDisabled || !paletteMaskAvailable;
+    const paletteMaskControlsDisabled = paletteMaskToggleDisabled || !paletteMaskEnabled;
+    const palettePreviewAvailable = paletteMaskAvailable && !ditherMaskControlsDisabled;
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -470,6 +483,28 @@ export default function DitherGradientPage() {
         setDitherStrength(0);
     };
 
+    useEffect(() => {
+        if (palettePreviewAvailable) {
+            return;
+        }
+        if (showPaletteErrorPreview) {
+            setShowPaletteErrorPreview(false);
+        }
+        if (showPaletteAmbiguityPreview) {
+            setShowPaletteAmbiguityPreview(false);
+        }
+    }, [palettePreviewAvailable, showPaletteErrorPreview, showPaletteAmbiguityPreview]);
+
+    const paletteModulationParams = paletteMaskAvailable
+        ? {
+            errorScale: ditherErrorScale,
+            errorExponent: ditherErrorExponent,
+            ambiguityExponent: ditherAmbiguityExponent,
+            ambiguityBias: ditherAmbiguityBias,
+        }
+        : null;
+    const paletteModulationEnabled = sourceAdjustmentsEnabled && paletteMaskEnabled && paletteMaskAvailable;
+
     useDitherRenderer({
         width,
         height,
@@ -488,7 +523,10 @@ export default function DitherGradientPage() {
         ditherMask: {
             blurRadius: sourceAdjustmentsEnabled ? ditherMaskBlurRadius : 0,
             strength: sourceAdjustmentsEnabled ? ditherMaskStrength : 0,
+            paletteModulation: paletteModulationEnabled && paletteModulationParams ? paletteModulationParams : null,
         },
+        paletteModulationParams,
+        paletteModulationEnabled,
         paletteNudgeStrength: effectivePaletteNudgeStrength,
         paletteMagnetParams,
         gamutTransform: activeGamutTransform,
@@ -497,11 +535,15 @@ export default function DitherGradientPage() {
         showGamutPreview,
         showDitherPreview,
         showReducedPreview,
+        showPaletteErrorPreview: showPaletteErrorPreview && palettePreviewAvailable,
+        showPaletteAmbiguityPreview: showPaletteAmbiguityPreview && palettePreviewAvailable,
         canvasRefs: {
             source: sourceCanvasRef,
             gamut: gamutCanvasRef,
             dither: ditherCanvasRef,
             reduced: reducedCanvasRef,
+            paletteError: paletteErrorCanvasRef,
+            paletteAmbiguity: paletteAmbiguityCanvasRef,
         },
     });
     const seedEnabled = usesSeededDither(ditherType);
@@ -761,6 +803,71 @@ export default function DitherGradientPage() {
                                                 disabled={ditherMaskControlsDisabled}
                                             />
                                         </label>
+                                        <div className="palette-mask-section">
+                                            <label className="palette-mask-toggle">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={paletteMaskEnabled && paletteMaskAvailable}
+                                                    onChange={(event) => setPaletteMaskEnabled(event.target.checked)}
+                                                    disabled={paletteMaskToggleDisabled}
+                                                />
+                                                Palette Error/Ambiguity Weighting
+                                            </label>
+                                            {!paletteMaskAvailable && (
+                                                <p className="dither-gradient-note">Provide a reduction palette to enable palette-based weighting.</p>
+                                            )}
+                                            <label>
+                                                Error Scale ({ditherErrorScale.toFixed(0)})
+                                                <input
+                                                    type="range"
+                                                    min={5}
+                                                    max={150}
+                                                    step={1}
+                                                    value={ditherErrorScale}
+                                                    onChange={(event) => setDitherErrorScale(event.target.valueAsNumber)}
+                                                    disabled={paletteMaskControlsDisabled}
+                                                />
+                                            </label>
+                                            <label>
+                                                Error Exponent (kErr: {ditherErrorExponent.toFixed(2)})
+                                                <input
+                                                    type="range"
+                                                    min={0.1}
+                                                    max={4}
+                                                    step={0.05}
+                                                    value={ditherErrorExponent}
+                                                    onChange={(event) => setDitherErrorExponent(event.target.valueAsNumber)}
+                                                    disabled={paletteMaskControlsDisabled}
+                                                />
+                                            </label>
+                                            <label>
+                                                Ambiguity Exponent (kAmb: {ditherAmbiguityExponent.toFixed(2)})
+                                                <input
+                                                    type="range"
+                                                    min={0.1}
+                                                    max={4}
+                                                    step={0.05}
+                                                    value={ditherAmbiguityExponent}
+                                                    onChange={(event) => setDitherAmbiguityExponent(event.target.valueAsNumber)}
+                                                    disabled={paletteMaskControlsDisabled}
+                                                />
+                                            </label>
+                                            <label>
+                                                Ambiguity Bias ({Math.round(ditherAmbiguityBias * 100)}% base)
+                                                <input
+                                                    type="range"
+                                                    min={0}
+                                                    max={1}
+                                                    step={0.05}
+                                                    value={ditherAmbiguityBias}
+                                                    onChange={(event) => setDitherAmbiguityBias(event.target.valueAsNumber)}
+                                                    disabled={paletteMaskControlsDisabled}
+                                                />
+                                            </label>
+                                            <p className="dither-gradient-note">
+                                                Error boosts dithering where palette distances spike; ambiguity raises strength when two colors tie.
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </section>
@@ -859,10 +966,18 @@ export default function DitherGradientPage() {
                                 onToggleDitherPreview={setShowDitherPreview}
                                 showReducedPreview={showReducedPreview}
                                 onToggleReducedPreview={setShowReducedPreview}
+                                showPaletteErrorPreview={showPaletteErrorPreview}
+                                onTogglePaletteErrorPreview={setShowPaletteErrorPreview}
+                                paletteErrorPreviewAvailable={palettePreviewAvailable}
+                                showPaletteAmbiguityPreview={showPaletteAmbiguityPreview}
+                                onTogglePaletteAmbiguityPreview={setShowPaletteAmbiguityPreview}
+                                paletteAmbiguityPreviewAvailable={palettePreviewAvailable}
                                 sourceCanvasRef={sourceCanvasRef}
                                 gamutCanvasRef={gamutCanvasRef}
                                 ditherCanvasRef={ditherCanvasRef}
                                 reducedCanvasRef={reducedCanvasRef}
+                                paletteErrorCanvasRef={paletteErrorCanvasRef}
+                                paletteAmbiguityCanvasRef={paletteAmbiguityCanvasRef}
                                 width={width}
                                 height={height}
                                 previewScale={previewScale}

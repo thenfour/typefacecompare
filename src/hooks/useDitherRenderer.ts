@@ -17,18 +17,22 @@ import {
     applyReduction,
     blendColorTowardPalette,
     clampRgb255,
+    distanceSq,
+    rgbToCoords,
     type PaletteMagnetParams,
     type ReductionPaletteEntry,
 } from "@/utils/paletteDistance";
 import type { ReductionMode, SourceType } from "@/types/dither";
 
-export type PreviewStageKey = "source" | "gamut" | "dither" | "reduced";
+export type PreviewStageKey = "source" | "gamut" | "dither" | "reduced" | "paletteError" | "paletteAmbiguity";
 
 export interface PreviewCanvasRefs {
     source: MutableRefObject<HTMLCanvasElement | null>;
     gamut: MutableRefObject<HTMLCanvasElement | null>;
     dither: MutableRefObject<HTMLCanvasElement | null>;
     reduced: MutableRefObject<HTMLCanvasElement | null>;
+    paletteError: MutableRefObject<HTMLCanvasElement | null>;
+    paletteAmbiguity: MutableRefObject<HTMLCanvasElement | null>;
 }
 
 interface PreviewStageConfig {
@@ -41,6 +45,25 @@ interface ActivePreviewStage {
     key: PreviewStageKey;
     ctx: CanvasRenderingContext2D;
     imageData: ImageData;
+}
+
+interface PaletteModulationParams {
+    errorScale: number;
+    errorExponent: number;
+    ambiguityExponent: number;
+    ambiguityBias: number;
+}
+
+interface DitherMaskOptions {
+    blurRadius: number;
+    strength: number;
+    paletteModulation: PaletteModulationParams | null;
+}
+
+interface PaletteMetricsSample {
+    normalizedError: number;
+    normalizedAmbiguity: number;
+    modulationFactor: number;
 }
 
 export interface UseDitherRendererOptions {
@@ -58,10 +81,9 @@ export interface UseDitherRendererOptions {
     reductionPaletteEntries: ReductionPaletteEntry[];
     distanceColorSpace: ColorInterpolationMode;
     errorDiffusionKernelId: ErrorDiffusionKernelId;
-    ditherMask?: {
-        blurRadius: number;
-        strength: number;
-    };
+    ditherMask?: DitherMaskOptions;
+    paletteModulationParams: PaletteModulationParams | null;
+    paletteModulationEnabled: boolean;
     paletteNudgeStrength: number;
     paletteMagnetParams: PaletteMagnetParams;
     gamutTransform: GamutTransform | null;
@@ -70,6 +92,8 @@ export interface UseDitherRendererOptions {
     showGamutPreview: boolean;
     showDitherPreview: boolean;
     showReducedPreview: boolean;
+    showPaletteErrorPreview: boolean;
+    showPaletteAmbiguityPreview: boolean;
     canvasRefs: PreviewCanvasRefs;
 }
 
@@ -90,6 +114,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         distanceColorSpace,
         errorDiffusionKernelId,
         ditherMask,
+        paletteModulationParams,
+        paletteModulationEnabled,
         paletteNudgeStrength,
         paletteMagnetParams,
         gamutTransform,
@@ -98,6 +124,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showGamutPreview,
         showDitherPreview,
         showReducedPreview,
+        showPaletteErrorPreview,
+        showPaletteAmbiguityPreview,
         canvasRefs,
     } = options;
 
@@ -107,6 +135,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             { key: "gamut", enabled: showGamutPreview && sourceAdjustmentsActive, ref: canvasRefs.gamut },
             { key: "dither", enabled: showDitherPreview, ref: canvasRefs.dither },
             { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
+            { key: "paletteError", enabled: showPaletteErrorPreview, ref: canvasRefs.paletteError },
+            { key: "paletteAmbiguity", enabled: showPaletteAmbiguityPreview, ref: canvasRefs.paletteAmbiguity },
         ];
 
         const isErrorDiffusion = isErrorDiffusionDither(ditherType);
@@ -182,10 +212,18 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             ditherMask?.blurRadius ?? 0,
             ditherMask?.strength ?? 0
         );
+        const hasPaletteReduction = reductionMode === "palette" && reductionPaletteEntries.length > 0;
+        const paletteMetricsParams = hasPaletteReduction ? paletteModulationParams : null;
+        const paletteModulationConfig =
+            paletteMetricsParams && paletteModulationEnabled && ditherMask?.paletteModulation
+                ? paletteMetricsParams
+                : null;
+        const shouldCollectPaletteMetrics = Boolean(
+            paletteMetricsParams && (paletteModulationConfig || showPaletteErrorPreview || showPaletteAmbiguityPreview)
+        );
 
         const shouldApplyGamut = Boolean(gamutTransform && gamutTransform.isActive);
-        const shouldApplyPaletteNudge =
-            paletteNudgeStrength > 0 && reductionMode === "palette" && reductionPaletteEntries.length > 0;
+        const shouldApplyPaletteNudge = paletteNudgeStrength > 0 && hasPaletteReduction;
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const pixelIndex = y * width + x;
@@ -211,7 +249,19 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 const sourceColor = clampRgb255(base);
                 const gamutPreviewColor = clampRgb255(sourceAdjustmentsActive ? pipelineSource : base);
                 const maskFactor = maskBuffer ? maskBuffer[pixelIndex] : 1;
-                const effectiveDitherStrength = ditherStrength * maskFactor;
+                let paletteMetrics: PaletteMetricsSample | null = null;
+                if (shouldCollectPaletteMetrics && paletteMetricsParams) {
+                    paletteMetrics = evaluatePaletteMetrics(
+                        pipelineSource,
+                        reductionPaletteEntries,
+                        distanceColorSpace,
+                        paletteMetricsParams
+                    );
+                }
+                const paletteFactor = paletteModulationConfig && paletteMetrics
+                    ? paletteMetrics.modulationFactor
+                    : 1;
+                const effectiveDitherStrength = ditherStrength * maskFactor * paletteFactor;
                 let ditheredColor: { r: number; g: number; b: number };
                 let reducedColor: { r: number; g: number; b: number };
 
@@ -249,6 +299,24 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 if (stageMap.reduced) {
                     writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
                 }
+                if (paletteMetrics) {
+                    if (stageMap.paletteError) {
+                        const channel = Math.round(clamp01(paletteMetrics.normalizedError) * 255);
+                        writePixel(stageMap.paletteError.imageData.data, offset, {
+                            r: channel,
+                            g: channel,
+                            b: channel,
+                        });
+                    }
+                    if (stageMap.paletteAmbiguity) {
+                        const channel = Math.round(clamp01(paletteMetrics.normalizedAmbiguity) * 255);
+                        writePixel(stageMap.paletteAmbiguity.imageData.data, offset, {
+                            r: channel,
+                            g: channel,
+                            b: channel,
+                        });
+                    }
+                }
             }
             if (errorDiffusionContext) {
                 advanceErrorDiffusionRow(errorDiffusionContext);
@@ -275,6 +343,13 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         errorDiffusionKernelId,
         ditherMask?.blurRadius,
         ditherMask?.strength,
+        ditherMask?.paletteModulation,
+        paletteModulationParams?.errorScale,
+        paletteModulationParams?.errorExponent,
+        paletteModulationParams?.ambiguityExponent,
+        paletteModulationParams?.ambiguityBias,
+        paletteModulationParams,
+        paletteModulationEnabled,
         paletteNudgeStrength,
         paletteMagnetParams,
         sourceAdjustmentsActive,
@@ -282,11 +357,15 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showGamutPreview,
         showDitherPreview,
         showReducedPreview,
+        showPaletteErrorPreview,
+        showPaletteAmbiguityPreview,
         gamutTransform,
         canvasRefs.source,
         canvasRefs.gamut,
         canvasRefs.dither,
         canvasRefs.reduced,
+        canvasRefs.paletteError,
+        canvasRefs.paletteAmbiguity,
     ]);
 }
 
@@ -353,6 +432,50 @@ function buildDitherMaskBuffer(
     }
     return mask;
 }
+
+function evaluatePaletteMetrics(
+    rgb: { r: number; g: number; b: number },
+    palette: ReductionPaletteEntry[],
+    distanceMode: ColorInterpolationMode,
+    params: PaletteModulationParams
+): PaletteMetricsSample {
+    const coords = rgbToCoords(rgb, distanceMode);
+    let nearest = Infinity;
+    let secondNearest = Infinity;
+    for (const entry of palette) {
+        const dist = distanceSq(coords, entry.coords);
+        if (dist < nearest) {
+            secondNearest = nearest;
+            nearest = dist;
+        } else if (dist < secondNearest) {
+            secondNearest = dist;
+        }
+    }
+    const d0 = Math.sqrt(Math.max(nearest, 0));
+    const errorScale = Math.max(params.errorScale, 1e-6);
+    const normalizedError = clamp01(d0 / errorScale);
+    const errorExponent = Math.max(params.errorExponent, 0);
+    const errorFactor = errorExponent === 0 ? 1 : Math.pow(normalizedError, errorExponent);
+
+    let normalizedAmbiguity = 0;
+    if (Number.isFinite(secondNearest) && secondNearest > 1e-6) {
+        const d1 = Math.sqrt(secondNearest);
+        const diff = Math.abs(d1 - d0);
+        normalizedAmbiguity = d1 > 0 ? clamp01(1 - diff / d1) : 0;
+    }
+    const ambExponent = Math.max(params.ambiguityExponent, 0);
+    const shapedAmbiguity = ambExponent === 0 ? 1 : Math.pow(normalizedAmbiguity, ambExponent);
+    const bias = clamp01(params.ambiguityBias ?? 0.5);
+    const ambiguityFactor = bias + (1 - bias) * shapedAmbiguity;
+    const modulationFactor = clamp01(errorFactor * ambiguityFactor);
+    return {
+        normalizedError,
+        normalizedAmbiguity,
+        modulationFactor,
+    } satisfies PaletteMetricsSample;
+}
+
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
 function blurFloatArray(values: Float32Array, width: number, height: number, radius: number) {
     if (radius <= 0) {

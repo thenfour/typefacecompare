@@ -504,3 +504,19 @@
 .source-adjustments-card .controls-panel__fields {
     margin-top: 8px;
 }
+
+.palette-mask-section {
+    margin-top: 12px;
+    border-top: 1px solid #efefef;
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.palette-mask-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}

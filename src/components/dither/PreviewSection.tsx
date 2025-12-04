@@ -16,10 +16,18 @@ interface PreviewSectionProps {
     onToggleDitherPreview: (value: boolean) => void;
     showReducedPreview: boolean;
     onToggleReducedPreview: (value: boolean) => void;
+    showPaletteErrorPreview: boolean;
+    onTogglePaletteErrorPreview: (value: boolean) => void;
+    paletteErrorPreviewAvailable: boolean;
+    showPaletteAmbiguityPreview: boolean;
+    onTogglePaletteAmbiguityPreview: (value: boolean) => void;
+    paletteAmbiguityPreviewAvailable: boolean;
     sourceCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     gamutCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     ditherCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     reducedCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    paletteErrorCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    paletteAmbiguityCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     width: number;
     height: number;
     previewScale: number;
@@ -42,10 +50,18 @@ export function PreviewSection({
     onToggleDitherPreview,
     showReducedPreview,
     onToggleReducedPreview,
+    showPaletteErrorPreview,
+    onTogglePaletteErrorPreview,
+    paletteErrorPreviewAvailable,
+    showPaletteAmbiguityPreview,
+    onTogglePaletteAmbiguityPreview,
+    paletteAmbiguityPreviewAvailable,
     sourceCanvasRef,
     gamutCanvasRef,
     ditherCanvasRef,
     reducedCanvasRef,
+    paletteErrorCanvasRef,
+    paletteAmbiguityCanvasRef,
     width,
     height,
     previewScale,
@@ -112,6 +128,28 @@ export function PreviewSection({
                         devicePixelRatio={devicePixelRatio}
                     />
                 )}
+                {showPaletteErrorPreview && paletteErrorPreviewAvailable && (
+                    <GradientPreviewCanvas
+                        ref={paletteErrorCanvasRef}
+                        title="Palette Error"
+                        description="Normalized palette distance"
+                        width={width}
+                        height={height}
+                        previewScale={previewScale}
+                        devicePixelRatio={devicePixelRatio}
+                    />
+                )}
+                {showPaletteAmbiguityPreview && paletteAmbiguityPreviewAvailable && (
+                    <GradientPreviewCanvas
+                        ref={paletteAmbiguityCanvasRef}
+                        title="Palette Ambiguity"
+                        description="Similarity between nearest colors"
+                        width={width}
+                        height={height}
+                        previewScale={previewScale}
+                        devicePixelRatio={devicePixelRatio}
+                    />
+                )}
             </div>
             <div className="preview-toggle-list">
                 <label>
@@ -131,6 +169,24 @@ export function PreviewSection({
                 </label>
                 <label>
                     <input type="checkbox" checked={showReducedPreview} onChange={(event) => onToggleReducedPreview(event.target.checked)} /> Palette Reduced
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showPaletteErrorPreview && paletteErrorPreviewAvailable}
+                        disabled={!paletteErrorPreviewAvailable}
+                        onChange={(event) => onTogglePaletteErrorPreview(event.target.checked)}
+                    />
+                    Palette Error
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showPaletteAmbiguityPreview && paletteAmbiguityPreviewAvailable}
+                        disabled={!paletteAmbiguityPreviewAvailable}
+                        onChange={(event) => onTogglePaletteAmbiguityPreview(event.target.checked)}
+                    />
+                    Palette Ambiguity
                 </label>
             </div>
         </section>
