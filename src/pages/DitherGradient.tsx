@@ -26,6 +26,7 @@ import { Tooltip } from "@/components/Tooltip";
 import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
 import { extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
+import { CANVAS_SIZE_MAX, CANVAS_SIZE_MIN, CANVAS_SIZE_STEP, type CanvasSize } from "@/utils/canvasSizing";
 import {
     buildGradientField,
     resolveGradientControlPoints,
@@ -186,6 +187,13 @@ export default function DitherGradientPage() {
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
     const handleActivateImageSource = useCallback(() => setSourceType("image"), [setSourceType]);
+    const handleAutoResizeCanvas = useCallback(
+        ({ width: suggestedWidth, height: suggestedHeight }: CanvasSize) => {
+            setWidth((previousWidth) => (previousWidth === suggestedWidth ? previousWidth : suggestedWidth));
+            setHeight((previousHeight) => (previousHeight === suggestedHeight ? previousHeight : suggestedHeight));
+        },
+        [setWidth, setHeight]
+    );
     const {
         imageUrlInput,
         setImageUrlInput,
@@ -201,6 +209,7 @@ export default function DitherGradientPage() {
         width,
         height,
         onActivateImageSource: handleActivateImageSource,
+        onAutoResizeCanvas: handleAutoResizeCanvas,
     });
     useEffect(() => {
         let isMounted = true;
@@ -969,11 +978,25 @@ export default function DitherGradientPage() {
                                         <div className="controls-panel__fields">
                                             <label>
                                                 Canvas Width ({width}px)
-                                                <input type="range" min={64} max={512} step={8} value={width} onChange={(event) => setWidth(event.target.valueAsNumber)} />
+                                                <input
+                                                    type="range"
+                                                    min={CANVAS_SIZE_MIN}
+                                                    max={CANVAS_SIZE_MAX}
+                                                    step={CANVAS_SIZE_STEP}
+                                                    value={width}
+                                                    onChange={(event) => setWidth(event.target.valueAsNumber)}
+                                                />
                                             </label>
                                             <label>
                                                 Canvas Height ({height}px)
-                                                <input type="range" min={64} max={512} step={8} value={height} onChange={(event) => setHeight(event.target.valueAsNumber)} />
+                                                <input
+                                                    type="range"
+                                                    min={CANVAS_SIZE_MIN}
+                                                    max={CANVAS_SIZE_MAX}
+                                                    step={CANVAS_SIZE_STEP}
+                                                    value={height}
+                                                    onChange={(event) => setHeight(event.target.valueAsNumber)}
+                                                />
                                             </label>
                                             <label>
                                                 Preview Scale ({previewScale}×)

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { drawImageWithScaleMode, type ImageScaleMode } from "@/utils/imageScaling";
 import type { ExampleImage } from "@/data/ditherSourceExamples";
 import { loadImageElementFromUrl, loadLocalImageElement } from "@/utils/imageSource";
+import { deriveCanvasSizeFromImage, type CanvasSize } from "@/utils/canvasSizing";
 
 export type ImageSourceKind = "url" | "clipboard" | "example";
 
@@ -16,15 +17,27 @@ interface UseImageSourceOptions {
     width: number;
     height: number;
     onActivateImageSource?: (label: string) => void;
+    onAutoResizeCanvas?: (size: CanvasSize) => void;
 }
 
-export function useImageSource({ width, height, onActivateImageSource }: UseImageSourceOptions) {
+export function useImageSource({ width, height, onActivateImageSource, onAutoResizeCanvas }: UseImageSourceOptions) {
     const [imageUrlInput, setImageUrlInput] = useState("");
-    const [imageScaleMode, setImageScaleMode] = useState<ImageScaleMode>("cover");
+    const [imageScaleMode, setImageScaleMode] = useState<ImageScaleMode>("none");
     const [imageSource, setImageSource] = useState<ImageSourceState | null>(null);
     const [sourceImageData, setSourceImageData] = useState<ImageData | null>(null);
     const [isImportingImage, setIsImportingImage] = useState(false);
     const [imageImportError, setImageImportError] = useState<string | null>(null);
+
+    const autoResizeCanvas = useCallback(
+        (image: HTMLImageElement) => {
+            if (!onAutoResizeCanvas) {
+                return;
+            }
+            const suggestedSize = deriveCanvasSizeFromImage(image);
+            onAutoResizeCanvas(suggestedSize);
+        },
+        [onAutoResizeCanvas]
+    );
 
     const replaceImageSource = useCallback((next: ImageSourceState | null) => {
         setImageSource((previous) => {
@@ -84,6 +97,7 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
         setImageImportError(null);
         try {
             const imageElement = await loadImageElementFromUrl(trimmedUrl);
+            autoResizeCanvas(imageElement);
             activateImage({
                 element: imageElement,
                 label: "Imported URL",
@@ -95,7 +109,7 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
         } finally {
             setIsImportingImage(false);
         }
-    }, [activateImage, imageUrlInput, replaceImageSource]);
+    }, [activateImage, autoResizeCanvas, imageUrlInput, replaceImageSource]);
 
     const importExampleImage = useCallback(
         async (example: ExampleImage) => {
@@ -111,6 +125,7 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
             setImageImportError(null);
             try {
                 const imageElement = await loadLocalImageElement(example.path);
+                autoResizeCanvas(imageElement);
                 activateImage({
                     element: imageElement,
                     label: example.label,
@@ -124,7 +139,7 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
                 setIsImportingImage(false);
             }
         },
-        [activateImage, replaceImageSource]
+        [activateImage, autoResizeCanvas, replaceImageSource]
     );
 
     useEffect(() => {
@@ -148,6 +163,7 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
             const pastedImage = new Image();
             pastedImage.decoding = "async";
             pastedImage.onload = () => {
+                autoResizeCanvas(pastedImage);
                 activateImage({
                     element: pastedImage,
                     label: "Pasted image",
@@ -164,7 +180,7 @@ export function useImageSource({ width, height, onActivateImageSource }: UseImag
         };
         window.addEventListener("paste", handlePaste);
         return () => window.removeEventListener("paste", handlePaste);
-    }, [activateImage]);
+    }, [activateImage, autoResizeCanvas]);
 
     return {
         imageUrlInput,
