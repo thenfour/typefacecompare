@@ -50,6 +50,7 @@ import {
 } from "../utils/dithering";
 const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
 const MAX_SCATTER_SOURCE_POINTS = 4000;
+const DEFAULT_PALETTE_NUDGE_STRENGTH = 0.1;
 
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
@@ -158,6 +159,7 @@ export default function DitherGradientPage() {
     const [previewScale, setPreviewScale] = useState(2);
     const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(5);
     const [ditherMaskStrength, setDitherMaskStrength] = useState(2);
+    const [sourceAdjustmentsEnabled, setSourceAdjustmentsEnabled] = useState(true);
     const [gamutOverallStrength, setGamutOverallStrength] = useState(0.3);
     const [gamutTranslationStrength, setGamutTranslationStrength] = useState(1);
     const [gamutRotationStrength, setGamutRotationStrength] = useState(0.1);
@@ -169,11 +171,11 @@ export default function DitherGradientPage() {
         rotation: gamutRotationStrength,
         scale: [...gamutScaleStrength] as AxisTriple,
     }));
-    const [paletteNudgeStrength, setPaletteNudgeStrength] = useState(0);
-    const [paletteMagnetRadiusOut, setPaletteMagnetRadiusOut] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.radiusOut);
+    const [paletteNudgeStrength, setPaletteNudgeStrength] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH);
+    const [paletteNudgeEnabled, setPaletteNudgeEnabled] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH > 0);
+    const [savedPaletteNudgeStrength, setSavedPaletteNudgeStrength] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH);
     const [paletteMagnetRadiusDir, setPaletteMagnetRadiusDir] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.radiusDir);
     const [paletteMagnetAmbiguityPower, setPaletteMagnetAmbiguityPower] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kAmb);
-    const [paletteMagnetOutPower, setPaletteMagnetOutPower] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kOut);
     const [paletteMagnetNearestCount, setPaletteMagnetNearestCount] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kNearest);
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
@@ -239,23 +241,18 @@ export default function DitherGradientPage() {
     const parsedReductionPalette = useMemo(() => parsePaletteDefinition(reductionPaletteText), [reductionPaletteText]);
     const reductionSwatches = parsedReductionPalette.swatches;
     const hasReductionPalette = reductionSwatches.length > 0;
-    const paletteNudgeActive = paletteNudgeStrength > 0 && hasReductionPalette && reductionMode === "palette";
     const paletteMagnetParams = useMemo<PaletteMagnetParams>(
         () => ({
-            radiusOut: paletteMagnetRadiusOut,
             radiusDir: paletteMagnetRadiusDir,
             kAmb: paletteMagnetAmbiguityPower,
-            kOut: paletteMagnetOutPower,
             kNearest: paletteMagnetNearestCount,
         }),
-        [
-            paletteMagnetRadiusOut,
-            paletteMagnetRadiusDir,
-            paletteMagnetAmbiguityPower,
-            paletteMagnetOutPower,
-            paletteMagnetNearestCount,
-        ]
+        [paletteMagnetRadiusDir, paletteMagnetAmbiguityPower, paletteMagnetNearestCount]
     );
+    const effectivePaletteNudgeStrength = sourceAdjustmentsEnabled && paletteNudgeEnabled
+        ? paletteNudgeStrength
+        : 0;
+    const paletteNudgeActive = effectivePaletteNudgeStrength > 0 && hasReductionPalette && reductionMode === "palette";
 
     const derivedCornerHexes = useMemo(() => deriveCornerHexes(gradientSwatches, cornerAssignments), [gradientSwatches, cornerAssignments]);
     const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
@@ -351,14 +348,15 @@ export default function DitherGradientPage() {
         gamutRotationStrength,
         gamutScaleStrength,
     ]);
+    const activeGamutTransform = useMemo(() => (sourceAdjustmentsEnabled && gamutFitEnabled ? gamutTransform : null), [sourceAdjustmentsEnabled, gamutFitEnabled, gamutTransform]);
     const gamutScatterPoints = useMemo(() => {
-        if (!gamutTransform || !gamutTransform.isActive || sourceScatterPoints.length === 0) {
+        if (!activeGamutTransform || !activeGamutTransform.isActive || sourceScatterPoints.length === 0) {
             return [] as ScatterPoint[];
         }
         return sourceScatterPoints.map((point) => {
             let adjusted = applyGamutTransformToColor(
                 { r: point.color[0] ?? 0, g: point.color[1] ?? 0, b: point.color[2] ?? 0 },
-                gamutTransform,
+                activeGamutTransform,
                 distanceColorSpace
             );
             if (paletteNudgeActive) {
@@ -366,7 +364,7 @@ export default function DitherGradientPage() {
                     adjusted,
                     reductionPaletteEntries,
                     distanceColorSpace,
-                    paletteNudgeStrength,
+                    effectivePaletteNudgeStrength,
                     paletteMagnetParams
                 );
             }
@@ -374,17 +372,22 @@ export default function DitherGradientPage() {
         });
     }, [
         sourceScatterPoints,
-        gamutTransform,
+        activeGamutTransform,
         distanceColorSpace,
         paletteNudgeActive,
-        paletteNudgeStrength,
+        effectivePaletteNudgeStrength,
         reductionPaletteEntries,
         paletteMagnetParams,
     ]);
-    const sourceAdjustmentsActive = Boolean((gamutTransform && gamutTransform.isActive) || paletteNudgeActive);
+    const sourceAdjustmentsActive = Boolean(
+        (activeGamutTransform && activeGamutTransform.isActive) || paletteNudgeActive
+    );
     const gamutPreviewAvailable = sourceAdjustmentsActive;
-    const gamutControlsDisabled = !sourceAxisStats || !paletteAxisStats;
+    const gamutControlsDisabled = !sourceAxisStats || !paletteAxisStats || !sourceAdjustmentsEnabled;
     const gamutSlidersDisabled = gamutControlsDisabled || !gamutFitEnabled;
+    const paletteNudgeToggleDisabled = !sourceAdjustmentsEnabled || !hasReductionPalette || reductionMode !== "palette";
+    const paletteNudgeControlsDisabled = paletteNudgeToggleDisabled || !paletteNudgeEnabled;
+    const ditherMaskControlsDisabled = !sourceAdjustmentsEnabled;
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -419,9 +422,22 @@ export default function DitherGradientPage() {
             return next;
         });
     };
+    const handleSourceAdjustmentsToggle = (nextEnabled: boolean) => {
+        setSourceAdjustmentsEnabled(nextEnabled);
+    };
     const handlePaletteNudgeChange = (nextValue: number) => {
         const clamped = Math.max(0, Math.min(1, nextValue));
         setPaletteNudgeStrength(clamped);
+        setSavedPaletteNudgeStrength(clamped);
+    };
+    const handlePaletteNudgeToggle = (nextEnabled: boolean) => {
+        setPaletteNudgeEnabled(nextEnabled);
+        if (nextEnabled) {
+            setPaletteNudgeStrength(savedPaletteNudgeStrength);
+            return;
+        }
+        setSavedPaletteNudgeStrength(paletteNudgeStrength);
+        setPaletteNudgeStrength(0);
     };
     const handleGamutFitToggle = (nextEnabled: boolean) => {
         setGamutFitEnabled(nextEnabled);
@@ -469,19 +485,17 @@ export default function DitherGradientPage() {
         distanceColorSpace,
         errorDiffusionKernelId,
         ditherMask: {
-            blurRadius: ditherMaskBlurRadius,
-            strength: ditherMaskStrength,
+            blurRadius: sourceAdjustmentsEnabled ? ditherMaskBlurRadius : 0,
+            strength: sourceAdjustmentsEnabled ? ditherMaskStrength : 0,
         },
-        paletteNudgeStrength,
+        paletteNudgeStrength: effectivePaletteNudgeStrength,
         paletteMagnetParams,
-        gamutTransform,
+        gamutTransform: activeGamutTransform,
         sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
         showDitherPreview,
         showReducedPreview,
-        gamutTransform,
-        sourceAdjustmentsActive,
         canvasRefs: {
             source: sourceCanvasRef,
             gamut: gamutCanvasRef,
@@ -573,32 +587,20 @@ export default function DitherGradientPage() {
 
                     <section className="dither-gradient-card source-adjustments-card">
                         <header>
-                            <strong>Source Adjustments</strong>
-                            <span>Prepare the bitmap before dithering</span>
+                            <div>
+                                <strong>Source Adjustments</strong>
+                                <span>Prepare the bitmap before dithering</span>
+                            </div>
+                            <label className="source-adjustments-toggle">
+                                <input
+                                    type="checkbox"
+                                    checked={sourceAdjustmentsEnabled}
+                                    onChange={(event) => handleSourceAdjustmentsToggle(event.target.checked)}
+                                />
+                                Enable Source Adjustments
+                            </label>
                         </header>
                         <div className="controls-panel__fields">
-                            <label>
-                                Dither Mask Blur Radius ({ditherMaskBlurRadius}px)
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={10}
-                                    step={1}
-                                    value={ditherMaskBlurRadius}
-                                    onChange={(event) => setDitherMaskBlurRadius(event.target.valueAsNumber)}
-                                />
-                            </label>
-                            <label>
-                                Dither Mask Effect Strength ({Math.round(ditherMaskStrength * 100)}%)
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={10}
-                                    step={0.05}
-                                    value={ditherMaskStrength}
-                                    onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
-                                />
-                            </label>
                             <div className="gamut-fit-controls">
                                 <h4>Gamut Fit</h4>
                                 <label className="gamut-fit-toggle">
@@ -665,6 +667,15 @@ export default function DitherGradientPage() {
                             </div>
                             <div className="palette-nudge-controls">
                                 <h4>Palette Nudge</h4>
+                                <label className="palette-nudge-toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={paletteNudgeEnabled}
+                                        onChange={(event) => handlePaletteNudgeToggle(event.target.checked)}
+                                        disabled={paletteNudgeToggleDisabled}
+                                    />
+                                    Enable Palette Nudge
+                                </label>
                                 <label>
                                     Strength ({Math.round(paletteNudgeStrength * 100)}%)
                                     <input
@@ -674,24 +685,10 @@ export default function DitherGradientPage() {
                                         step={0.01}
                                         value={paletteNudgeStrength}
                                         onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
-                                        disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                        disabled={paletteNudgeControlsDisabled}
                                     />
                                 </label>
                                 <div className="palette-nudge-controls__grid">
-                                    <Tooltip title="Distance a pixel must drift from its closest palette color before magnets start pulling. Larger radius nudges more of the image; smaller only grabs extreme outliers.">
-                                        <label>
-                                            Out-of-Gamut Radius ({paletteMagnetRadiusOut.toFixed(2)})
-                                            <input
-                                                type="range"
-                                                min={0.05}
-                                                max={1}
-                                                step={0.01}
-                                                value={paletteMagnetRadiusOut}
-                                                onChange={(event) => setPaletteMagnetRadiusOut(event.target.valueAsNumber)}
-                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
-                                            />
-                                        </label>
-                                    </Tooltip>
                                     <Tooltip title="How far to look for palette neighbors when establishing a pull direction. Bigger values blend more swatches; smaller values stay laser-focused on the nearest entries.">
                                         <label>
                                             Direction Radius ({paletteMagnetRadiusDir.toFixed(2)})
@@ -702,7 +699,7 @@ export default function DitherGradientPage() {
                                                 step={0.01}
                                                 value={paletteMagnetRadiusDir}
                                                 onChange={(event) => setPaletteMagnetRadiusDir(event.target.valueAsNumber)}
-                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                                disabled={paletteNudgeControlsDisabled}
                                             />
                                         </label>
                                     </Tooltip>
@@ -716,21 +713,7 @@ export default function DitherGradientPage() {
                                                 step={0.05}
                                                 value={paletteMagnetAmbiguityPower}
                                                 onChange={(event) => setPaletteMagnetAmbiguityPower(event.target.valueAsNumber)}
-                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
-                                            />
-                                        </label>
-                                    </Tooltip>
-                                    <Tooltip title="Shapes how quickly magnets ramp up with distance. Higher curves reserve full force for the farthest out-of-gamut pixels; lower curves apply force earlier.">
-                                        <label>
-                                            Out-of-Gamut Curve ({paletteMagnetOutPower.toFixed(2)})
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={4}
-                                                step={0.05}
-                                                value={paletteMagnetOutPower}
-                                                onChange={(event) => setPaletteMagnetOutPower(event.target.valueAsNumber)}
-                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                                disabled={paletteNudgeControlsDisabled}
                                             />
                                         </label>
                                     </Tooltip>
@@ -744,7 +727,7 @@ export default function DitherGradientPage() {
                                                 step={1}
                                                 value={paletteMagnetNearestCount}
                                                 onChange={(event) => setPaletteMagnetNearestCount(event.target.valueAsNumber)}
-                                                disabled={!hasReductionPalette || reductionMode !== "palette"}
+                                                disabled={paletteNudgeControlsDisabled}
                                             />
                                         </label>
                                     </Tooltip>
@@ -752,6 +735,33 @@ export default function DitherGradientPage() {
                                 <p className="dither-gradient-note">
                                     Pulls source pixels toward their nearest palette entry before dithering, helping them resist harsh palette jumps.
                                 </p>
+                            </div>
+                            <div className="dither-mask-controls">
+                                <h4>Dither Masking</h4>
+                                <label>
+                                    Blur Radius ({ditherMaskBlurRadius}px)
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={10}
+                                        step={1}
+                                        value={ditherMaskBlurRadius}
+                                        onChange={(event) => setDitherMaskBlurRadius(event.target.valueAsNumber)}
+                                        disabled={ditherMaskControlsDisabled}
+                                    />
+                                </label>
+                                <label>
+                                    Effect Strength ({Math.round(ditherMaskStrength * 100)}%)
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={10}
+                                        step={0.05}
+                                        value={ditherMaskStrength}
+                                        onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
+                                        disabled={ditherMaskControlsDisabled}
+                                    />
+                                </label>
                             </div>
                         </div>
                     </section>

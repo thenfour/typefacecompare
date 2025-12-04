@@ -43,19 +43,15 @@ export function quantizeToPalette(
 }
 
 export interface PaletteMagnetParams {
-    radiusOut: number;
     radiusDir: number;
     kAmb: number;
-    kOut: number;
     kNearest: number;
 }
 
 export const DEFAULT_PALETTE_MAGNET_PARAMS: PaletteMagnetParams = {
-    radiusOut: 0.25,
-    radiusDir: 0.35,
-    kAmb: 2,
-    kOut: 1,
-    kNearest: 3,
+    radiusDir: 0.5,
+    kAmb: 3,
+    kNearest: 4,
 };
 
 export function blendColorTowardPalette(
@@ -84,15 +80,13 @@ export function blendColorTowardPalette(
     const second = distances[1];
     const d1 = nearest.d;
     const d2 = second?.d ?? Infinity;
-    const outRaw = clamp01(params.radiusOut > 0 ? d1 / params.radiusOut : 1);
-    const outFactor = Math.pow(outRaw, params.kOut);
     let ambiguity = 0;
     if (Number.isFinite(d2) && d2 > 1e-6) {
         const diff = Math.abs(d2 - d1);
         const rel = clamp01(1 - diff / d2);
         ambiguity = Math.pow(rel, params.kAmb);
     }
-    const magnetAmount = baseStrength * outFactor * ambiguity;
+    const magnetAmount = baseStrength * ambiguity;
     if (magnetAmount < 1e-4) {
         return rgb;
     }
