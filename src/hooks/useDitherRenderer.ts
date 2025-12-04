@@ -61,8 +61,8 @@ interface DitherMaskOptions {
 }
 
 interface PaletteMetricsSample {
-    normalizedError: number;
-    normalizedAmbiguity: number;
+    errorDistance: number;
+    ambiguityRatio: number;
     modulationFactor: number;
 }
 
@@ -182,6 +182,14 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         }, {} as Partial<Record<PreviewStageKey, ActivePreviewStage>>);
 
         const pixelCount = width * height;
+        const capturePaletteErrorPreview = Boolean(stageMap.paletteError);
+        const capturePaletteAmbiguityPreview = Boolean(stageMap.paletteAmbiguity);
+        const paletteErrorValues = capturePaletteErrorPreview ? new Float32Array(pixelCount) : null;
+        const paletteAmbiguityValues = capturePaletteAmbiguityPreview ? new Float32Array(pixelCount) : null;
+        let paletteErrorMin = Infinity;
+        let paletteErrorMax = -Infinity;
+        let paletteAmbiguityMin = Infinity;
+        let paletteAmbiguityMax = -Infinity;
         const baseColorBuffer = new Float32Array(pixelCount * 3);
         for (let y = 0; y < height; y++) {
             const v = height === 1 ? 0 : y / (height - 1);
@@ -300,27 +308,48 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
                 }
                 if (paletteMetrics) {
-                    if (stageMap.paletteError) {
-                        const channel = Math.round(clamp01(paletteMetrics.normalizedError) * 255);
-                        writePixel(stageMap.paletteError.imageData.data, offset, {
-                            r: channel,
-                            g: channel,
-                            b: channel,
-                        });
+                    if (paletteErrorValues) {
+                        const value = paletteMetrics.errorDistance;
+                        paletteErrorValues[pixelIndex] = value;
+                        if (value < paletteErrorMin) {
+                            paletteErrorMin = value;
+                        }
+                        if (value > paletteErrorMax) {
+                            paletteErrorMax = value;
+                        }
                     }
-                    if (stageMap.paletteAmbiguity) {
-                        const channel = Math.round(clamp01(paletteMetrics.normalizedAmbiguity) * 255);
-                        writePixel(stageMap.paletteAmbiguity.imageData.data, offset, {
-                            r: channel,
-                            g: channel,
-                            b: channel,
-                        });
+                    if (paletteAmbiguityValues) {
+                        const value = paletteMetrics.ambiguityRatio;
+                        paletteAmbiguityValues[pixelIndex] = value;
+                        if (value < paletteAmbiguityMin) {
+                            paletteAmbiguityMin = value;
+                        }
+                        if (value > paletteAmbiguityMax) {
+                            paletteAmbiguityMax = value;
+                        }
                     }
                 }
             }
             if (errorDiffusionContext) {
                 advanceErrorDiffusionRow(errorDiffusionContext);
             }
+        }
+
+        if (paletteErrorValues && stageMap.paletteError) {
+            writeNormalizedMetricToImageData(
+                paletteErrorValues,
+                paletteErrorMin,
+                paletteErrorMax,
+                stageMap.paletteError.imageData.data
+            );
+        }
+        if (paletteAmbiguityValues && stageMap.paletteAmbiguity) {
+            writeNormalizedMetricToImageData(
+                paletteAmbiguityValues,
+                paletteAmbiguityMin,
+                paletteAmbiguityMax,
+                stageMap.paletteAmbiguity.imageData.data
+            );
         }
 
         activeStages.forEach((stage) => {
@@ -451,31 +480,51 @@ function evaluatePaletteMetrics(
             secondNearest = dist;
         }
     }
-    const d0 = Math.sqrt(Math.max(nearest, 0));
+    const errorDistance = Math.sqrt(Math.max(nearest, 0));
     const errorScale = Math.max(params.errorScale, 1e-6);
-    const normalizedError = clamp01(d0 / errorScale);
+    const scaledError = clamp01(errorDistance / errorScale);
     const errorExponent = Math.max(params.errorExponent, 0);
-    const errorFactor = errorExponent === 0 ? 1 : Math.pow(normalizedError, errorExponent);
+    const errorFactor = errorExponent === 0 ? 1 : Math.pow(scaledError, errorExponent);
 
-    let normalizedAmbiguity = 0;
+    let ambiguityRatio = 0;
     if (Number.isFinite(secondNearest) && secondNearest > 1e-6) {
         const d1 = Math.sqrt(secondNearest);
-        const diff = Math.abs(d1 - d0);
-        normalizedAmbiguity = d1 > 0 ? clamp01(1 - diff / d1) : 0;
+        const diff = Math.abs(d1 - errorDistance);
+        ambiguityRatio = d1 > 0 ? clamp01(1 - diff / d1) : 0;
     }
     const ambExponent = Math.max(params.ambiguityExponent, 0);
-    const shapedAmbiguity = ambExponent === 0 ? 1 : Math.pow(normalizedAmbiguity, ambExponent);
+    const shapedAmbiguity = ambExponent === 0 ? 1 : Math.pow(ambiguityRatio, ambExponent);
     const bias = clamp01(params.ambiguityBias ?? 0.5);
     const ambiguityFactor = bias + (1 - bias) * shapedAmbiguity;
     const modulationFactor = clamp01(errorFactor * ambiguityFactor);
     return {
-        normalizedError,
-        normalizedAmbiguity,
+        errorDistance,
+        ambiguityRatio,
         modulationFactor,
     } satisfies PaletteMetricsSample;
 }
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+function writeNormalizedMetricToImageData(
+    values: Float32Array,
+    minValue: number,
+    maxValue: number,
+    imageData: Uint8ClampedArray
+) {
+    const length = values.length;
+    const range = maxValue - minValue;
+    const hasRange = Number.isFinite(range) && range > 1e-9;
+    for (let index = 0; index < length; index++) {
+        const normalized = hasRange ? clamp01((values[index] - minValue) / range) : 0;
+        const channel = Math.round(normalized * 255);
+        const offset = index * 4;
+        imageData[offset] = channel;
+        imageData[offset + 1] = channel;
+        imageData[offset + 2] = channel;
+        imageData[offset + 3] = 255;
+    }
+}
 
 function blurFloatArray(values: Float32Array, width: number, height: number, radius: number) {
     if (radius <= 0) {
