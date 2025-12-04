@@ -229,6 +229,7 @@ export default function DitherGradientPage() {
     const [showReducedPreview, setShowReducedPreview] = useState(true);
     const [showPaletteErrorPreview, setShowPaletteErrorPreview] = useState(false);
     const [showPaletteAmbiguityPreview, setShowPaletteAmbiguityPreview] = useState(false);
+    const [showPaletteModulationPreview, setShowPaletteModulationPreview] = useState(false);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -237,6 +238,7 @@ export default function DitherGradientPage() {
     const reducedCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const paletteErrorCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const paletteAmbiguityCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const paletteModulationCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
 
@@ -485,7 +487,10 @@ export default function DitherGradientPage() {
         if (showPaletteAmbiguityPreview) {
             setShowPaletteAmbiguityPreview(false);
         }
-    }, [palettePreviewAvailable, showPaletteErrorPreview, showPaletteAmbiguityPreview]);
+        if (showPaletteModulationPreview) {
+            setShowPaletteModulationPreview(false);
+        }
+    }, [palettePreviewAvailable, showPaletteErrorPreview, showPaletteAmbiguityPreview, showPaletteModulationPreview]);
 
     const paletteModulationParams = paletteMaskAvailable
         ? {
@@ -529,6 +534,7 @@ export default function DitherGradientPage() {
         showReducedPreview,
         showPaletteErrorPreview: showPaletteErrorPreview && palettePreviewAvailable,
         showPaletteAmbiguityPreview: showPaletteAmbiguityPreview && palettePreviewAvailable,
+        showPaletteModulationPreview: showPaletteModulationPreview && palettePreviewAvailable,
         canvasRefs: {
             source: sourceCanvasRef,
             gamut: gamutCanvasRef,
@@ -536,6 +542,7 @@ export default function DitherGradientPage() {
             reduced: reducedCanvasRef,
             paletteError: paletteErrorCanvasRef,
             paletteAmbiguity: paletteAmbiguityCanvasRef,
+            paletteModulation: paletteModulationCanvasRef,
         },
     });
     const seedEnabled = usesSeededDither(ditherType);
@@ -964,12 +971,16 @@ export default function DitherGradientPage() {
                                 showPaletteAmbiguityPreview={showPaletteAmbiguityPreview}
                                 onTogglePaletteAmbiguityPreview={setShowPaletteAmbiguityPreview}
                                 paletteAmbiguityPreviewAvailable={palettePreviewAvailable}
+                                showPaletteModulationPreview={showPaletteModulationPreview}
+                                onTogglePaletteModulationPreview={setShowPaletteModulationPreview}
+                                paletteModulationPreviewAvailable={palettePreviewAvailable}
                                 sourceCanvasRef={sourceCanvasRef}
                                 gamutCanvasRef={gamutCanvasRef}
                                 ditherCanvasRef={ditherCanvasRef}
                                 reducedCanvasRef={reducedCanvasRef}
                                 paletteErrorCanvasRef={paletteErrorCanvasRef}
                                 paletteAmbiguityCanvasRef={paletteAmbiguityCanvasRef}
+                                paletteModulationCanvasRef={paletteModulationCanvasRef}
                                 width={width}
                                 height={height}
                                 previewScale={previewScale}

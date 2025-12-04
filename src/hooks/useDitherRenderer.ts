@@ -24,7 +24,14 @@ import {
 } from "@/utils/paletteDistance";
 import type { ReductionMode, SourceType } from "@/types/dither";
 
-export type PreviewStageKey = "source" | "gamut" | "dither" | "reduced" | "paletteError" | "paletteAmbiguity";
+export type PreviewStageKey =
+    | "source"
+    | "gamut"
+    | "dither"
+    | "reduced"
+    | "paletteError"
+    | "paletteAmbiguity"
+    | "paletteModulation";
 
 export interface PreviewCanvasRefs {
     source: MutableRefObject<HTMLCanvasElement | null>;
@@ -33,6 +40,7 @@ export interface PreviewCanvasRefs {
     reduced: MutableRefObject<HTMLCanvasElement | null>;
     paletteError: MutableRefObject<HTMLCanvasElement | null>;
     paletteAmbiguity: MutableRefObject<HTMLCanvasElement | null>;
+    paletteModulation: MutableRefObject<HTMLCanvasElement | null>;
 }
 
 interface PreviewStageConfig {
@@ -94,6 +102,7 @@ export interface UseDitherRendererOptions {
     showReducedPreview: boolean;
     showPaletteErrorPreview: boolean;
     showPaletteAmbiguityPreview: boolean;
+    showPaletteModulationPreview: boolean;
     canvasRefs: PreviewCanvasRefs;
 }
 
@@ -126,6 +135,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showReducedPreview,
         showPaletteErrorPreview,
         showPaletteAmbiguityPreview,
+        showPaletteModulationPreview,
         canvasRefs,
     } = options;
 
@@ -137,6 +147,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
             { key: "paletteError", enabled: showPaletteErrorPreview, ref: canvasRefs.paletteError },
             { key: "paletteAmbiguity", enabled: showPaletteAmbiguityPreview, ref: canvasRefs.paletteAmbiguity },
+            { key: "paletteModulation", enabled: showPaletteModulationPreview, ref: canvasRefs.paletteModulation },
         ];
 
         const isErrorDiffusion = isErrorDiffusionDither(ditherType);
@@ -184,12 +195,16 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         const pixelCount = width * height;
         const capturePaletteErrorPreview = Boolean(stageMap.paletteError);
         const capturePaletteAmbiguityPreview = Boolean(stageMap.paletteAmbiguity);
+        const capturePaletteModulationPreview = Boolean(stageMap.paletteModulation);
         const paletteErrorValues = capturePaletteErrorPreview ? new Float32Array(pixelCount) : null;
         const paletteAmbiguityValues = capturePaletteAmbiguityPreview ? new Float32Array(pixelCount) : null;
+        const paletteModulationValues = capturePaletteModulationPreview ? new Float32Array(pixelCount) : null;
         let paletteErrorMin = Infinity;
         let paletteErrorMax = -Infinity;
         let paletteAmbiguityMin = Infinity;
         let paletteAmbiguityMax = -Infinity;
+        let paletteModulationMin = Infinity;
+        let paletteModulationMax = -Infinity;
         const baseColorBuffer = new Float32Array(pixelCount * 3);
         for (let y = 0; y < height; y++) {
             const v = height === 1 ? 0 : y / (height - 1);
@@ -227,7 +242,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 ? paletteMetricsParams
                 : null;
         const shouldCollectPaletteMetrics = Boolean(
-            paletteMetricsParams && (paletteModulationConfig || showPaletteErrorPreview || showPaletteAmbiguityPreview)
+            paletteMetricsParams &&
+            (paletteModulationConfig || showPaletteErrorPreview || showPaletteAmbiguityPreview || showPaletteModulationPreview)
         );
 
         const shouldApplyGamut = Boolean(gamutTransform && gamutTransform.isActive);
@@ -328,6 +344,16 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                             paletteAmbiguityMax = value;
                         }
                     }
+                    if (paletteModulationValues) {
+                        const value = paletteMetrics.modulationFactor;
+                        paletteModulationValues[pixelIndex] = value;
+                        if (value < paletteModulationMin) {
+                            paletteModulationMin = value;
+                        }
+                        if (value > paletteModulationMax) {
+                            paletteModulationMax = value;
+                        }
+                    }
                 }
             }
             if (errorDiffusionContext) {
@@ -336,19 +362,30 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         }
 
         if (paletteErrorValues && stageMap.paletteError) {
-            writeNormalizedMetricToImageData(
+            writeMetricToImageData(
                 paletteErrorValues,
                 paletteErrorMin,
                 paletteErrorMax,
-                stageMap.paletteError.imageData.data
+                stageMap.paletteError.imageData.data,
+                true
             );
         }
         if (paletteAmbiguityValues && stageMap.paletteAmbiguity) {
-            writeNormalizedMetricToImageData(
+            writeMetricToImageData(
                 paletteAmbiguityValues,
                 paletteAmbiguityMin,
                 paletteAmbiguityMax,
-                stageMap.paletteAmbiguity.imageData.data
+                stageMap.paletteAmbiguity.imageData.data,
+                true
+            );
+        }
+        if (paletteModulationValues && stageMap.paletteModulation) {
+            writeMetricToImageData(
+                paletteModulationValues,
+                paletteModulationMin,
+                paletteModulationMax,
+                stageMap.paletteModulation.imageData.data,
+                true
             );
         }
 
@@ -388,6 +425,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showReducedPreview,
         showPaletteErrorPreview,
         showPaletteAmbiguityPreview,
+        showPaletteModulationPreview,
         gamutTransform,
         canvasRefs.source,
         canvasRefs.gamut,
@@ -395,6 +433,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         canvasRefs.reduced,
         canvasRefs.paletteError,
         canvasRefs.paletteAmbiguity,
+        canvasRefs.paletteModulation,
     ]);
 }
 
@@ -506,17 +545,20 @@ function evaluatePaletteMetrics(
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
-function writeNormalizedMetricToImageData(
+function writeMetricToImageData(
     values: Float32Array,
     minValue: number,
     maxValue: number,
-    imageData: Uint8ClampedArray
+    imageData: Uint8ClampedArray,
+    normalizeRange: boolean
 ) {
     const length = values.length;
     const range = maxValue - minValue;
     const hasRange = Number.isFinite(range) && range > 1e-9;
     for (let index = 0; index < length; index++) {
-        const normalized = hasRange ? clamp01((values[index] - minValue) / range) : 0;
+        const normalized = normalizeRange && hasRange
+            ? clamp01((values[index] - minValue) / range)
+            : clamp01(values[index]);
         const channel = Math.round(normalized * 255);
         const offset = index * 4;
         imageData[offset] = channel;

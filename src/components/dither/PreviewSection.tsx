@@ -22,12 +22,16 @@ interface PreviewSectionProps {
     showPaletteAmbiguityPreview: boolean;
     onTogglePaletteAmbiguityPreview: (value: boolean) => void;
     paletteAmbiguityPreviewAvailable: boolean;
+    showPaletteModulationPreview: boolean;
+    onTogglePaletteModulationPreview: (value: boolean) => void;
+    paletteModulationPreviewAvailable: boolean;
     sourceCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     gamutCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     ditherCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     reducedCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     paletteErrorCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     paletteAmbiguityCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    paletteModulationCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     width: number;
     height: number;
     previewScale: number;
@@ -56,12 +60,16 @@ export function PreviewSection({
     showPaletteAmbiguityPreview,
     onTogglePaletteAmbiguityPreview,
     paletteAmbiguityPreviewAvailable,
+    showPaletteModulationPreview,
+    onTogglePaletteModulationPreview,
+    paletteModulationPreviewAvailable,
     sourceCanvasRef,
     gamutCanvasRef,
     ditherCanvasRef,
     reducedCanvasRef,
     paletteErrorCanvasRef,
     paletteAmbiguityCanvasRef,
+    paletteModulationCanvasRef,
     width,
     height,
     previewScale,
@@ -150,6 +158,17 @@ export function PreviewSection({
                         devicePixelRatio={devicePixelRatio}
                     />
                 )}
+                {showPaletteModulationPreview && paletteModulationPreviewAvailable && (
+                    <GradientPreviewCanvas
+                        ref={paletteModulationCanvasRef}
+                        title="Palette Modulation"
+                        description="Effective dither multiplier"
+                        width={width}
+                        height={height}
+                        previewScale={previewScale}
+                        devicePixelRatio={devicePixelRatio}
+                    />
+                )}
             </div>
             <div className="preview-toggle-list">
                 <label>
@@ -187,6 +206,15 @@ export function PreviewSection({
                         onChange={(event) => onTogglePaletteAmbiguityPreview(event.target.checked)}
                     />
                     Palette Ambiguity
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showPaletteModulationPreview && paletteModulationPreviewAvailable}
+                        disabled={!paletteModulationPreviewAvailable}
+                        onChange={(event) => onTogglePaletteModulationPreview(event.target.checked)}
+                    />
+                    Palette Modulation
                 </label>
             </div>
         </section>
