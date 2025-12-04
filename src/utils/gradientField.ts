@@ -5,6 +5,8 @@ import { convertHexToVector, mixColorVectorsWeighted, rgbUnitTo255, vectorToRgb 
 
 type GradientPosition = PaletteCoordinate;
 
+export type GradientAutoPlacementMode = "perimeter" | "radial" | "grid";
+
 export interface GradientControlPoint {
     hex: string;
     position: GradientPosition;
@@ -75,15 +77,23 @@ interface BarycentricHit {
     weights: [number, number, number];
 }
 
-export function resolveGradientControlPoints(swatches: PaletteSwatchDefinition[]): GradientControlPoint[] {
+export function resolveGradientControlPoints(
+    swatches: PaletteSwatchDefinition[],
+    autoPlacementMode: GradientAutoPlacementMode = "perimeter"
+): GradientControlPoint[] {
     if (swatches.length === 0) {
         return [];
     }
-    const defaultLayout = buildDefaultPerimeterLayout(swatches.length);
-    return swatches.map((swatch, index) => ({
-        hex: swatch.hex,
-        position: clonePosition(swatch.position ?? defaultLayout[index] ?? DEFAULT_FALLBACK_POSITION),
-    }));
+    const unplacedCount = swatches.filter((swatch) => !swatch.position).length;
+    const autoPositions = buildAutoPlacementLayout(autoPlacementMode, unplacedCount);
+    let autoIndex = 0;
+    return swatches.map((swatch) => {
+        const position = swatch.position ?? autoPositions[autoIndex++] ?? DEFAULT_FALLBACK_POSITION;
+        return {
+            hex: swatch.hex,
+            position: clonePosition(position),
+        } satisfies GradientControlPoint;
+    });
 }
 
 export function buildGradientField(points: GradientControlPoint[], mode: ColorInterpolationMode): GradientField {
@@ -364,7 +374,22 @@ function classifyEdgeBuckets(points: GradientFieldPoint[]) {
     return { top, bottom, left, right };
 }
 
-function buildDefaultPerimeterLayout(count: number): GradientPosition[] {
+function buildAutoPlacementLayout(mode: GradientAutoPlacementMode, count: number): GradientPosition[] {
+    if (count <= 0) {
+        return [];
+    }
+    switch (mode) {
+        case "radial":
+            return buildRadialLayout(count);
+        case "grid":
+            return buildGridLayout(count);
+        case "perimeter":
+        default:
+            return buildPerimeterLayout(count);
+    }
+}
+
+function buildPerimeterLayout(count: number): GradientPosition[] {
     if (count <= 0) {
         return [];
     }
@@ -386,12 +411,53 @@ function buildDefaultPerimeterLayout(count: number): GradientPosition[] {
         segments.push({ start: newNode, end: segment.end });
         remaining -= 1;
     }
-    if (layout.length < count) {
-        while (layout.length < count) {
-            layout.push(clonePosition(DEFAULT_FALLBACK_POSITION));
+    while (layout.length < count) {
+        layout.push(clonePosition(DEFAULT_FALLBACK_POSITION));
+    }
+    return layout.slice(0, count);
+}
+
+function buildRadialLayout(count: number): GradientPosition[] {
+    const positions: GradientPosition[] = [];
+    const centerX = 0.5;
+    const centerY = 0.5;
+    for (let index = 0; index < count; index++) {
+        const angle = (index / count) * Math.PI * 2;
+        const dx = Math.cos(angle);
+        const dy = Math.sin(angle);
+        const tValues: number[] = [];
+        if (dx > ZERO_DISTANCE_EPSILON) {
+            tValues.push((1 - centerX) / dx);
+        } else if (dx < -ZERO_DISTANCE_EPSILON) {
+            tValues.push((0 - centerX) / dx);
+        }
+        if (dy > ZERO_DISTANCE_EPSILON) {
+            tValues.push((1 - centerY) / dy);
+        } else if (dy < -ZERO_DISTANCE_EPSILON) {
+            tValues.push((0 - centerY) / dy);
+        }
+        const positiveT = tValues.filter((value) => value > 0);
+        const t = positiveT.length ? Math.min(...positiveT) : 0.5;
+        const x = clamp01(centerX + dx * t);
+        const y = clamp01(centerY + dy * t);
+        positions.push({ x, y });
+    }
+    return positions;
+}
+
+function buildGridLayout(count: number): GradientPosition[] {
+    if (count <= 0) {
+        return [];
+    }
+    const gridSize = Math.max(1, Math.ceil(Math.sqrt(count)));
+    const step = gridSize > 1 ? 1 / (gridSize - 1) : 0;
+    const positions: GradientPosition[] = [];
+    for (let row = 0; row < gridSize && positions.length < count; row++) {
+        for (let col = 0; col < gridSize && positions.length < count; col++) {
+            positions.push({ x: clamp01(col * step), y: clamp01(row * step) });
         }
     }
-    return layout;
+    return positions;
 }
 
 function createPerimeterCycle(): PerimeterNode[] {

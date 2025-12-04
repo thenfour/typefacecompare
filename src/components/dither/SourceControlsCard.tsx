@@ -7,6 +7,7 @@ import type { PaletteRow, PaletteSwatchDefinition } from "@/types/paletteDefinit
 import type { SourceType } from "@/types/dither";
 import type { ColorInterpolationMode } from "@/utils/colorSpaces";
 import { ImageSourceControls, type ImageSourceControlsProps } from "@/components/dither/ImageSourceControls";
+import type { GradientAutoPlacementMode } from "@/utils/gradientField";
 
 interface GradientControlsProps {
     swatchCountLabel: string;
@@ -21,6 +22,8 @@ interface GradientControlsProps {
     footer?: ReactNode;
     interpolationMode: ColorInterpolationMode;
     onInterpolationModeChange: (mode: ColorInterpolationMode) => void;
+    autoPlacementMode: GradientAutoPlacementMode;
+    onAutoPlacementModeChange: (mode: GradientAutoPlacementMode) => void;
 }
 
 interface SourceControlsCardProps {
@@ -80,6 +83,8 @@ function renderGradientControls({
     footer,
     interpolationMode,
     onInterpolationModeChange,
+    autoPlacementMode,
+    onAutoPlacementModeChange,
 }: GradientControlsProps) {
     const interpolationOptions: { value: ColorInterpolationMode; label: string }[] = [
         { value: "rgb", label: "RGB" },
@@ -97,6 +102,12 @@ function renderGradientControls({
         { value: "oklch", label: "OKLCH" },
     ];
 
+    const placementOptions: { value: GradientAutoPlacementMode; label: string }[] = [
+        { value: "perimeter", label: "Perimeter" },
+        { value: "radial", label: "Radial" },
+        { value: "grid", label: "Grid" },
+    ];
+
     return (
         <div className="source-card__gradient-panel">
             <div className="source-card__meta">{swatchCountLabel}</div>
@@ -107,6 +118,15 @@ function renderGradientControls({
                     onChange={onInterpolationModeChange}
                     options={interpolationOptions}
                     ariaLabel="Interpolation space"
+                />
+            </div>
+            <div className="source-card__interpolation">
+                <span>Auto Placement</span>
+                <OptionButtonGroup
+                    value={autoPlacementMode}
+                    onChange={onAutoPlacementModeChange}
+                    options={placementOptions}
+                    ariaLabel="Auto placement strategy"
                 />
             </div>
             <PalettePresetButtons presets={presets} onSelect={onSelectPreset} />

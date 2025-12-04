@@ -30,6 +30,7 @@ import {
     buildGradientField,
     resolveGradientControlPoints,
     sampleGradientField,
+    type GradientAutoPlacementMode,
     type GradientField,
 } from "@/utils/gradientField";
 import {
@@ -60,7 +61,6 @@ const DEFAULT_PALETTE_NUDGE_STRENGTH = 0.1;
 
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
-const RGB_FOUR_LEVELS = [0, 85, 170, 255] as const;
 
 function buildRgbLevelPalette(levels: readonly number[], chunkSize = 8) {
     const toHex = (value: number) => value.toString(16).padStart(2, "0").toUpperCase();
@@ -139,6 +139,7 @@ type GamutStrengthSnapshot = {
 export default function DitherGradientPage() {
     const [gradientPaletteText, setGradientPaletteText] = useState<string>(PALETTE_PRESETS[0].value);
     const [reductionPaletteText, setReductionPaletteText] = useState<string>(PALETTE_PRESETS[1].value);
+    const [gradientAutoPlacementMode, setGradientAutoPlacementMode] = useState<GradientAutoPlacementMode>("perimeter");
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.333);
@@ -247,8 +248,8 @@ export default function DitherGradientPage() {
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
     const gradientControlPoints = useMemo(
-        () => resolveGradientControlPoints(gradientSwatches),
-        [gradientSwatches]
+        () => resolveGradientControlPoints(gradientSwatches, gradientAutoPlacementMode),
+        [gradientSwatches, gradientAutoPlacementMode]
     );
     const gradientField = useMemo(
         () => buildGradientField(gradientControlPoints, interpolationMode),
@@ -598,6 +599,8 @@ export default function DitherGradientPage() {
                                         ) : null,
                                     interpolationMode,
                                     onInterpolationModeChange: setInterpolationMode,
+                                    autoPlacementMode: gradientAutoPlacementMode,
+                                    onAutoPlacementModeChange: setGradientAutoPlacementMode,
                                 }}
                                 imageControls={{
                                     imageUrlInput,
