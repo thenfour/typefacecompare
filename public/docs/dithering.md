@@ -105,6 +105,19 @@ to be better. I can contrive an example basically by finding a random place wher
 this nudging works out to be nice effect. But it would often be better to just leave
 it off, and change dither strength instead.
 
+Ok i finally found a situation where this genuinely helps...
+
+Without palette nudging:
+
+![alt text](image.png)
+
+With palette nudging:
+
+![alt text](image-1.png)
+
+Solid flat swatches demonstrate the effect best. Here you see how a mostly unrelated color gets selected, but by nudging the color first towards the correct direction, we reduce that extreme
+stippling effect.
+
 #### Direction radius
 
 When calculating the direction we should nudge a color, only consider colors within this radius.
