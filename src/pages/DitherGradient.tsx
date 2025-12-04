@@ -99,20 +99,12 @@ const PALETTE_PRESETS = [
         value: `#000000\n#242424\n#484848\n#6D6D6D\n#919191\n#B6B6B6\n#DADADA\n#FFFFFF`,
     },
     {
-        label: "Grayscale16",
-        value: `#000000\n#111111\n#222222\n#333333\n#444444\n#555555\n#666666\n#777777\n-----\n#888888\n#999999\n#AAAAAA\n#BBBBBB\n#CCCCCC\n#DDDDDD\n#EEEEEE\n#FFFFFF`,
-    },
-    {
         label: "RGB Primaries",
         value: `#FF0000 // red\n#00FF00 // green\n#0000FF // blue\n-----\n#00FFFF // cyan\n#FF00FF // magenta\n#FFFF00 // yellow\n#000000 // black\n#FFFFFF // white`,
     },
     {
         label: "RGB Levels (3)",
         value: buildRgbLevelPalette(RGB_THREE_LEVELS),
-    },
-    {
-        label: "RGB Levels (4)",
-        value: buildRgbLevelPalette(RGB_FOUR_LEVELS),
     },
     {
         label: "Pastels",
@@ -1143,7 +1135,6 @@ const COLOR_SPACE_AXIS_LABELS: Partial<Record<ColorInterpolationMode, [string, s
     hsl: ["Hue X", "Hue Y", "Saturation"],
     hsv: ["Hue X", "Hue Y", "Value"],
     hwb: ["Hue X", "Hue Y", "Whiteness"],
-    ryb: ["Hue X", "Hue Y", "Value"],
     "luma-rgb": ["Luma", "Axis 2", "Axis 3"],
     "luma-lab": ["Luma", "Axis 2", "Axis 3"],
     "luma-oklab": ["Luma", "Axis 2", "Axis 3"],

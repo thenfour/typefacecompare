@@ -86,7 +86,6 @@ function renderGradientControls({
         { value: "hsl", label: "HSL" },
         { value: "hsv", label: "HSV" },
         { value: "hwb", label: "HWB" },
-        { value: "ryb", label: "RYB" },
         { value: "cmy", label: "CMY" },
         { value: "cmyk", label: "CMYK" },
         { value: "luma-rgb", label: "Luma (RGB)" },

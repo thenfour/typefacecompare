@@ -157,11 +157,6 @@ function vectorToTuple(vector: ReturnType<typeof convertHexToVector>, mode: Colo
             const [hx, hy] = hueToCartesian(hwb.h);
             return [hx, hy, hwb.w, hwb.b];
         }
-        case "ryb": {
-            const ryb = vector as { h: number; s: number; v: number };
-            const [hx, hy] = hueToCartesian(ryb.h);
-            return [hx, hy, ryb.s, ryb.v];
-        }
         case "luma-rgb":
         case "luma-lab":
         case "luma-oklab": {

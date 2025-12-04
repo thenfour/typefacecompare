@@ -31,8 +31,6 @@ function vectorToAxes(vector: any, mode: ColorInterpolationMode): AxisTriple {
             return [wrapHueNormalized(vector.h), clamp01(vector.s), clamp01(vector.v)];
         case "hwb":
             return [wrapHueNormalized(vector.h), clamp01(vector.w), clamp01(vector.b)];
-        case "ryb":
-            return [wrapHueNormalized(vector.h), clamp01(vector.s), clamp01(vector.v)];
         case "cmy":
             return [clamp01(vector.c), clamp01(vector.m), clamp01(vector.y)];
         case "cmyk":
@@ -75,11 +73,6 @@ function assignAxesToVector(vector: any, mode: ColorInterpolationMode, axes: Axi
             vector.h = unwrapHueNormalized(axes[0]);
             vector.w = clamp01(axes[1]);
             vector.b = clamp01(axes[2]);
-            break;
-        case "ryb":
-            vector.h = unwrapHueNormalized(axes[0]);
-            vector.s = clamp01(axes[1]);
-            vector.v = clamp01(axes[2]);
             break;
         case "cmy":
             vector.c = clamp01(axes[0]);
