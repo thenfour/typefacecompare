@@ -1,6 +1,6 @@
 import { useEffect, type MutableRefObject } from "react";
 import type { ColorInterpolationMode } from "@/utils/colorSpaces";
-import { interpolateGradientColor } from "@/utils/colorSpaces";
+import { sampleGradientField, type GradientField } from "@/utils/gradientField";
 import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
 import {
     applyDitherJitter,
@@ -78,8 +78,7 @@ export interface UseDitherRendererOptions {
     width: number;
     height: number;
     sourceType: SourceType;
-    derivedCornerHexes: string[];
-    interpolationMode: ColorInterpolationMode;
+    gradientField: GradientField;
     sourceImageData: ImageData | null;
     sourceGamma: number;
     ditherType: DitherType;
@@ -112,8 +111,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         width,
         height,
         sourceType,
-        derivedCornerHexes,
-        interpolationMode,
+        gradientField,
         sourceImageData,
         sourceGamma,
         ditherType,
@@ -158,7 +156,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
 
         const requiresGradientData = sourceType === "gradient";
         const requiresImageData = sourceType === "image";
-        if ((requiresGradientData && derivedCornerHexes.length < 4) || (requiresImageData && !sourceImageData)) {
+        if ((requiresGradientData && gradientField.points.length === 0) || (requiresImageData && !sourceImageData)) {
             previewStages.forEach((stage) => {
                 const canvas = stage.ref.current;
                 if (!canvas) return;
@@ -214,8 +212,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 const u = width === 1 ? 0 : x / (width - 1);
                 const base = sampleSourceColor(
                     sourceType,
-                    derivedCornerHexes,
-                    interpolationMode,
+                    gradientField,
                     u,
                     v,
                     x,
@@ -402,8 +399,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         width,
         height,
         sourceType,
-        derivedCornerHexes,
-        interpolationMode,
+        gradientField,
         sourceImageData,
         sourceGamma,
         ditherType,
@@ -446,8 +442,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
 
 function sampleSourceColor(
     sourceType: SourceType,
-    cornerHexes: string[],
-    interpolationMode: ColorInterpolationMode,
+    gradientField: GradientField,
     u: number,
     v: number,
     x: number,
@@ -465,7 +460,7 @@ function sampleSourceColor(
             b: data[offset + 2] ?? 0,
         };
     }
-    return interpolateGradientColor(cornerHexes, u, v, interpolationMode);
+    return sampleGradientField(gradientField, u, v);
 }
 
 function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: number; g: number; b: number }) {

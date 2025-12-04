@@ -1,6 +1,8 @@
 import {
     PaletteColorToken,
+    PaletteCoordinate,
     PaletteIgnoredToken,
+    PaletteParseError,
     PaletteParseResult,
     PaletteRow,
     PaletteSeparatorToken,
@@ -16,6 +18,7 @@ interface LineChunk {
 }
 
 const COLOR_LITERAL = /^#?(?:[0-9a-fA-F]{1}|[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const COORDINATE_LITERAL = /^\(\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*,\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+))\s*\)(?:\s+(.*))?$/;
 const SEPARATOR_LITERAL = /^-{5,}$/;
 
 export function parsePaletteDefinition(text: string): PaletteParseResult {
@@ -24,6 +27,7 @@ export function parsePaletteDefinition(text: string): PaletteParseResult {
 
     const rows: PaletteRow[] = [[]];
     const swatches: PaletteSwatchDefinition[] = [];
+    const errors: PaletteParseError[] = [];
     let rowIndex = 0;
     let ordinal = 0;
 
@@ -39,6 +43,7 @@ export function parsePaletteDefinition(text: string): PaletteParseResult {
 
         const row = rows[rowIndex] ?? (rows[rowIndex] = []);
         const columnIndex = row.length;
+        const position = normalizeCoordinate(token, errors);
         const swatch: PaletteSwatchDefinition = {
             tokenId: token.id,
             hex: token.normalizedHex,
@@ -48,6 +53,7 @@ export function parsePaletteDefinition(text: string): PaletteParseResult {
             ordinal,
             lineIndex: token.lineIndex,
             line: token.line,
+            position,
         };
 
         row.push(swatch);
@@ -60,7 +66,7 @@ export function parsePaletteDefinition(text: string): PaletteParseResult {
         tokens,
         rows: rows.filter((row) => row.length > 0),
         swatches,
-        errors: [],
+        errors,
     } satisfies PaletteParseResult;
 }
 
@@ -120,6 +126,7 @@ function toToken(chunk: LineChunk): PaletteToken {
         if (COLOR_LITERAL.test(candidate)) {
             const normalizedHex = normalizeHex(candidate);
             if (normalizedHex) {
+                const { coordinate, commentText } = extractCoordinateFromRemainder(colorMatch[2]);
                 return {
                     id: tokenId(chunk),
                     kind: "color",
@@ -127,9 +134,10 @@ function toToken(chunk: LineChunk): PaletteToken {
                     line: chunk.line,
                     lineIndex: chunk.lineIndex,
                     colorText: candidate,
-                    commentText: colorMatch[2]?.trim() ?? "",
+                    commentText,
                     normalizedHex,
                     leadingWhitespace,
+                    coordinate,
                 } satisfies PaletteColorToken;
             }
         }
@@ -172,3 +180,49 @@ function normalizeHex(input: string): string | null {
 
     return `#${hex.toUpperCase()}`;
 }
+
+function extractCoordinateFromRemainder(remainder?: string): { coordinate: PaletteCoordinate | null; commentText: string } {
+    if (!remainder) {
+        return { coordinate: null, commentText: "" };
+    }
+    const trimmed = remainder.trim();
+    if (!trimmed.startsWith("(")) {
+        return { coordinate: null, commentText: trimmed };
+    }
+    const coordinateMatch = trimmed.match(COORDINATE_LITERAL);
+    if (!coordinateMatch) {
+        return { coordinate: null, commentText: trimmed };
+    }
+    const parsedX = Number(coordinateMatch[1]);
+    const parsedY = Number(coordinateMatch[2]);
+    const coordinate: PaletteCoordinate | null = Number.isFinite(parsedX) && Number.isFinite(parsedY)
+        ? { x: parsedX, y: parsedY }
+        : null;
+    const commentText = coordinateMatch[3]?.trim() ?? "";
+    return { coordinate, commentText };
+}
+
+function normalizeCoordinate(token: PaletteColorToken, errors: PaletteParseError[]): PaletteCoordinate | null {
+    if (!token.coordinate) {
+        return null;
+    }
+    const { x, y } = token.coordinate;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        errors.push({
+            lineIndex: token.lineIndex,
+            message: "Invalid gradient coordinate. Use (x,y) with numeric values between 0 and 1.",
+        });
+        return null;
+    }
+    const clampedX = clamp01(x);
+    const clampedY = clamp01(y);
+    if (clampedX !== x || clampedY !== y) {
+        errors.push({
+            lineIndex: token.lineIndex,
+            message: "Gradient coordinates must be between 0 and 1; values were clamped.",
+        });
+    }
+    return { x: clampedX, y: clampedY } satisfies PaletteCoordinate;
+}
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));

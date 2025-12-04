@@ -32,7 +32,7 @@ interface OklabVector { L: number; a: number; b: number; }
 interface OklchVector { L: number; C: number; h: number; }
 interface LumaVector { l: number; }
 
-type ColorVector =
+export type ColorVector =
     | RGB
     | HSLVector
     | HSVVector
@@ -81,6 +81,33 @@ export function interpolateGradientColor(corners: string[], u: number, v: number
 
     const rgbUnit = vectorToRgb(blended, mode);
     return rgbUnitTo255(rgbUnit);
+}
+
+export function mixColorVectorsWeighted(vectors: ColorVector[], weights: number[], mode: ColorInterpolationMode): ColorVector {
+    if (vectors.length === 0) {
+        throw new Error("Cannot mix zero color vectors");
+    }
+    let accumulator: ColorVector | null = null;
+    let accumulatedWeight = 0;
+    for (let index = 0; index < vectors.length; index++) {
+        const weight = Math.max(0, weights[index] ?? 0);
+        if (!Number.isFinite(weight) || weight <= 0) {
+            continue;
+        }
+        if (!accumulator) {
+            accumulator = vectors[index];
+            accumulatedWeight = weight;
+            continue;
+        }
+        const nextTotal = accumulatedWeight + weight;
+        if (nextTotal <= 0) {
+            continue;
+        }
+        const t = weight / nextTotal;
+        accumulator = mixVectors(accumulator, vectors[index], t, mode);
+        accumulatedWeight = nextTotal;
+    }
+    return accumulator ?? vectors[0];
 }
 
 function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterpolationMode): ColorVector {

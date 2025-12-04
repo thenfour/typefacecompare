@@ -15,6 +15,11 @@ export interface PaletteTokenBase {
     line: string;
 }
 
+export interface PaletteCoordinate {
+    x: number;
+    y: number;
+}
+
 export interface PaletteColorToken extends PaletteTokenBase {
     kind: "color";
     /** The substring that matched the color literal (e.g., "#0", "000000"). */
@@ -25,6 +30,8 @@ export interface PaletteColorToken extends PaletteTokenBase {
     normalizedHex: string;
     /** Amount of whitespace that preceded the color literal on the line. */
     leadingWhitespace: string;
+    /** Optional normalized coordinate literal parsed from the line. */
+    coordinate: PaletteCoordinate | null;
 }
 
 export interface PaletteSeparatorToken extends PaletteTokenBase {
@@ -47,6 +54,7 @@ export interface PaletteSwatchDefinition {
     ordinal: number;
     lineIndex: number;
     line: string;
+    position: PaletteCoordinate | null;
 }
 
 export type PaletteRow = PaletteSwatchDefinition[];

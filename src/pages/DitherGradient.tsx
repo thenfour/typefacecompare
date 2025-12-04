@@ -1,10 +1,9 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
-import { ColorInterpolationMode, interpolateGradientColor, rgbUnitTo255 } from "../utils/colorSpaces";
+import { ColorInterpolationMode, rgbUnitTo255 } from "../utils/colorSpaces";
 import { hexToRgb } from "../utils/color";
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
-import type { PaletteSwatchDefinition } from "../types/paletteDefinition";
 import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { fetchDitherSourceExamples, type ExampleImage } from "@/data/ditherSourceExamples";
@@ -27,6 +26,12 @@ import { Tooltip } from "@/components/Tooltip";
 import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
 import { extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
+import {
+    buildGradientField,
+    resolveGradientControlPoints,
+    sampleGradientField,
+    type GradientField,
+} from "@/utils/gradientField";
 import {
     blendRotationMatrix,
     determinantMatrix3,
@@ -134,7 +139,6 @@ type GamutStrengthSnapshot = {
 export default function DitherGradientPage() {
     const [gradientPaletteText, setGradientPaletteText] = useState<string>(PALETTE_PRESETS[0].value);
     const [reductionPaletteText, setReductionPaletteText] = useState<string>(PALETTE_PRESETS[1].value);
-    const [cornerAssignments] = useState<number[]>([0, 1, 2, 3]);
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.333);
@@ -242,6 +246,14 @@ export default function DitherGradientPage() {
     const paletteModulationCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
+    const gradientControlPoints = useMemo(
+        () => resolveGradientControlPoints(gradientSwatches),
+        [gradientSwatches]
+    );
+    const gradientField = useMemo(
+        () => buildGradientField(gradientControlPoints, interpolationMode),
+        [gradientControlPoints, interpolationMode]
+    );
 
     const parsedReductionPalette = useMemo(() => parsePaletteDefinition(reductionPaletteText), [reductionPaletteText]);
     const reductionSwatches = parsedReductionPalette.swatches;
@@ -258,8 +270,6 @@ export default function DitherGradientPage() {
         ? paletteNudgeStrength
         : 0;
     const paletteNudgeActive = effectivePaletteNudgeStrength > 0 && hasReductionPalette && reductionMode === "palette";
-
-    const derivedCornerHexes = useMemo(() => deriveCornerHexes(gradientSwatches, cornerAssignments), [gradientSwatches, cornerAssignments]);
     const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
         () =>
             reductionSwatches.map((swatch) => {
@@ -276,8 +286,7 @@ export default function DitherGradientPage() {
             sampleSourceScatterPoints({
                 sourceType,
                 sourceImageData,
-                derivedCornerHexes,
-                interpolationMode,
+                gradientField,
                 width,
                 height,
                 maxPoints: MAX_SCATTER_SOURCE_POINTS,
@@ -286,8 +295,7 @@ export default function DitherGradientPage() {
         [
             sourceType,
             sourceImageData,
-            derivedCornerHexes,
-            interpolationMode,
+            gradientField,
             width,
             height,
             distanceColorSpace,
@@ -509,8 +517,7 @@ export default function DitherGradientPage() {
         width,
         height,
         sourceType,
-        derivedCornerHexes,
-        interpolationMode,
+        gradientField,
         sourceImageData,
         sourceGamma: sourceAdjustmentsEnabled ? sourceGamma : 1,
         ditherType,
@@ -1046,32 +1053,10 @@ export default function DitherGradientPage() {
     );
 }
 
-/**
- * Resolves the four corner colors to hex strings.
- * Missing indices wrap through the available swatches so gradients still render with short palettes.
- */
-function deriveCornerHexes(swatches: PaletteSwatchDefinition[], requested: number[]) {
-    if (swatches.length === 0) {
-        return [] as string[];
-    }
-    const hexes: string[] = [];
-    for (let index = 0; index < 4; index++) {
-        const candidate = requested[index];
-        if (typeof candidate === "number" && swatches[candidate]) {
-            hexes.push(swatches[candidate].hex);
-        } else {
-            const fallback = swatches[index % swatches.length].hex;
-            hexes.push(fallback);
-        }
-    }
-    return hexes;
-}
-
 interface SourceScatterSampleOptions {
     sourceType: SourceType;
     sourceImageData: ImageData | null;
-    derivedCornerHexes: string[];
-    interpolationMode: ColorInterpolationMode;
+    gradientField: GradientField;
     width: number;
     height: number;
     maxPoints: number;
@@ -1079,12 +1064,12 @@ interface SourceScatterSampleOptions {
 }
 
 function sampleSourceScatterPoints(options: SourceScatterSampleOptions): ScatterPoint[] {
-    const { sourceType, sourceImageData, derivedCornerHexes, interpolationMode, width, height, maxPoints, colorSpace } = options;
+    const { sourceType, sourceImageData, gradientField, width, height, maxPoints, colorSpace } = options;
     if (sourceType === "image") {
         return sampleImageScatterPoints(sourceImageData, maxPoints, colorSpace);
     }
     if (sourceType === "gradient") {
-        return sampleGradientScatterPoints(derivedCornerHexes, interpolationMode, width, height, maxPoints, colorSpace);
+        return sampleGradientScatterPoints(gradientField, width, height, maxPoints, colorSpace);
     }
     return [];
 }
@@ -1114,14 +1099,13 @@ function sampleImageScatterPoints(imageData: ImageData | null, maxPoints: number
 }
 
 function sampleGradientScatterPoints(
-    cornerHexes: string[],
-    interpolationMode: ColorInterpolationMode,
+    field: GradientField,
     width: number,
     height: number,
     maxPoints: number,
     colorSpace: ColorInterpolationMode
 ): ScatterPoint[] {
-    if (cornerHexes.length < 4 || maxPoints <= 0 || width <= 0 || height <= 0) {
+    if (field.points.length === 0 || maxPoints <= 0 || width <= 0 || height <= 0) {
         return [];
     }
     const totalPixels = width * height;
@@ -1133,7 +1117,7 @@ function sampleGradientScatterPoints(
         const y = Math.floor(pixelIndex / width);
         const u = width === 1 ? 0 : x / (width - 1);
         const v = height === 1 ? 0 : y / (height - 1);
-        const color = interpolateGradientColor(cornerHexes, u, v, interpolationMode);
+        const color = sampleGradientField(field, u, v);
         result.push(buildScatterPointFromRgb(color, colorSpace));
     }
     return result;
