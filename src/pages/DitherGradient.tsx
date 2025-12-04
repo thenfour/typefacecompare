@@ -139,7 +139,8 @@ type GamutStrengthSnapshot = {
 export default function DitherGradientPage() {
     const [gradientPaletteText, setGradientPaletteText] = useState<string>(PALETTE_PRESETS[0].value);
     const [reductionPaletteText, setReductionPaletteText] = useState<string>(PALETTE_PRESETS[1].value);
-    const [gradientAutoPlacementMode, setGradientAutoPlacementMode] = useState<GradientAutoPlacementMode>("perimeter");
+    const [gradientAutoPlacementMode, setGradientAutoPlacementMode] = useState<GradientAutoPlacementMode>("grid");
+    const [gradientInterpolationCurve, setGradientInterpolationCurve] = useState(0.5);
     const [interpolationMode, setInterpolationMode] = useState<ColorInterpolationMode>("oklch");
     const [ditherType, setDitherType] = useState<DitherType>("bayer4");
     const [ditherStrength, setDitherStrength] = useState(0.333);
@@ -159,9 +160,9 @@ export default function DitherGradientPage() {
     const [ditherMaskStrength, setDitherMaskStrength] = useState(3);
     const [sourceGamma, setSourceGamma] = useState(1);
     const [paletteMaskEnabled, setPaletteMaskEnabled] = useState(true);
-    const [ditherErrorScale, setDitherErrorScale] = useState(35);
-    const [ditherErrorExponent, setDitherErrorExponent] = useState(1.2);
-    const [ditherAmbiguityExponent, setDitherAmbiguityExponent] = useState(1);
+    const [ditherErrorScale, setDitherErrorScale] = useState(5);
+    const [ditherErrorExponent, setDitherErrorExponent] = useState(0.1);
+    const [ditherAmbiguityExponent, setDitherAmbiguityExponent] = useState(0.1);
     const [ditherAmbiguityBias, setDitherAmbiguityBias] = useState(0.5);
     const [sourceAdjustmentsEnabled, setSourceAdjustmentsEnabled] = useState(true);
     const [gamutOverallStrength, setGamutOverallStrength] = useState(0.3);
@@ -252,8 +253,8 @@ export default function DitherGradientPage() {
         [gradientSwatches, gradientAutoPlacementMode]
     );
     const gradientField = useMemo(
-        () => buildGradientField(gradientControlPoints, interpolationMode),
-        [gradientControlPoints, interpolationMode]
+        () => buildGradientField(gradientControlPoints, interpolationMode, gradientInterpolationCurve),
+        [gradientControlPoints, interpolationMode, gradientInterpolationCurve]
     );
 
     const parsedReductionPalette = useMemo(() => parsePaletteDefinition(reductionPaletteText), [reductionPaletteText]);
@@ -601,6 +602,8 @@ export default function DitherGradientPage() {
                                     onInterpolationModeChange: setInterpolationMode,
                                     autoPlacementMode: gradientAutoPlacementMode,
                                     onAutoPlacementModeChange: setGradientAutoPlacementMode,
+                                    interpolationCurve: gradientInterpolationCurve,
+                                    onInterpolationCurveChange: setGradientInterpolationCurve,
                                 }}
                                 imageControls={{
                                     imageUrlInput,

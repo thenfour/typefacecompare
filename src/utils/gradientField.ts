@@ -40,6 +40,7 @@ export interface GradientField {
     points: GradientFieldPoint[];
     triangles: GradientTriangle[];
     edgeStrategy: EdgeStrategy | null;
+    curveAmount: number;
 }
 
 const DEFAULT_FALLBACK_POSITION: GradientPosition = { x: 0, y: 0 };
@@ -60,6 +61,7 @@ const IDW_POWER = 2;
 const BARYCENTRIC_TOLERANCE = 1e-4;
 const TRIANGLE_AREA_EPSILON = 1e-9;
 const EDGE_TOLERANCE = 1e-3;
+const CURVE_LINEAR_TOLERANCE = 1e-4;
 
 interface PerimeterNode {
     position: GradientPosition;
@@ -92,11 +94,15 @@ export function resolveGradientControlPoints(
         return {
             hex: swatch.hex,
             position: clonePosition(position),
-        } satisfies GradientControlPoint;
+        };
     });
 }
 
-export function buildGradientField(points: GradientControlPoint[], mode: ColorInterpolationMode): GradientField {
+export function buildGradientField(
+    points: GradientControlPoint[],
+    mode: ColorInterpolationMode,
+    curveAmount: number
+): GradientField {
     const fieldPoints = points.map((point) => ({
         position: clonePosition(point.position),
         vector: convertHexToVector(point.hex, mode),
@@ -108,6 +114,7 @@ export function buildGradientField(points: GradientControlPoint[], mode: ColorIn
         points: fieldPoints,
         triangles,
         edgeStrategy,
+        curveAmount: clamp01(curveAmount),
     };
 }
 
@@ -127,7 +134,8 @@ export function sampleGradientField(field: GradientField, u: number, v: number):
         const barycentricHit = findBarycentricHit(field, u, v);
         if (barycentricHit) {
             const vectors: ColorVector[] = barycentricHit.indices.map((index) => field.points[index].vector);
-            const blended = mixColorVectorsWeighted(vectors, barycentricHit.weights, field.mode);
+            const shapedWeights = shapeWeightArray(barycentricHit.weights, field.curveAmount);
+            const blended = mixColorVectorsWeighted(vectors, shapedWeights, field.mode);
             return vectorToRgb255(blended, field.mode);
         }
     }
@@ -153,7 +161,8 @@ function sampleByInverseDistance(field: GradientField, u: number, v: number): RG
         vectors.push(point.vector);
         weights.push(weight);
     }
-    const blendedVector = mixColorVectorsWeighted(vectors, weights, field.mode);
+    const shapedWeights = shapeWeightArray(weights, field.curveAmount);
+    const blendedVector = mixColorVectorsWeighted(vectors, shapedWeights, field.mode);
     return vectorToRgb255(blendedVector, field.mode);
 }
 
@@ -165,24 +174,24 @@ function sampleEdgeStrategy(
 ): RGBColor | null {
     switch (strategy.kind) {
         case "horizontal-1d": {
-            const vector = sampleAxisVector(strategy.points, "x", clamp01(u), field.mode);
+            const vector = sampleAxisVector(strategy.points, "x", clamp01(u), field.mode, field.curveAmount);
             return vectorToRgb255(vector, field.mode);
         }
         case "vertical-1d": {
-            const vector = sampleAxisVector(strategy.points, "y", clamp01(v), field.mode);
+            const vector = sampleAxisVector(strategy.points, "y", clamp01(v), field.mode, field.curveAmount);
             return vectorToRgb255(vector, field.mode);
         }
         case "horizontal-bilinear": {
-            const topVector = sampleAxisVector(strategy.topPoints, "x", clamp01(u), field.mode);
-            const bottomVector = sampleAxisVector(strategy.bottomPoints, "x", clamp01(u), field.mode);
-            const t = clamp01(v);
+            const topVector = sampleAxisVector(strategy.topPoints, "x", clamp01(u), field.mode, field.curveAmount);
+            const bottomVector = sampleAxisVector(strategy.bottomPoints, "x", clamp01(u), field.mode, field.curveAmount);
+            const t = applyScalarCurve(clamp01(v), field.curveAmount);
             const blended = mixColorVectorsWeighted([topVector, bottomVector], [1 - t, t], field.mode);
             return vectorToRgb255(blended, field.mode);
         }
         case "vertical-bilinear": {
-            const leftVector = sampleAxisVector(strategy.leftPoints, "y", clamp01(v), field.mode);
-            const rightVector = sampleAxisVector(strategy.rightPoints, "y", clamp01(v), field.mode);
-            const t = clamp01(u);
+            const leftVector = sampleAxisVector(strategy.leftPoints, "y", clamp01(v), field.mode, field.curveAmount);
+            const rightVector = sampleAxisVector(strategy.rightPoints, "y", clamp01(v), field.mode, field.curveAmount);
+            const t = applyScalarCurve(clamp01(u), field.curveAmount);
             const blended = mixColorVectorsWeighted([leftVector, rightVector], [1 - t, t], field.mode);
             return vectorToRgb255(blended, field.mode);
         }
@@ -195,7 +204,8 @@ function sampleAxisVector(
     points: GradientFieldPoint[],
     axis: "x" | "y",
     value: number,
-    mode: ColorInterpolationMode
+    mode: ColorInterpolationMode,
+    curveAmount: number
 ): ColorVector {
     if (points.length === 0) {
         throw new Error("Cannot sample axis vector with no points");
@@ -218,11 +228,16 @@ function sampleAxisVector(
     if (vectors.length === 0) {
         return points[0].vector;
     }
-    return mixColorVectorsWeighted(vectors, weights, mode);
+    const shapedWeights = shapeWeightArray(weights, curveAmount);
+    return mixColorVectorsWeighted(vectors, shapedWeights, mode);
 }
 
 function buildTriangles(points: GradientFieldPoint[]): GradientTriangle[] {
-    const delaunay = Delaunator.from(points, (point) => point.position.x, (point) => point.position.y);
+    const delaunay = Delaunator.from(
+        points,
+        (point: GradientFieldPoint) => point.position.x,
+        (point: GradientFieldPoint) => point.position.y
+    );
     const triangles: GradientTriangle[] = [];
     for (let index = 0; index < delaunay.triangles.length; index += 3) {
         const indices: [number, number, number] = [
@@ -323,6 +338,45 @@ function vectorToRgb255(vector: ColorVector, mode: ColorInterpolationMode): RGBC
     const rgbUnit = vectorToRgb(vector, mode);
     return rgbUnitTo255(rgbUnit);
 }
+
+function shapeWeightArray(weights: number[], curveAmount: number): number[] {
+    const normalized = normalizeWeights(weights);
+    if (!normalized.length || Math.abs(curveAmount - 0.5) <= CURVE_LINEAR_TOLERANCE) {
+        return normalized;
+    }
+    const shaped = normalized.map((value) => applyScalarCurve(value, curveAmount));
+    return normalizeWeights(shaped);
+}
+
+function applyScalarCurve(value: number, curveAmount: number): number {
+    const clamped = clamp01(value);
+    if (Math.abs(curveAmount - 0.5) <= CURVE_LINEAR_TOLERANCE) {
+        return clamped;
+    }
+    if (curveAmount < 0.5) {
+        const t = (0.5 - curveAmount) * 2; // 0 at midpoint, 1 at far left
+        const exponent = lerp(1, 0.15, t);
+        return Math.pow(clamped, exponent);
+    }
+    const t = (curveAmount - 0.5) * 2; // 0 at midpoint, 1 at far right
+    const exponent = lerp(1, 10, t);
+    return Math.pow(clamped, exponent);
+}
+
+function normalizeWeights(weights: number[]): number[] {
+    if (!weights.length) {
+        return [];
+    }
+    const clamped = weights.map((value) => (Number.isFinite(value) ? Math.max(0, value) : 0));
+    const sum = clamped.reduce((acc, value) => acc + value, 0);
+    if (sum <= 1e-6) {
+        const fallback = clamped.length > 0 ? 1 / clamped.length : 0;
+        return clamped.map(() => fallback);
+    }
+    return clamped.map((value) => value / sum);
+}
+
+const lerp = (start: number, end: number, t: number) => start + (end - start) * clamp01(t);
 
 function deriveEdgeStrategy(points: GradientFieldPoint[]): EdgeStrategy | null {
     if (!points.length) {

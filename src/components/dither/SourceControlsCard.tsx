@@ -24,6 +24,8 @@ interface GradientControlsProps {
     onInterpolationModeChange: (mode: ColorInterpolationMode) => void;
     autoPlacementMode: GradientAutoPlacementMode;
     onAutoPlacementModeChange: (mode: GradientAutoPlacementMode) => void;
+    interpolationCurve: number;
+    onInterpolationCurveChange: (value: number) => void;
 }
 
 interface SourceControlsCardProps {
@@ -85,6 +87,8 @@ function renderGradientControls({
     onInterpolationModeChange,
     autoPlacementMode,
     onAutoPlacementModeChange,
+    interpolationCurve,
+    onInterpolationCurveChange,
 }: GradientControlsProps) {
     const interpolationOptions: { value: ColorInterpolationMode; label: string }[] = [
         { value: "rgb", label: "RGB" },
@@ -129,6 +133,20 @@ function renderGradientControls({
                     ariaLabel="Auto placement strategy"
                 />
             </div>
+            <label className="source-card__slider">
+                <div>
+                    <span>Interpolation Curve</span>
+                    <small>({(interpolationCurve * 100).toFixed(0)}%)</small>
+                </div>
+                <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={interpolationCurve}
+                    onChange={(event) => onInterpolationCurveChange(event.target.valueAsNumber)}
+                />
+            </label>
             <PalettePresetButtons presets={presets} onSelect={onSelectPreset} />
             <LospecPaletteImporter targetLabel={lospecTargetLabel} onApplyPalette={onChangeValue} />
             <div className="source-card__gradient-editor">
