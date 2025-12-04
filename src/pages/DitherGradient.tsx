@@ -158,12 +158,12 @@ export default function DitherGradientPage() {
     const [width, setWidth] = useState(160);
     const [height, setHeight] = useState(160);
     const [previewScale, setPreviewScale] = useState(2);
-    const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(5);
-    const [ditherMaskStrength, setDitherMaskStrength] = useState(2);
+    const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(4);
+    const [ditherMaskStrength, setDitherMaskStrength] = useState(3);
     const [sourceAdjustmentsEnabled, setSourceAdjustmentsEnabled] = useState(true);
     const [gamutOverallStrength, setGamutOverallStrength] = useState(0.3);
     const [gamutTranslationStrength, setGamutTranslationStrength] = useState(1);
-    const [gamutRotationStrength, setGamutRotationStrength] = useState(0.1);
+    const [gamutRotationStrength, setGamutRotationStrength] = useState(0.0);
     const [gamutScaleStrength, setGamutScaleStrength] = useState<AxisTriple>([1, 1, 1]);
     const [gamutFitEnabled, setGamutFitEnabled] = useState(true);
     const [savedGamutStrengths, setSavedGamutStrengths] = useState<GamutStrengthSnapshot>(() => ({
@@ -173,7 +173,7 @@ export default function DitherGradientPage() {
         scale: [...gamutScaleStrength] as AxisTriple,
     }));
     const [paletteNudgeStrength, setPaletteNudgeStrength] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH);
-    const [paletteNudgeEnabled, setPaletteNudgeEnabled] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH > 0);
+    const [paletteNudgeEnabled, setPaletteNudgeEnabled] = useState(false);
     const [savedPaletteNudgeStrength, setSavedPaletteNudgeStrength] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH);
     const [paletteMagnetRadiusDir, setPaletteMagnetRadiusDir] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.radiusDir);
     const [paletteMagnetAmbiguityPower, setPaletteMagnetAmbiguityPower] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kAmb);
