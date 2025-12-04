@@ -81,6 +81,7 @@ export interface UseDitherRendererOptions {
     derivedCornerHexes: string[];
     interpolationMode: ColorInterpolationMode;
     sourceImageData: ImageData | null;
+    sourceGamma: number;
     ditherType: DitherType;
     ditherStrength: number;
     ditherSeed: number;
@@ -114,6 +115,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         derivedCornerHexes,
         interpolationMode,
         sourceImageData,
+        sourceGamma,
         ditherType,
         ditherStrength,
         ditherSeed,
@@ -248,6 +250,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
 
         const shouldApplyGamut = Boolean(gamutTransform && gamutTransform.isActive);
         const shouldApplyPaletteNudge = paletteNudgeStrength > 0 && hasPaletteReduction;
+        const shouldApplyGamma = Math.abs(sourceGamma - 1) > 0.001 && sourceAdjustmentsActive;
         for (let y = 0; y < height; y++) {
             for (let x = 0; x < width; x++) {
                 const pixelIndex = y * width + x;
@@ -257,10 +260,13 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     g: baseColorBuffer[baseOffset + 1],
                     b: baseColorBuffer[baseOffset + 2],
                 };
-                const gamutAdjustedColor = shouldApplyGamut && gamutTransform
-                    ? applyGamutTransformToColor(base, gamutTransform, distanceColorSpace)
+                const gammaAdjustedColor = shouldApplyGamma
+                    ? applyGammaCorrection(base, sourceGamma)
                     : base;
-                const pipelineSourceBase = shouldApplyGamut ? gamutAdjustedColor : base;
+                const gamutAdjustedColor = shouldApplyGamut && gamutTransform
+                    ? applyGamutTransformToColor(gammaAdjustedColor, gamutTransform, distanceColorSpace)
+                    : gammaAdjustedColor;
+                const pipelineSourceBase = shouldApplyGamut ? gamutAdjustedColor : gammaAdjustedColor;
                 const pipelineSource = shouldApplyPaletteNudge
                     ? blendColorTowardPalette(
                         pipelineSourceBase,
@@ -399,6 +405,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         derivedCornerHexes,
         interpolationMode,
         sourceImageData,
+        sourceGamma,
         ditherType,
         ditherStrength,
         ditherSeed,
@@ -544,6 +551,22 @@ function evaluatePaletteMetrics(
 }
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
+function applyGammaCorrection(color: { r: number; g: number; b: number }, gamma: number) {
+    if (!Number.isFinite(gamma) || Math.abs(gamma - 1) < 0.001) {
+        return color;
+    }
+    const exponent = Math.max(0.05, Math.min(5, gamma));
+    const remapChannel = (channel: number) => {
+        const normalized = clamp01(channel / 255);
+        return Math.round(Math.pow(normalized, exponent) * 255);
+    };
+    return clampRgb255({
+        r: remapChannel(color.r),
+        g: remapChannel(color.g),
+        b: remapChannel(color.b),
+    });
+}
 
 function writeMetricToImageData(
     values: Float32Array,

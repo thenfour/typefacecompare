@@ -152,6 +152,7 @@ export default function DitherGradientPage() {
     const [previewScale, setPreviewScale] = useState(2);
     const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(4);
     const [ditherMaskStrength, setDitherMaskStrength] = useState(3);
+    const [sourceGamma, setSourceGamma] = useState(1);
     const [paletteMaskEnabled, setPaletteMaskEnabled] = useState(true);
     const [ditherErrorScale, setDitherErrorScale] = useState(35);
     const [ditherErrorExponent, setDitherErrorExponent] = useState(1.2);
@@ -383,8 +384,10 @@ export default function DitherGradientPage() {
         reductionPaletteEntries,
         paletteMagnetParams,
     ]);
+    const gammaControlsDisabled = !sourceAdjustmentsEnabled;
+    const gammaActive = sourceAdjustmentsEnabled && Math.abs(sourceGamma - 1) > 0.01;
     const sourceAdjustmentsActive = Boolean(
-        (activeGamutTransform && activeGamutTransform.isActive) || paletteNudgeActive
+        (activeGamutTransform && activeGamutTransform.isActive) || paletteNudgeActive || gammaActive
     );
     const gamutPreviewAvailable = sourceAdjustmentsActive;
     const gamutControlsDisabled = !sourceAxisStats || !paletteAxisStats || !sourceAdjustmentsEnabled;
@@ -509,6 +512,7 @@ export default function DitherGradientPage() {
         derivedCornerHexes,
         interpolationMode,
         sourceImageData,
+        sourceGamma: sourceAdjustmentsEnabled ? sourceGamma : 1,
         ditherType,
         ditherStrength,
         ditherSeed,
@@ -775,6 +779,24 @@ export default function DitherGradientPage() {
                                                 </div>
                                             </>
                                         )}
+                                    </div>
+                                    <div className="gamma-correction-controls">
+                                        <h4>Gamma Correction</h4>
+                                        <label>
+                                            Gamma (γ: {sourceGamma.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0.2}
+                                                max={3}
+                                                step={0.05}
+                                                value={sourceGamma}
+                                                onChange={(event) => setSourceGamma(event.target.valueAsNumber)}
+                                                disabled={gammaControlsDisabled}
+                                            />
+                                        </label>
+                                        <p className="dither-gradient-note">
+                                            Lower values brighten, higher values darken before other adjustments.
+                                        </p>
                                     </div>
                                     <div className="dither-mask-controls">
                                         <h4>Dither Masking</h4>
