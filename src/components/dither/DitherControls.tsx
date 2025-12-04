@@ -42,16 +42,13 @@ export function DitherControls({
 }: DitherControlsProps) {
     return (
         <>
-            <label>
-                Dither Pattern
-                <select value={ditherType} onChange={(event) => onDitherTypeChange(event.target.value as DitherType)}>
-                    {DITHER_TYPE_ORDER.map((type) => (
-                        <option value={type} key={type}>
-                            {DITHER_LABELS[type]}
-                        </option>
-                    ))}
-                </select>
-            </label>
+            <select value={ditherType} onChange={(event) => onDitherTypeChange(event.target.value as DitherType)}>
+                {DITHER_TYPE_ORDER.map((type) => (
+                    <option value={type} key={type}>
+                        {DITHER_LABELS[type]}
+                    </option>
+                ))}
+            </select>
             <label>
                 Dither Strength ({ditherStrength.toFixed(2)})
                 <input

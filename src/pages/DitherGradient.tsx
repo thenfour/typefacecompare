@@ -48,6 +48,7 @@ import {
     isErrorDiffusionDither,
     usesSeededDither,
 } from "../utils/dithering";
+import { MarkdownFile } from "@/components/MarkdownFile";
 const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
 const MAX_SCATTER_SOURCE_POINTS = 4000;
 const DEFAULT_PALETTE_NUDGE_STRENGTH = 0.1;
@@ -602,16 +603,15 @@ export default function DitherGradientPage() {
                         </header>
                         <div className="controls-panel__fields">
                             <div className="gamut-fit-controls">
-                                <h4>Gamut Fit</h4>
-                                <label className="gamut-fit-toggle">
+                                <h4>
+                                    Gamut Fit
                                     <input
                                         type="checkbox"
                                         checked={gamutFitEnabled}
                                         onChange={(event) => handleGamutFitToggle(event.target.checked)}
                                         disabled={gamutControlsDisabled}
                                     />
-                                    Enable Gamut Fit
-                                </label>
+                                </h4>
                                 <label>
                                     Overall Strength ({Math.round(gamutOverallStrength * 100)}%)
                                     <input
@@ -666,75 +666,74 @@ export default function DitherGradientPage() {
                                 </div>
                             </div>
                             <div className="palette-nudge-controls">
-                                <h4>Palette Nudge</h4>
-                                <label className="palette-nudge-toggle">
+                                <h4>
+                                    Palette Nudge
                                     <input
                                         type="checkbox"
                                         checked={paletteNudgeEnabled}
                                         onChange={(event) => handlePaletteNudgeToggle(event.target.checked)}
                                         disabled={paletteNudgeToggleDisabled}
                                     />
-                                    Enable Palette Nudge
-                                </label>
-                                <label>
-                                    Strength ({Math.round(paletteNudgeStrength * 100)}%)
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        value={paletteNudgeStrength}
-                                        onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
-                                        disabled={paletteNudgeControlsDisabled}
-                                    />
-                                </label>
-                                <div className="palette-nudge-controls__grid">
-                                    <Tooltip title="How far to look for palette neighbors when establishing a pull direction. Bigger values blend more swatches; smaller values stay laser-focused on the nearest entries.">
-                                        <label>
-                                            Direction Radius ({paletteMagnetRadiusDir.toFixed(2)})
-                                            <input
-                                                type="range"
-                                                min={0.05}
-                                                max={1}
-                                                step={0.01}
-                                                value={paletteMagnetRadiusDir}
-                                                onChange={(event) => setPaletteMagnetRadiusDir(event.target.valueAsNumber)}
-                                                disabled={paletteNudgeControlsDisabled}
-                                            />
-                                        </label>
-                                    </Tooltip>
-                                    <Tooltip title="Boosts pixels that sit between multiple palette colors. Higher values wait for truly ambiguous colors; lower values tug even when the best and second-best colors are far apart.">
-                                        <label>
-                                            Ambiguity Curve ({paletteMagnetAmbiguityPower.toFixed(2)})
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={4}
-                                                step={0.05}
-                                                value={paletteMagnetAmbiguityPower}
-                                                onChange={(event) => setPaletteMagnetAmbiguityPower(event.target.valueAsNumber)}
-                                                disabled={paletteNudgeControlsDisabled}
-                                            />
-                                        </label>
-                                    </Tooltip>
-                                    <Tooltip title="Maximum number of nearby palette entries that contribute to the pull direction. Increase to average more neighbors; decrease to favor only the very closest colors.">
-                                        <label>
-                                            Nearest Colors ({paletteMagnetNearestCount})
-                                            <input
-                                                type="range"
-                                                min={1}
-                                                max={6}
-                                                step={1}
-                                                value={paletteMagnetNearestCount}
-                                                onChange={(event) => setPaletteMagnetNearestCount(event.target.valueAsNumber)}
-                                                disabled={paletteNudgeControlsDisabled}
-                                            />
-                                        </label>
-                                    </Tooltip>
-                                </div>
-                                <p className="dither-gradient-note">
-                                    Pulls source pixels toward their nearest palette entry before dithering, helping them resist harsh palette jumps.
-                                </p>
+
+                                </h4>
+                                {!paletteNudgeControlsDisabled && (<>
+                                    <label>
+                                        Strength ({Math.round(paletteNudgeStrength * 100)}%)
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={1}
+                                            step={0.01}
+                                            value={paletteNudgeStrength}
+                                            onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
+                                            disabled={paletteNudgeControlsDisabled}
+                                        />
+                                    </label>
+                                    <div className="palette-nudge-controls__grid">
+                                        <Tooltip title="How far to look for palette neighbors when establishing a pull direction. Bigger values blend more swatches; smaller values stay laser-focused on the nearest entries.">
+                                            <label>
+                                                Direction Radius ({paletteMagnetRadiusDir.toFixed(2)})
+                                                <input
+                                                    type="range"
+                                                    min={0.05}
+                                                    max={1}
+                                                    step={0.01}
+                                                    value={paletteMagnetRadiusDir}
+                                                    onChange={(event) => setPaletteMagnetRadiusDir(event.target.valueAsNumber)}
+                                                    disabled={paletteNudgeControlsDisabled}
+                                                />
+                                            </label>
+                                        </Tooltip>
+                                        <Tooltip title="Boosts pixels that sit between multiple palette colors. Higher values wait for truly ambiguous colors; lower values tug even when the best and second-best colors are far apart.">
+                                            <label>
+                                                Ambiguity Curve ({paletteMagnetAmbiguityPower.toFixed(2)})
+                                                <input
+                                                    type="range"
+                                                    min={0}
+                                                    max={4}
+                                                    step={0.05}
+                                                    value={paletteMagnetAmbiguityPower}
+                                                    onChange={(event) => setPaletteMagnetAmbiguityPower(event.target.valueAsNumber)}
+                                                    disabled={paletteNudgeControlsDisabled}
+                                                />
+                                            </label>
+                                        </Tooltip>
+                                        <Tooltip title="Maximum number of nearby palette entries that contribute to the pull direction. Increase to average more neighbors; decrease to favor only the very closest colors.">
+                                            <label>
+                                                Nearest Colors ({paletteMagnetNearestCount})
+                                                <input
+                                                    type="range"
+                                                    min={1}
+                                                    max={6}
+                                                    step={1}
+                                                    value={paletteMagnetNearestCount}
+                                                    onChange={(event) => setPaletteMagnetNearestCount(event.target.valueAsNumber)}
+                                                    disabled={paletteNudgeControlsDisabled}
+                                                />
+                                            </label>
+                                        </Tooltip>
+                                    </div>
+                                </>)}
                             </div>
                             <div className="dither-mask-controls">
                                 <h4>Dither Masking</h4>
@@ -773,17 +772,17 @@ export default function DitherGradientPage() {
                         <div className="controls-section-grid">
                             <div className="controls-panel controls-panel--wide">
                                 <div className="controls-panel__header">
-                                    <h3>Dither</h3>
-                                </div>
-                                <div className="controls-panel__fields">
-                                    <label className="dither-enable-toggle">
+                                    <h3>
+                                        Dither
                                         <input
                                             type="checkbox"
                                             checked={ditheringEnabled}
                                             onChange={(event) => handleDitheringToggle(event.target.checked)}
                                         />
-                                        Enable Dithering
-                                    </label>
+
+                                    </h3>
+                                </div>
+                                <div className="controls-panel__fields">
                                     <DitherControls
                                         ditherType={ditherType}
                                         onDitherTypeChange={setDitherType}
@@ -892,6 +891,10 @@ export default function DitherGradientPage() {
                         <p className="dither-gradient-note">
                             Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} samples are plotted in the current reduction color space ({distanceColorSpace.toUpperCase()}).
                         </p>
+                    </section>
+
+                    <section>
+                        <MarkdownFile path="/docs/dithering.md" />
                     </section>
                 </div>
             </main>

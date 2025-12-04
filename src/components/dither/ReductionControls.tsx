@@ -22,7 +22,6 @@ export function ReductionControls({
     return (
         <>
             <div>
-                <span style={{ fontSize: 12, color: "#555" }}>Palette Reduction</span>
                 <OptionButtonGroup
                     value={reductionMode}
                     onChange={onReductionModeChange}
@@ -36,7 +35,7 @@ export function ReductionControls({
             {reductionMode === "palette" && (
                 <>
                     <div>
-                        <span style={{ fontSize: 12, color: "#555" }}>Palette Distance Space</span>
+                        <span style={{ fontSize: 12, color: "#555" }}>Color Distance Space</span>
                         <OptionButtonGroup
                             value={distanceColorSpace}
                             onChange={onDistanceColorSpaceChange}
