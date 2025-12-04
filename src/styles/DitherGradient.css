@@ -1,5 +1,6 @@
 .dither-gradient-page {
     min-height: 100vh;
+    height: 100vh;
     background: #ffffff;
     color: #0a0a0a;
     padding: 32px;
@@ -7,6 +8,8 @@
     flex-direction: column;
     gap: 24px;
     font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .dither-gradient-header {
@@ -14,12 +17,50 @@
     flex-direction: column;
     gap: 8px;
     max-width: 880px;
+    flex-shrink: 0;
 }
 
-.dither-gradient-layout {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+.dither-gradient-body {
+    display: flex;
     gap: 24px;
+    flex: 1;
+    min-height: 0;
+}
+
+.dither-gradient-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow-y: auto;
+    padding-right: 12px;
+    min-height: 0;
+}
+
+.dither-gradient-column--previews {
+    padding-right: 0;
+    padding-left: 12px;
+}
+
+.dither-gradient-settings-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+}
+
+.dither-gradient-settings-grid>* {
+    flex: 1 1 min(480px, 100%);
+}
+
+.dither-gradient-preview-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    flex: 1;
+}
+
+.documentation-card {
+    flex: 0 0 auto;
 }
 
 .dither-gradient-card {
@@ -319,6 +360,17 @@
 @media (max-width: 720px) {
     .dither-gradient-page {
         padding: 20px;
+        height: auto;
+        overflow: visible;
+    }
+
+    .dither-gradient-body {
+        flex-direction: column;
+    }
+
+    .dither-gradient-column {
+        overflow: visible;
+        padding: 0;
     }
 }
 

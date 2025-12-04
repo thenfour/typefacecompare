@@ -528,374 +528,382 @@ export default function DitherGradientPage() {
                     <h1>Bilinear Dither Gradient Lab</h1>
                 </div>
 
-                <div className="dither-gradient-layout">
-                    <SourceControlsCard
-                        sourceType={sourceType}
-                        onSourceTypeChange={setSourceType}
-                        sourceSummary={sourceSummaryLabel}
-                        gradientControls={{
-                            swatchCountLabel: `${gradientSwatches.length} swatch${gradientSwatches.length === 1 ? "" : "es"}`,
-                            presets: PALETTE_PRESETS,
-                            onSelectPreset: setGradientPaletteText,
-                            lospecTargetLabel: "gradient palette",
-                            value: gradientPaletteText,
-                            onChangeValue: setGradientPaletteText,
-                            swatches: gradientSwatches,
-                            rows: parsedGradientPalette.rows,
-                            footer:
-                                gradientSwatches.length === 0 ? (
-                                    <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
-                                ) : null,
-                            interpolationMode,
-                            onInterpolationModeChange: setInterpolationMode,
-                        }}
-                        imageControls={{
-                            imageUrlInput,
-                            onImageUrlChange: setImageUrlInput,
-                            onImportImage: importImageFromUrl,
-                            exampleImages,
-                            exampleImagesLoading: areExamplesLoading,
-                            exampleImagesError,
-                            onImportExampleImage: importExampleImage,
-                            isImportingImage,
-                            imageScaleMode,
-                            onImageScaleModeChange: setImageScaleMode,
-                            imageSource,
-                            imageImportError,
-                            imageSourceReady,
-                        }}
-                    />
+                <div className="dither-gradient-body">
+                    <div className="dither-gradient-column dither-gradient-column--settings">
+                        <div className="dither-gradient-settings-grid">
+                            <SourceControlsCard
+                                sourceType={sourceType}
+                                onSourceTypeChange={setSourceType}
+                                sourceSummary={sourceSummaryLabel}
+                                gradientControls={{
+                                    swatchCountLabel: `${gradientSwatches.length} swatch${gradientSwatches.length === 1 ? "" : "es"}`,
+                                    presets: PALETTE_PRESETS,
+                                    onSelectPreset: setGradientPaletteText,
+                                    lospecTargetLabel: "gradient palette",
+                                    value: gradientPaletteText,
+                                    onChangeValue: setGradientPaletteText,
+                                    swatches: gradientSwatches,
+                                    rows: parsedGradientPalette.rows,
+                                    footer:
+                                        gradientSwatches.length === 0 ? (
+                                            <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
+                                        ) : null,
+                                    interpolationMode,
+                                    onInterpolationModeChange: setInterpolationMode,
+                                }}
+                                imageControls={{
+                                    imageUrlInput,
+                                    onImageUrlChange: setImageUrlInput,
+                                    onImportImage: importImageFromUrl,
+                                    exampleImages,
+                                    exampleImagesLoading: areExamplesLoading,
+                                    exampleImagesError,
+                                    onImportExampleImage: importExampleImage,
+                                    isImportingImage,
+                                    imageScaleMode,
+                                    onImageScaleModeChange: setImageScaleMode,
+                                    imageSource,
+                                    imageImportError,
+                                    imageSourceReady,
+                                }}
+                            />
 
-                    <PaletteEditorCard
-                        title="Reduction Palette"
-                        swatchCountLabel={`${reductionSwatches.length} swatch${reductionSwatches.length === 1 ? "" : "es"}`}
-                        presets={PALETTE_PRESETS}
-                        onSelectPreset={setReductionPaletteText}
-                        lospecTargetLabel="reduction palette"
-                        value={reductionPaletteText}
-                        onChangeValue={setReductionPaletteText}
-                        swatches={reductionSwatches}
-                        rows={parsedReductionPalette.rows}
-                        placeholder="Leave empty to disable palette reduction"
-                        footer={
-                            reductionMode === "palette" && reductionSwatches.length === 0 ? (
-                                <p className="dither-gradient-warning">
-                                    Provide at least one valid color before enabling palette reduction.
-                                </p>
-                            ) : null
-                        }
-                    />
+                            <PaletteEditorCard
+                                title="Reduction Palette"
+                                swatchCountLabel={`${reductionSwatches.length} swatch${reductionSwatches.length === 1 ? "" : "es"}`}
+                                presets={PALETTE_PRESETS}
+                                onSelectPreset={setReductionPaletteText}
+                                lospecTargetLabel="reduction palette"
+                                value={reductionPaletteText}
+                                onChangeValue={setReductionPaletteText}
+                                swatches={reductionSwatches}
+                                rows={parsedReductionPalette.rows}
+                                placeholder="Leave empty to disable palette reduction"
+                                footer={
+                                    reductionMode === "palette" && reductionSwatches.length === 0 ? (
+                                        <p className="dither-gradient-warning">
+                                            Provide at least one valid color before enabling palette reduction.
+                                        </p>
+                                    ) : null
+                                }
+                            />
 
-                    <section className="dither-gradient-card source-adjustments-card">
-                        <header>
-                            <div>
-                                <strong>Source Adjustments</strong>
-                                <span>Prepare the bitmap before dithering</span>
-                            </div>
-                            <label className="source-adjustments-toggle">
-                                <input
-                                    type="checkbox"
-                                    checked={sourceAdjustmentsEnabled}
-                                    onChange={(event) => handleSourceAdjustmentsToggle(event.target.checked)}
-                                />
-                                Enable Source Adjustments
-                            </label>
-                        </header>
-                        <div className="controls-panel__fields">
-                            <div className="gamut-fit-controls">
-                                <h4>
-                                    Gamut Fit
-                                    <input
-                                        type="checkbox"
-                                        checked={gamutFitEnabled}
-                                        onChange={(event) => handleGamutFitToggle(event.target.checked)}
-                                        disabled={gamutControlsDisabled}
-                                    />
-                                </h4>
-                                <label>
-                                    Overall Strength ({Math.round(gamutOverallStrength * 100)}%)
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        value={gamutOverallStrength}
-                                        onChange={(event) => handleGamutOverallStrengthChange(event.target.valueAsNumber)}
-                                        disabled={gamutSlidersDisabled}
-                                    />
-                                </label>
-                                <label>
-                                    Translation Strength ({Math.round(gamutTranslationStrength * 100)}%)
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        value={gamutTranslationStrength}
-                                        onChange={(event) => handleGamutTranslationChange(event.target.valueAsNumber)}
-                                        disabled={gamutSlidersDisabled}
-                                    />
-                                </label>
-                                <label>
-                                    Rotation Strength ({Math.round(gamutRotationStrength * 100)}%)
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={1}
-                                        step={0.01}
-                                        value={gamutRotationStrength}
-                                        onChange={(event) => handleGamutRotationChange(event.target.valueAsNumber)}
-                                        disabled={gamutSlidersDisabled}
-                                    />
-                                </label>
-                                <div className="gamut-fit-controls__scale-grid">
-                                    {scatterAxisLabels.map((axisLabel, axisIndex) => (
-                                        <label key={`${axisLabel}-${axisIndex}`}>
-                                            {axisLabel} Scaling ({Math.round(gamutScaleStrength[axisIndex] * 100)}%)
+                            <section className="dither-gradient-card source-adjustments-card">
+                                <header>
+                                    <div>
+                                        <strong>Source Adjustments</strong>
+                                        <span>Prepare the bitmap before dithering</span>
+                                    </div>
+                                    <label className="source-adjustments-toggle">
+                                        <input
+                                            type="checkbox"
+                                            checked={sourceAdjustmentsEnabled}
+                                            onChange={(event) => handleSourceAdjustmentsToggle(event.target.checked)}
+                                        />
+                                        Enable Source Adjustments
+                                    </label>
+                                </header>
+                                <div className="controls-panel__fields">
+                                    <div className="gamut-fit-controls">
+                                        <h4>
+                                            Gamut Fit
+                                            <input
+                                                type="checkbox"
+                                                checked={gamutFitEnabled}
+                                                onChange={(event) => handleGamutFitToggle(event.target.checked)}
+                                                disabled={gamutControlsDisabled}
+                                            />
+                                        </h4>
+                                        <label>
+                                            Overall Strength ({Math.round(gamutOverallStrength * 100)}%)
                                             <input
                                                 type="range"
                                                 min={0}
                                                 max={1}
                                                 step={0.01}
-                                                value={gamutScaleStrength[axisIndex]}
-                                                onChange={(event) => handleGamutScaleSliderChange(axisIndex, event.target.valueAsNumber)}
+                                                value={gamutOverallStrength}
+                                                onChange={(event) => handleGamutOverallStrengthChange(event.target.valueAsNumber)}
                                                 disabled={gamutSlidersDisabled}
                                             />
                                         </label>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="palette-nudge-controls">
-                                <h4>
-                                    Palette Nudge
-                                    <input
-                                        type="checkbox"
-                                        checked={paletteNudgeEnabled}
-                                        onChange={(event) => handlePaletteNudgeToggle(event.target.checked)}
-                                        disabled={paletteNudgeToggleDisabled}
-                                    />
-
-                                </h4>
-                                {!paletteNudgeControlsDisabled && (<>
-                                    <label>
-                                        Strength ({Math.round(paletteNudgeStrength * 100)}%)
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={1}
-                                            step={0.01}
-                                            value={paletteNudgeStrength}
-                                            onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
-                                            disabled={paletteNudgeControlsDisabled}
-                                        />
-                                    </label>
-                                    <div className="palette-nudge-controls__grid">
-                                        <Tooltip title="How far to look for palette neighbors when establishing a pull direction. Bigger values blend more swatches; smaller values stay laser-focused on the nearest entries.">
-                                            <label>
-                                                Direction Radius ({paletteMagnetRadiusDir.toFixed(2)})
-                                                <input
-                                                    type="range"
-                                                    min={0.05}
-                                                    max={1}
-                                                    step={0.01}
-                                                    value={paletteMagnetRadiusDir}
-                                                    onChange={(event) => setPaletteMagnetRadiusDir(event.target.valueAsNumber)}
-                                                    disabled={paletteNudgeControlsDisabled}
-                                                />
-                                            </label>
-                                        </Tooltip>
-                                        <Tooltip title="Boosts pixels that sit between multiple palette colors. Higher values wait for truly ambiguous colors; lower values tug even when the best and second-best colors are far apart.">
-                                            <label>
-                                                Ambiguity Curve ({paletteMagnetAmbiguityPower.toFixed(2)})
-                                                <input
-                                                    type="range"
-                                                    min={0}
-                                                    max={4}
-                                                    step={0.05}
-                                                    value={paletteMagnetAmbiguityPower}
-                                                    onChange={(event) => setPaletteMagnetAmbiguityPower(event.target.valueAsNumber)}
-                                                    disabled={paletteNudgeControlsDisabled}
-                                                />
-                                            </label>
-                                        </Tooltip>
-                                        <Tooltip title="Maximum number of nearby palette entries that contribute to the pull direction. Increase to average more neighbors; decrease to favor only the very closest colors.">
-                                            <label>
-                                                Nearest Colors ({paletteMagnetNearestCount})
-                                                <input
-                                                    type="range"
-                                                    min={1}
-                                                    max={6}
-                                                    step={1}
-                                                    value={paletteMagnetNearestCount}
-                                                    onChange={(event) => setPaletteMagnetNearestCount(event.target.valueAsNumber)}
-                                                    disabled={paletteNudgeControlsDisabled}
-                                                />
-                                            </label>
-                                        </Tooltip>
+                                        <label>
+                                            Translation Strength ({Math.round(gamutTranslationStrength * 100)}%)
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={1}
+                                                step={0.01}
+                                                value={gamutTranslationStrength}
+                                                onChange={(event) => handleGamutTranslationChange(event.target.valueAsNumber)}
+                                                disabled={gamutSlidersDisabled}
+                                            />
+                                        </label>
+                                        <label>
+                                            Rotation Strength ({Math.round(gamutRotationStrength * 100)}%)
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={1}
+                                                step={0.01}
+                                                value={gamutRotationStrength}
+                                                onChange={(event) => handleGamutRotationChange(event.target.valueAsNumber)}
+                                                disabled={gamutSlidersDisabled}
+                                            />
+                                        </label>
+                                        <div className="gamut-fit-controls__scale-grid">
+                                            {scatterAxisLabels.map((axisLabel, axisIndex) => (
+                                                <label key={`${axisLabel}-${axisIndex}`}>
+                                                    {axisLabel} Scaling ({Math.round(gamutScaleStrength[axisIndex] * 100)}%)
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={1}
+                                                        step={0.01}
+                                                        value={gamutScaleStrength[axisIndex]}
+                                                        onChange={(event) => handleGamutScaleSliderChange(axisIndex, event.target.valueAsNumber)}
+                                                        disabled={gamutSlidersDisabled}
+                                                    />
+                                                </label>
+                                            ))}
+                                        </div>
                                     </div>
-                                </>)}
-                            </div>
-                            <div className="dither-mask-controls">
-                                <h4>Dither Masking</h4>
-                                <label>
-                                    Blur Radius ({ditherMaskBlurRadius}px)
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={10}
-                                        step={1}
-                                        value={ditherMaskBlurRadius}
-                                        onChange={(event) => setDitherMaskBlurRadius(event.target.valueAsNumber)}
-                                        disabled={ditherMaskControlsDisabled}
-                                    />
-                                </label>
-                                <label>
-                                    Effect Strength ({Math.round(ditherMaskStrength * 100)}%)
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={10}
-                                        step={0.05}
-                                        value={ditherMaskStrength}
-                                        onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
-                                        disabled={ditherMaskControlsDisabled}
-                                    />
-                                </label>
-                            </div>
-                        </div>
-                    </section>
+                                    <div className="palette-nudge-controls">
+                                        <h4>
+                                            Palette Nudge
+                                            <input
+                                                type="checkbox"
+                                                checked={paletteNudgeEnabled}
+                                                onChange={(event) => handlePaletteNudgeToggle(event.target.checked)}
+                                                disabled={paletteNudgeToggleDisabled}
+                                            />
 
-                    <section className="dither-gradient-card settings">
-                        <header>
-                            <strong>Controls</strong>
-                        </header>
-                        <div className="controls-section-grid">
-                            <div className="controls-panel controls-panel--wide">
-                                <div className="controls-panel__header">
-                                    <h3>
-                                        Dither
-                                        <input
-                                            type="checkbox"
-                                            checked={ditheringEnabled}
-                                            onChange={(event) => handleDitheringToggle(event.target.checked)}
+                                        </h4>
+                                        {!paletteNudgeControlsDisabled && (
+                                            <>
+                                                <label>
+                                                    Strength ({Math.round(paletteNudgeStrength * 100)}%)
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={1}
+                                                        step={0.01}
+                                                        value={paletteNudgeStrength}
+                                                        onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
+                                                        disabled={paletteNudgeControlsDisabled}
+                                                    />
+                                                </label>
+                                                <div className="palette-nudge-controls__grid">
+                                                    <Tooltip title="How far to look for palette neighbors when establishing a pull direction. Bigger values blend more swatches; smaller values stay laser-focused on the nearest entries.">
+                                                        <label>
+                                                            Direction Radius ({paletteMagnetRadiusDir.toFixed(2)})
+                                                            <input
+                                                                type="range"
+                                                                min={0.05}
+                                                                max={1}
+                                                                step={0.01}
+                                                                value={paletteMagnetRadiusDir}
+                                                                onChange={(event) => setPaletteMagnetRadiusDir(event.target.valueAsNumber)}
+                                                                disabled={paletteNudgeControlsDisabled}
+                                                            />
+                                                        </label>
+                                                    </Tooltip>
+                                                    <Tooltip title="Boosts pixels that sit between multiple palette colors. Higher values wait for truly ambiguous colors; lower values tug even when the best and second-best colors are far apart.">
+                                                        <label>
+                                                            Ambiguity Curve ({paletteMagnetAmbiguityPower.toFixed(2)})
+                                                            <input
+                                                                type="range"
+                                                                min={0}
+                                                                max={4}
+                                                                step={0.05}
+                                                                value={paletteMagnetAmbiguityPower}
+                                                                onChange={(event) => setPaletteMagnetAmbiguityPower(event.target.valueAsNumber)}
+                                                                disabled={paletteNudgeControlsDisabled}
+                                                            />
+                                                        </label>
+                                                    </Tooltip>
+                                                    <Tooltip title="Maximum number of nearby palette entries that contribute to the pull direction. Increase to average more neighbors; decrease to favor only the very closest colors.">
+                                                        <label>
+                                                            Nearest Colors ({paletteMagnetNearestCount})
+                                                            <input
+                                                                type="range"
+                                                                min={1}
+                                                                max={6}
+                                                                step={1}
+                                                                value={paletteMagnetNearestCount}
+                                                                onChange={(event) => setPaletteMagnetNearestCount(event.target.valueAsNumber)}
+                                                                disabled={paletteNudgeControlsDisabled}
+                                                            />
+                                                        </label>
+                                                    </Tooltip>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                    <div className="dither-mask-controls">
+                                        <h4>Dither Masking</h4>
+                                        <label>
+                                            Blur Radius ({ditherMaskBlurRadius}px)
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={10}
+                                                step={1}
+                                                value={ditherMaskBlurRadius}
+                                                onChange={(event) => setDitherMaskBlurRadius(event.target.valueAsNumber)}
+                                                disabled={ditherMaskControlsDisabled}
+                                            />
+                                        </label>
+                                        <label>
+                                            Effect Strength ({Math.round(ditherMaskStrength * 100)}%)
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={10}
+                                                step={0.05}
+                                                value={ditherMaskStrength}
+                                                onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
+                                                disabled={ditherMaskControlsDisabled}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="dither-gradient-card settings">
+                                <header>
+                                    <strong>Controls</strong>
+                                </header>
+                                <div className="controls-section-grid">
+                                    <div className="controls-panel controls-panel--wide">
+                                        <div className="controls-panel__header">
+                                            <h3>
+                                                Dither
+                                                <input
+                                                    type="checkbox"
+                                                    checked={ditheringEnabled}
+                                                    onChange={(event) => handleDitheringToggle(event.target.checked)}
+                                                />
+
+                                            </h3>
+                                        </div>
+                                        <div className="controls-panel__fields">
+                                            <DitherControls
+                                                ditherType={ditherType}
+                                                onDitherTypeChange={setDitherType}
+                                                ditherStrength={ditherStrength}
+                                                onDitherStrengthChange={setDitherStrength}
+                                                ditherStrengthDisabled={!ditheringEnabled}
+                                                ditherSeed={ditherSeed}
+                                                onDitherSeedChange={setDitherSeed}
+                                                seedEnabled={seedEnabled}
+                                                isErrorDiffusion={isErrorDiffusion}
+                                                errorDiffusionKernelId={errorDiffusionKernelId}
+                                                onErrorDiffusionKernelChange={setErrorDiffusionKernelId}
+                                                isVoronoiDither={isVoronoiDither}
+                                                voronoiCellsPerAxis={voronoiCellsPerAxis}
+                                                onVoronoiCellsChange={setVoronoiCellsPerAxis}
+                                                voronoiCellOptions={VORONOI_CELL_OPTIONS}
+                                                voronoiJitter={voronoiJitter}
+                                                onVoronoiJitterChange={setVoronoiJitter}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="controls-panel controls-panel--wide">
+                                        <div className="controls-panel__header">
+                                            <h3>Reduction</h3>
+                                        </div>
+                                        <div className="controls-panel__fields">
+                                            <ReductionControls
+                                                reductionMode={reductionMode}
+                                                onReductionModeChange={setReductionMode}
+                                                hasReductionPalette={hasReductionPalette}
+                                                reductionSwatchCount={reductionSwatches.length}
+                                                distanceColorSpace={distanceColorSpace}
+                                                onDistanceColorSpaceChange={handleDistanceColorSpaceChange}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="controls-panel">
+                                        <div className="controls-panel__header">
+                                            <h3>Canvas & Preview</h3>
+                                        </div>
+                                        <div className="controls-panel__fields">
+                                            <label>
+                                                Canvas Width ({width}px)
+                                                <input type="range" min={64} max={512} step={8} value={width} onChange={(event) => setWidth(event.target.valueAsNumber)} />
+                                            </label>
+                                            <label>
+                                                Canvas Height ({height}px)
+                                                <input type="range" min={64} max={512} step={8} value={height} onChange={(event) => setHeight(event.target.valueAsNumber)} />
+                                            </label>
+                                            <label>
+                                                Preview Scale ({previewScale}×)
+                                                <input type="range" min={1} max={4} step={1} value={previewScale} onChange={(event) => setPreviewScale(event.target.valueAsNumber)} />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    </div>
+
+                    <div className="dither-gradient-column dither-gradient-column--previews">
+                        <div className="dither-gradient-preview-stack">
+                            <PreviewSection
+                                sourceSummaryLabel={sourceSummaryLabel}
+                                ditherType={ditherType}
+                                showSourcePreview={showSourcePreview}
+                                onToggleSourcePreview={setShowSourcePreview}
+                                showGamutPreview={showGamutPreview}
+                                onToggleGamutPreview={setShowGamutPreview}
+                                gamutPreviewAvailable={gamutPreviewAvailable}
+                                showDitherPreview={showDitherPreview}
+                                onToggleDitherPreview={setShowDitherPreview}
+                                showReducedPreview={showReducedPreview}
+                                onToggleReducedPreview={setShowReducedPreview}
+                                sourceCanvasRef={sourceCanvasRef}
+                                gamutCanvasRef={gamutCanvasRef}
+                                ditherCanvasRef={ditherCanvasRef}
+                                reducedCanvasRef={reducedCanvasRef}
+                                width={width}
+                                height={height}
+                                previewScale={previewScale}
+                                devicePixelRatio={devicePixelRatio}
+                                sourceCanvasTitle={sourceCanvasTitle}
+                                sourceCanvasDescription={sourceCanvasDescription}
+                                reductionMode={reductionMode}
+                                reductionSwatchCount={reductionSwatches.length}
+                            />
+
+                            <section className="dither-gradient-card preview color-scatter-card">
+                                <header>
+                                    <strong>Color Space Scatter</strong>
+                                    <span>{distanceColorSpace.toUpperCase()} sample distribution</span>
+                                </header>
+                                {sourceScatterPoints.length === 0 && paletteScatterPoints.length === 0 ? (
+                                    <div className="color-scatter-container--empty">Import an image or define a reduction palette to preview color samples.</div>
+                                ) : (
+                                    <div className="color-scatter-container">
+                                        <ColorSpaceScatterPlot
+                                            sourcePoints={sourceScatterPoints}
+                                            gamutPoints={gamutScatterPoints}
+                                            palettePoints={paletteScatterPoints}
+                                            axisLabels={scatterAxisLabels}
                                         />
+                                    </div>
+                                )}
+                                <p className="dither-gradient-note">
+                                    Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} samples are plotted in the current reduction color space ({distanceColorSpace.toUpperCase()}).
+                                </p>
+                            </section>
 
-                                    </h3>
-                                </div>
-                                <div className="controls-panel__fields">
-                                    <DitherControls
-                                        ditherType={ditherType}
-                                        onDitherTypeChange={setDitherType}
-                                        ditherStrength={ditherStrength}
-                                        onDitherStrengthChange={setDitherStrength}
-                                        ditherStrengthDisabled={!ditheringEnabled}
-                                        ditherSeed={ditherSeed}
-                                        onDitherSeedChange={setDitherSeed}
-                                        seedEnabled={seedEnabled}
-                                        isErrorDiffusion={isErrorDiffusion}
-                                        errorDiffusionKernelId={errorDiffusionKernelId}
-                                        onErrorDiffusionKernelChange={setErrorDiffusionKernelId}
-                                        isVoronoiDither={isVoronoiDither}
-                                        voronoiCellsPerAxis={voronoiCellsPerAxis}
-                                        onVoronoiCellsChange={setVoronoiCellsPerAxis}
-                                        voronoiCellOptions={VORONOI_CELL_OPTIONS}
-                                        voronoiJitter={voronoiJitter}
-                                        onVoronoiJitterChange={setVoronoiJitter}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="controls-panel controls-panel--wide">
-                                <div className="controls-panel__header">
-                                    <h3>Reduction</h3>
-                                </div>
-                                <div className="controls-panel__fields">
-                                    <ReductionControls
-                                        reductionMode={reductionMode}
-                                        onReductionModeChange={setReductionMode}
-                                        hasReductionPalette={hasReductionPalette}
-                                        reductionSwatchCount={reductionSwatches.length}
-                                        distanceColorSpace={distanceColorSpace}
-                                        onDistanceColorSpaceChange={handleDistanceColorSpaceChange}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="controls-panel">
-                                <div className="controls-panel__header">
-                                    <h3>Canvas & Preview</h3>
-                                </div>
-                                <div className="controls-panel__fields">
-                                    <label>
-                                        Canvas Width ({width}px)
-                                        <input type="range" min={64} max={512} step={8} value={width} onChange={(event) => setWidth(event.target.valueAsNumber)} />
-                                    </label>
-                                    <label>
-                                        Canvas Height ({height}px)
-                                        <input type="range" min={64} max={512} step={8} value={height} onChange={(event) => setHeight(event.target.valueAsNumber)} />
-                                    </label>
-                                    <label>
-                                        Preview Scale ({previewScale}×)
-                                        <input type="range" min={1} max={4} step={1} value={previewScale} onChange={(event) => setPreviewScale(event.target.valueAsNumber)} />
-                                    </label>
-                                </div>
-                            </div>
+                            <section className="dither-gradient-card documentation-card">
+                                <MarkdownFile path="/docs/dithering.md" />
+                            </section>
                         </div>
-                    </section>
-                </div>
-
-                <div className="dither-gradient-layout">
-                    <PreviewSection
-                        sourceSummaryLabel={sourceSummaryLabel}
-                        ditherType={ditherType}
-                        showSourcePreview={showSourcePreview}
-                        onToggleSourcePreview={setShowSourcePreview}
-                        showGamutPreview={showGamutPreview}
-                        onToggleGamutPreview={setShowGamutPreview}
-                        gamutPreviewAvailable={gamutPreviewAvailable}
-                        showDitherPreview={showDitherPreview}
-                        onToggleDitherPreview={setShowDitherPreview}
-                        showReducedPreview={showReducedPreview}
-                        onToggleReducedPreview={setShowReducedPreview}
-                        sourceCanvasRef={sourceCanvasRef}
-                        gamutCanvasRef={gamutCanvasRef}
-                        ditherCanvasRef={ditherCanvasRef}
-                        reducedCanvasRef={reducedCanvasRef}
-                        width={width}
-                        height={height}
-                        previewScale={previewScale}
-                        devicePixelRatio={devicePixelRatio}
-                        sourceCanvasTitle={sourceCanvasTitle}
-                        sourceCanvasDescription={sourceCanvasDescription}
-                        reductionMode={reductionMode}
-                        reductionSwatchCount={reductionSwatches.length}
-                    />
-
-                    <section className="dither-gradient-card preview color-scatter-card">
-                        <header>
-                            <strong>Color Space Scatter</strong>
-                            <span>{distanceColorSpace.toUpperCase()} sample distribution</span>
-                        </header>
-                        {sourceScatterPoints.length === 0 && paletteScatterPoints.length === 0 ? (
-                            <div className="color-scatter-container--empty">Import an image or define a reduction palette to preview color samples.</div>
-                        ) : (
-                            <div className="color-scatter-container">
-                                <ColorSpaceScatterPlot
-                                    sourcePoints={sourceScatterPoints}
-                                    gamutPoints={gamutScatterPoints}
-                                    palettePoints={paletteScatterPoints}
-                                    axisLabels={scatterAxisLabels}
-                                />
-                            </div>
-                        )}
-                        <p className="dither-gradient-note">
-                            Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} samples are plotted in the current reduction color space ({distanceColorSpace.toUpperCase()}).
-                        </p>
-                    </section>
-
-                    <section>
-                        <MarkdownFile path="/docs/dithering.md" />
-                    </section>
+                    </div>
                 </div>
             </main>
         </>
