@@ -56,3 +56,35 @@ These rules guide any AI coding agent contributing to this repository. Mirror th
 - When editing existing files, keep the top-level flow descriptive and offload new work into new helpers/components.
 - Never introduce fresh algorithms inline within pre-existing loops or conditionals.
 - Keep the codebase incremental and refactor-friendly; resist the urge to lump unrelated behavior together.
+
+## Duplication and modularity
+
+- **Do not repeat algorithms or processing steps in multiple places.**
+  - If an operation (e.g. multi-step image processing) is already implemented in a function, new code must **reuse that function or a shared helper**, not reimplement the steps in the caller.
+  - If the caller needs access to intermediate results (e.g. step 1 / step 2 images), refactor the processing function to return a richer result object instead of duplicating the algorithm inline.
+
+  ```ts
+  // Prefer this:
+  const result = processImage(input);
+  return <>
+    <ImageViewer bitmap={result.finalImage} />
+    <ImageViewer bitmap={result.step1Image} />
+    <ImageViewer bitmap={result.step2Image} />
+  </>;
+
+  // NOT this:
+  const finalImage = processImage(input);
+  const step1Image = /* repeat step 1 logic here */;
+  const step2Image = /* repeat step 2 logic here */;
+````
+
+* When you detect similar logic in two or more places, **extract a shared utility**.
+
+  * Move the common behavior into a helper (e.g. `applyProcessingSteps`, `processImageSteps`) and call it from both locations.
+  * Keep the core algorithm “tight and centralized” so it can be maintained in one place.
+
+* **Reuse utilities instead of duplicating even short expressions.**
+
+  * If there is (or should be) a helper for a pattern (e.g. averaging, float comparison with epsilon, clamping, distance computation), use or create that helper and reuse it consistently.
+  * Example utilities: `average`, `withinDistance`, `floatEquals`, `clamp`, `lerp`, conversions, date/time helpers, etc.
+

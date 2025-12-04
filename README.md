@@ -198,6 +198,82 @@ function ProcessBitmap(bitmap, gamma)
 
 ```
 
+## Do not repeat code. Design in flexible, modular ways.
+
+For example, if we have a function that applies multiple processing steps. E.g.,
+
+```
+function ProcessImage(bitmap : BitmapImage) : BitmapImage
+{
+    for (each pixel)
+    {
+        ...perform step 1
+        ...perform step 2
+    }
+    ...
+}
+
+// and in the calling component,
+{
+    ...
+    const image = ProcessImage(input);
+    ...
+    return <ImageViewer bitmap={image}>;
+}
+```
+
+Let's say we want to add the ability to inspect the intermediate steps. Keep the algorithm tight and
+organized, by altering the API sensibly to accommodate. What I see from agents is like this:
+
+```js
+// BAD:
+
+// in the calling component,
+{
+    ...
+    const image = ProcessImage(input);
+    const step1Result = // ... perform step 1
+    const step2Result = // ... perform step 2
+    ...
+    return <>
+        <ImageViewer bitmap={image}>
+        <ImageViewer bitmap={step1Result}>
+        <ImageViewer bitmap={step2Result}>
+    </>;
+}
+```
+
+Often actually copy/pasting the actual algorithm details in both places. I would prefer to refactor
+the processing function to accommodate the clean and efficient design:
+
+```
+// GOOD:
+function ProcessImage(bitmap : BitmapImage) : ProcessImageResult
+{
+    const ret : ProcessImageResult = ...
+    for (each pixel)
+    {
+        ...perform step 1, save to ret.step1Result
+        ...perform step 2, save to ret.step2Result
+    }
+    ...
+}
+
+// and in the calling component,
+{
+    ...
+    const result = ProcessImage(input);
+    ...
+    return <>
+        <ImageViewer bitmap={result.image}>
+        <ImageViewer bitmap={result.step1Result}>
+        <ImageViewer bitmap={result.step2Result}>
+    </>;
+}
+```
+
+
+## Reuse utilities when possible. Avoid duplicating code, even one-liners.
 
 
 
