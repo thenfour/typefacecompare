@@ -524,13 +524,9 @@ export default function DitherGradientPage() {
                 <meta name="viewport" content="width=device-width, initial-scale=1" />
             </Head>
             <main className="dither-gradient-page">
-                <div className="dither-gradient-header">
-                    <h1>Bilinear Dither Gradient Lab</h1>
-                </div>
-
                 <div className="dither-gradient-body">
                     <div className="dither-gradient-column dither-gradient-column--settings">
-                        <div className="dither-gradient-settings-grid">
+                        <div className="dither-gradient-settings-grid dither-gradient-stack">
                             <SourceControlsCard
                                 sourceType={sourceType}
                                 onSourceTypeChange={setSourceType}
@@ -850,7 +846,7 @@ export default function DitherGradientPage() {
                     </div>
 
                     <div className="dither-gradient-column dither-gradient-column--previews">
-                        <div className="dither-gradient-preview-stack">
+                        <div className="dither-gradient-preview-stack dither-gradient-stack">
                             <PreviewSection
                                 sourceSummaryLabel={sourceSummaryLabel}
                                 ditherType={ditherType}

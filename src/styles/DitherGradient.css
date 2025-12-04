@@ -42,6 +42,10 @@
     padding-left: 12px;
 }
 
+.dither-gradient-stack {
+    background-color: #eee;
+}
+
 .dither-gradient-settings-grid {
     display: flex;
     flex-wrap: wrap;
