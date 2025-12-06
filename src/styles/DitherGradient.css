@@ -349,6 +349,39 @@
     font-size: 12px;
 }
 
+.perceptual-match-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid #d7d7de;
+    border-radius: 8px;
+    background: linear-gradient(120deg, #f7f8fb 0%, #eef3ff 100%);
+    font-size: 12px;
+}
+
+.perceptual-match-banner__primary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    color: #0f172a;
+}
+
+.perceptual-match-banner__primary strong {
+    font-size: 13px;
+}
+
+.perceptual-match-banner__primary span {
+    font-weight: 600;
+}
+
+.perceptual-match-banner__secondary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: #4b5563;
+}
+
 .corner-summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

@@ -55,10 +55,14 @@ import {
     isErrorDiffusionDither,
     usesSeededDither,
 } from "../utils/dithering";
+import { DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX, type PerceptualSimilarityResult } from "@/utils/perceptualSimilarity";
 import { MarkdownFile } from "@/components/MarkdownFile";
 const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
 const MAX_SCATTER_SOURCE_POINTS = 4000;
 const DEFAULT_PALETTE_NUDGE_STRENGTH = 0.1;
+const PERCEPTUAL_BLUR_MIN_PX = 0.5;
+const PERCEPTUAL_BLUR_MAX_PX = 8;
+const PERCEPTUAL_BLUR_STEP_PX = 0.25;
 
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
@@ -157,6 +161,8 @@ export default function DitherGradientPage() {
     const [width, setWidth] = useState(160);
     const [height, setHeight] = useState(160);
     const [previewScale, setPreviewScale] = useState(2);
+    const [perceptualBlurRadiusPx, setPerceptualBlurRadiusPx] = useState<number>(DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX);
+    const [perceptualMatch, setPerceptualMatch] = useState<PerceptualSimilarityResult | null>(null);
     const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(4);
     const [ditherMaskStrength, setDitherMaskStrength] = useState(3);
     const [sourceGamma, setSourceGamma] = useState(1);
@@ -565,6 +571,10 @@ export default function DitherGradientPage() {
             paletteError: paletteErrorCanvasRef,
             paletteAmbiguity: paletteAmbiguityCanvasRef,
             paletteModulation: paletteModulationCanvasRef,
+        },
+        perceptualMatchOptions: {
+            blurRadiusPx: perceptualBlurRadiusPx,
+            onMatchComputed: setPerceptualMatch,
         },
     });
     const seedEnabled = usesSeededDither(ditherType);
@@ -1002,6 +1012,17 @@ export default function DitherGradientPage() {
                                                 Preview Scale ({previewScale}×)
                                                 <input type="range" min={1} max={4} step={1} value={previewScale} onChange={(event) => setPreviewScale(event.target.valueAsNumber)} />
                                             </label>
+                                            <label>
+                                                Perceptual Blur Radius ({perceptualBlurRadiusPx.toFixed(2)} px)
+                                                <input
+                                                    type="range"
+                                                    min={PERCEPTUAL_BLUR_MIN_PX}
+                                                    max={PERCEPTUAL_BLUR_MAX_PX}
+                                                    step={PERCEPTUAL_BLUR_STEP_PX}
+                                                    value={perceptualBlurRadiusPx}
+                                                    onChange={(event) => setPerceptualBlurRadiusPx(event.target.valueAsNumber)}
+                                                />
+                                            </label>
                                         </div>
                                     </div>
                                 </div>
@@ -1047,6 +1068,7 @@ export default function DitherGradientPage() {
                                 sourceCanvasDescription={sourceCanvasDescription}
                                 reductionMode={reductionMode}
                                 reductionSwatchCount={reductionSwatches.length}
+                                perceptualMatch={perceptualMatch}
                             />
 
                             <section className="dither-gradient-card preview color-scatter-card">

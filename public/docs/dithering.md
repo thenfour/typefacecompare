@@ -172,5 +172,9 @@ The is effective in allowing higher dither strength without the image getting ov
 
 - figure out why many color models don't play nicely at all with distance functions when i'd expect them to. Gamut plot feels wrong as well.
 - dither strength dynamically depending on distance to palette entries.
-- in general explore auto dither strength.
+- in general explore auto dither strength. better scaling for this effect. re-explore the idea holistically using the techinques explored.
+- optimization towards perception delta max.
+    - add delta preview images
+    - next to params allow a sweep across the param range, showing images for N variations over that param range. Maybe even a 2D grid (4x4, 5x5?). show graphs of perceptual delta.
+    
 

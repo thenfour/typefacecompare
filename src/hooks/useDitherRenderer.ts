@@ -22,7 +22,10 @@ import {
     type PaletteMagnetParams,
     type ReductionPaletteEntry,
 } from "@/utils/paletteDistance";
+import { DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX, computePerceptualSimilarityScore, type PerceptualSimilarityResult } from "@/utils/perceptualSimilarity";
 import type { ReductionMode, SourceType } from "@/types/dither";
+
+const RENDER_DEBOUNCE_MS = 24; // Keep renders responsive while preventing tight update loops.
 
 export type PreviewStageKey =
     | "source"
@@ -74,6 +77,15 @@ interface PaletteMetricsSample {
     modulationFactor: number;
 }
 
+export interface PerceptualMatchOptions {
+    blurRadiusPx: number;
+    onMatchComputed?: (result: PerceptualSimilarityResult | null) => void;
+}
+
+export interface RenderMetrics {
+    durationMs: number;
+}
+
 export interface UseDitherRendererOptions {
     width: number;
     height: number;
@@ -104,6 +116,8 @@ export interface UseDitherRendererOptions {
     showPaletteAmbiguityPreview: boolean;
     showPaletteModulationPreview: boolean;
     canvasRefs: PreviewCanvasRefs;
+    perceptualMatchOptions?: PerceptualMatchOptions;
+    onRenderMetrics?: (metrics: RenderMetrics) => void;
 }
 
 export function useDitherRenderer(options: UseDitherRendererOptions) {
@@ -137,264 +151,343 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showPaletteAmbiguityPreview,
         showPaletteModulationPreview,
         canvasRefs,
+        perceptualMatchOptions,
+        onRenderMetrics,
     } = options;
 
     useEffect(() => {
-        const previewStages: PreviewStageConfig[] = [
-            { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
-            { key: "gamut", enabled: showGamutPreview && sourceAdjustmentsActive, ref: canvasRefs.gamut },
-            { key: "dither", enabled: showDitherPreview, ref: canvasRefs.dither },
-            { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
-            { key: "paletteError", enabled: showPaletteErrorPreview, ref: canvasRefs.paletteError },
-            { key: "paletteAmbiguity", enabled: showPaletteAmbiguityPreview, ref: canvasRefs.paletteAmbiguity },
-            { key: "paletteModulation", enabled: showPaletteModulationPreview, ref: canvasRefs.paletteModulation },
-        ];
+        const cancelRef = { cancelled: false };
+        let debounceHandle: ReturnType<typeof setTimeout> | null = null;
 
-        const isErrorDiffusion = isErrorDiffusionDither(ditherType);
-        const selectedKernel = isErrorDiffusion ? getErrorDiffusionKernel(errorDiffusionKernelId) : null;
-        const errorDiffusionContext = selectedKernel ? createErrorDiffusionContext(width, height, selectedKernel) : null;
+        const notifyPerceptualMatch = (result: PerceptualSimilarityResult | null) => {
+            if (cancelRef.cancelled) return;
+            perceptualMatchOptions?.onMatchComputed?.(result);
+        };
 
-        const requiresGradientData = sourceType === "gradient";
-        const requiresImageData = sourceType === "image";
-        if ((requiresGradientData && gradientField.points.length === 0) || (requiresImageData && !sourceImageData)) {
-            previewStages.forEach((stage) => {
+        const clearAllCanvases = () => {
+            const stageConfigs: PreviewStageConfig[] = [
+                { key: "source", enabled: true, ref: canvasRefs.source },
+                { key: "gamut", enabled: true, ref: canvasRefs.gamut },
+                { key: "dither", enabled: true, ref: canvasRefs.dither },
+                { key: "reduced", enabled: true, ref: canvasRefs.reduced },
+                { key: "paletteError", enabled: true, ref: canvasRefs.paletteError },
+                { key: "paletteAmbiguity", enabled: true, ref: canvasRefs.paletteAmbiguity },
+                { key: "paletteModulation", enabled: true, ref: canvasRefs.paletteModulation },
+            ];
+            stageConfigs.forEach((stage) => {
                 const canvas = stage.ref.current;
                 if (!canvas) return;
                 const ctx = canvas.getContext("2d");
                 ctx?.clearRect(0, 0, canvas.width, canvas.height);
             });
-            return;
-        }
+        };
 
-        const activeStages = previewStages
-            .map((stage) => {
-                if (!stage.enabled) return null;
-                const canvas = stage.ref.current;
-                if (!canvas) return null;
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext("2d");
-                if (!ctx) return null;
-                return {
-                    key: stage.key,
-                    ctx,
-                    imageData: ctx.createImageData(width, height),
-                } satisfies ActivePreviewStage;
-            })
-            .filter((stage): stage is ActivePreviewStage => stage !== null);
+        const runRender = async () => {
+            const startTime = performance.now();
 
-        if (activeStages.length === 0) {
-            return;
-        }
+            const previewStages: PreviewStageConfig[] = [
+                { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
+                { key: "gamut", enabled: showGamutPreview && sourceAdjustmentsActive, ref: canvasRefs.gamut },
+                { key: "dither", enabled: showDitherPreview, ref: canvasRefs.dither },
+                { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
+                { key: "paletteError", enabled: showPaletteErrorPreview, ref: canvasRefs.paletteError },
+                { key: "paletteAmbiguity", enabled: showPaletteAmbiguityPreview, ref: canvasRefs.paletteAmbiguity },
+                { key: "paletteModulation", enabled: showPaletteModulationPreview, ref: canvasRefs.paletteModulation },
+            ];
 
-        const stageMap = activeStages.reduce((acc, stage) => {
-            acc[stage.key] = stage;
-            return acc;
-        }, {} as Partial<Record<PreviewStageKey, ActivePreviewStage>>);
+            const isErrorDiffusion = isErrorDiffusionDither(ditherType);
+            const selectedKernel = isErrorDiffusion ? getErrorDiffusionKernel(errorDiffusionKernelId) : null;
+            const errorDiffusionContext = selectedKernel ? createErrorDiffusionContext(width, height, selectedKernel) : null;
 
-        const pixelCount = width * height;
-        const capturePaletteErrorPreview = Boolean(stageMap.paletteError);
-        const capturePaletteAmbiguityPreview = Boolean(stageMap.paletteAmbiguity);
-        const capturePaletteModulationPreview = Boolean(stageMap.paletteModulation);
-        const paletteErrorValues = capturePaletteErrorPreview ? new Float32Array(pixelCount) : null;
-        const paletteAmbiguityValues = capturePaletteAmbiguityPreview ? new Float32Array(pixelCount) : null;
-        const paletteModulationValues = capturePaletteModulationPreview ? new Float32Array(pixelCount) : null;
-        let paletteErrorMin = Infinity;
-        let paletteErrorMax = -Infinity;
-        let paletteAmbiguityMin = Infinity;
-        let paletteAmbiguityMax = -Infinity;
-        let paletteModulationMin = Infinity;
-        let paletteModulationMax = -Infinity;
-        const baseColorBuffer = new Float32Array(pixelCount * 3);
-        for (let y = 0; y < height; y++) {
-            const v = height === 1 ? 0 : y / (height - 1);
-            for (let x = 0; x < width; x++) {
-                const u = width === 1 ? 0 : x / (width - 1);
-                const base = sampleSourceColor(
-                    sourceType,
-                    gradientField,
-                    u,
-                    v,
-                    x,
-                    y,
-                    sourceImageData
-                );
-                const pixelIndex = y * width + x;
-                const baseOffset = pixelIndex * 3;
-                baseColorBuffer[baseOffset] = base.r;
-                baseColorBuffer[baseOffset + 1] = base.g;
-                baseColorBuffer[baseOffset + 2] = base.b;
+            const requiresGradientData = sourceType === "gradient";
+            const requiresImageData = sourceType === "image";
+            if ((requiresGradientData && gradientField.points.length === 0) || (requiresImageData && !sourceImageData)) {
+                clearAllCanvases();
+                notifyPerceptualMatch(null);
+                return;
             }
-        }
 
-        const maskBuffer = buildDitherMaskBuffer(
-            baseColorBuffer,
-            width,
-            height,
-            ditherMask?.blurRadius ?? 0,
-            ditherMask?.strength ?? 0
-        );
-        const hasPaletteReduction = reductionMode === "palette" && reductionPaletteEntries.length > 0;
-        const paletteMetricsParams = hasPaletteReduction ? paletteModulationParams : null;
-        const paletteModulationConfig =
-            paletteMetricsParams && paletteModulationEnabled && ditherMask?.paletteModulation
-                ? paletteMetricsParams
-                : null;
-        const shouldCollectPaletteMetrics = Boolean(
-            paletteMetricsParams &&
-            (paletteModulationConfig || showPaletteErrorPreview || showPaletteAmbiguityPreview || showPaletteModulationPreview)
-        );
+            const activeStages = previewStages
+                .map((stage) => {
+                    if (!stage.enabled) return null;
+                    const canvas = stage.ref.current;
+                    if (!canvas) return null;
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext("2d");
+                    if (!ctx) return null;
+                    return {
+                        key: stage.key,
+                        ctx,
+                        imageData: ctx.createImageData(width, height),
+                    } satisfies ActivePreviewStage;
+                })
+                .filter((stage): stage is ActivePreviewStage => stage !== null);
 
-        const shouldApplyGamut = Boolean(gamutTransform && gamutTransform.isActive);
-        const shouldApplyPaletteNudge = paletteNudgeStrength > 0 && hasPaletteReduction;
-        const shouldApplyGamma = Math.abs(sourceGamma - 1) > 0.001 && sourceAdjustmentsActive;
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const pixelIndex = y * width + x;
-                const baseOffset = pixelIndex * 3;
-                const base = {
-                    r: baseColorBuffer[baseOffset],
-                    g: baseColorBuffer[baseOffset + 1],
-                    b: baseColorBuffer[baseOffset + 2],
-                };
-                const gammaAdjustedColor = shouldApplyGamma
-                    ? applyGammaCorrection(base, sourceGamma)
-                    : base;
-                const gamutAdjustedColor = shouldApplyGamut && gamutTransform
-                    ? applyGamutTransformToColor(gammaAdjustedColor, gamutTransform, distanceColorSpace)
-                    : gammaAdjustedColor;
-                const pipelineSourceBase = shouldApplyGamut ? gamutAdjustedColor : gammaAdjustedColor;
-                const pipelineSource = shouldApplyPaletteNudge
-                    ? blendColorTowardPalette(
-                        pipelineSourceBase,
-                        reductionPaletteEntries,
-                        distanceColorSpace,
-                        paletteNudgeStrength,
-                        paletteMagnetParams
-                    )
-                    : pipelineSourceBase;
-                const sourceColor = clampRgb255(base);
-                const gamutPreviewColor = clampRgb255(sourceAdjustmentsActive ? pipelineSource : base);
-                const maskFactor = maskBuffer ? maskBuffer[pixelIndex] : 1;
-                let paletteMetrics: PaletteMetricsSample | null = null;
-                if (shouldCollectPaletteMetrics && paletteMetricsParams) {
-                    paletteMetrics = evaluatePaletteMetrics(
-                        pipelineSource,
-                        reductionPaletteEntries,
-                        distanceColorSpace,
-                        paletteMetricsParams
-                    );
+            if (activeStages.length === 0) {
+                notifyPerceptualMatch(null);
+                return;
+            }
+
+            const stageMap = activeStages.reduce((acc, stage) => {
+                acc[stage.key] = stage;
+                return acc;
+            }, {} as Partial<Record<PreviewStageKey, ActivePreviewStage>>);
+
+            const pixelCount = width * height;
+            const capturePaletteErrorPreview = Boolean(stageMap.paletteError);
+            const capturePaletteAmbiguityPreview = Boolean(stageMap.paletteAmbiguity);
+            const capturePaletteModulationPreview = Boolean(stageMap.paletteModulation);
+            const paletteErrorValues = capturePaletteErrorPreview ? new Float32Array(pixelCount) : null;
+            const paletteAmbiguityValues = capturePaletteAmbiguityPreview ? new Float32Array(pixelCount) : null;
+            const paletteModulationValues = capturePaletteModulationPreview ? new Float32Array(pixelCount) : null;
+            let paletteErrorMin = Infinity;
+            let paletteErrorMax = -Infinity;
+            let paletteAmbiguityMin = Infinity;
+            let paletteAmbiguityMax = -Infinity;
+            let paletteModulationMin = Infinity;
+            let paletteModulationMax = -Infinity;
+            const baseColorBuffer = new Float32Array(pixelCount * 3);
+            let perceptualReferenceBuffer: Float32Array | null = null;
+            let perceptualTestBuffer: Float32Array | null = null;
+            for (let y = 0; y < height; y++) {
+                const v = height === 1 ? 0 : y / (height - 1);
+                for (let x = 0; x < width; x++) {
+                    const u = width === 1 ? 0 : x / (width - 1);
+                    const base = sampleSourceColor(sourceType, gradientField, u, v, x, y, sourceImageData);
+                    const pixelIndex = y * width + x;
+                    const baseOffset = pixelIndex * 3;
+                    baseColorBuffer[baseOffset] = base.r;
+                    baseColorBuffer[baseOffset + 1] = base.g;
+                    baseColorBuffer[baseOffset + 2] = base.b;
                 }
-                const paletteFactor = paletteModulationConfig && paletteMetrics
-                    ? paletteMetrics.modulationFactor
-                    : 1;
-                const effectiveDitherStrength = ditherStrength * maskFactor * paletteFactor;
-                let ditheredColor: { r: number; g: number; b: number };
-                let reducedColor: { r: number; g: number; b: number };
+            }
 
+            const maskBuffer = buildDitherMaskBuffer(
+                baseColorBuffer,
+                width,
+                height,
+                ditherMask?.blurRadius ?? 0,
+                ditherMask?.strength ?? 0
+            );
+            const hasPaletteReduction = reductionMode === "palette" && reductionPaletteEntries.length > 0;
+            const perceptualMatchEnabled = Boolean(perceptualMatchOptions && hasPaletteReduction && showReducedPreview);
+            if (perceptualMatchEnabled) {
+                perceptualReferenceBuffer = new Float32Array(pixelCount * 3);
+                perceptualTestBuffer = new Float32Array(pixelCount * 3);
+            }
+
+            const paletteMetricsParams = hasPaletteReduction ? paletteModulationParams : null;
+            const paletteModulationConfig =
+                paletteMetricsParams && paletteModulationEnabled && ditherMask?.paletteModulation
+                    ? paletteMetricsParams
+                    : null;
+            const shouldCollectPaletteMetrics = Boolean(
+                paletteMetricsParams &&
+                (paletteModulationConfig || showPaletteErrorPreview || showPaletteAmbiguityPreview || showPaletteModulationPreview)
+            );
+
+            const shouldApplyGamut = Boolean(gamutTransform && gamutTransform.isActive);
+            const shouldApplyPaletteNudge = paletteNudgeStrength > 0 && hasPaletteReduction;
+            const shouldApplyGamma = Math.abs(sourceGamma - 1) > 0.001 && sourceAdjustmentsActive;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const pixelIndex = y * width + x;
+                    const baseOffset = pixelIndex * 3;
+                    const base = {
+                        r: baseColorBuffer[baseOffset],
+                        g: baseColorBuffer[baseOffset + 1],
+                        b: baseColorBuffer[baseOffset + 2],
+                    };
+                    const gammaAdjustedColor = shouldApplyGamma ? applyGammaCorrection(base, sourceGamma) : base;
+                    const gamutAdjustedColor = shouldApplyGamut && gamutTransform
+                        ? applyGamutTransformToColor(gammaAdjustedColor, gamutTransform, distanceColorSpace)
+                        : gammaAdjustedColor;
+                    const pipelineSourceBase = shouldApplyGamut ? gamutAdjustedColor : gammaAdjustedColor;
+                    const pipelineSource = shouldApplyPaletteNudge
+                        ? blendColorTowardPalette(
+                            pipelineSourceBase,
+                            reductionPaletteEntries,
+                            distanceColorSpace,
+                            paletteNudgeStrength,
+                            paletteMagnetParams
+                        )
+                        : pipelineSourceBase;
+                    const sourceColor = clampRgb255(base);
+                    const gamutPreviewColor = clampRgb255(sourceAdjustmentsActive ? pipelineSource : base);
+                    const maskFactor = maskBuffer ? maskBuffer[pixelIndex] : 1;
+                    let paletteMetrics: PaletteMetricsSample | null = null;
+                    if (shouldCollectPaletteMetrics && paletteMetricsParams) {
+                        paletteMetrics = evaluatePaletteMetrics(
+                            pipelineSource,
+                            reductionPaletteEntries,
+                            distanceColorSpace,
+                            paletteMetricsParams
+                        );
+                    }
+                    const paletteFactor = paletteModulationConfig && paletteMetrics
+                        ? paletteMetrics.modulationFactor
+                        : 1;
+                    const effectiveDitherStrength = ditherStrength * maskFactor * paletteFactor;
+                    let ditheredColor: { r: number; g: number; b: number };
+                    let reducedColor: { r: number; g: number; b: number };
+
+                    if (errorDiffusionContext) {
+                        const result = applyErrorDiffusionToPixel(
+                            pipelineSource,
+                            x,
+                            y,
+                            errorDiffusionContext,
+                            effectiveDitherStrength,
+                            reductionMode,
+                            reductionPaletteEntries,
+                            distanceColorSpace,
+                        );
+                        ditheredColor = result.ditheredColor;
+                        reducedColor = result.quantizedColor;
+                    } else {
+                        const jittered = applyDitherJitter(
+                            pipelineSource,
+                            x,
+                            y,
+                            ditherType,
+                            effectiveDitherStrength,
+                            ditherSeed,
+                            proceduralDitherTile
+                        );
+                        ditheredColor = clampRgb255(jittered);
+                        reducedColor = clampRgb255(
+                            applyReduction(jittered, reductionMode, reductionPaletteEntries, distanceColorSpace)
+                        );
+                    }
+
+                    const offset = pixelIndex * 4;
+                    if (stageMap.source) {
+                        writePixel(stageMap.source.imageData.data, offset, sourceColor);
+                    }
+                    if (stageMap.gamut) {
+                        writePixel(stageMap.gamut.imageData.data, offset, gamutPreviewColor);
+                    }
+                    if (stageMap.dither) {
+                        writePixel(stageMap.dither.imageData.data, offset, ditheredColor);
+                    }
+                    if (stageMap.reduced) {
+                        writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
+                    }
+                    if (perceptualReferenceBuffer) {
+                        writeColorToFloatBuffer(perceptualReferenceBuffer, pixelIndex, gamutPreviewColor);
+                    }
+                    if (perceptualTestBuffer) {
+                        writeColorToFloatBuffer(perceptualTestBuffer, pixelIndex, reducedColor);
+                    }
+                    if (paletteMetrics) {
+                        if (paletteErrorValues) {
+                            const value = paletteMetrics.errorDistance;
+                            paletteErrorValues[pixelIndex] = value;
+                            if (value < paletteErrorMin) {
+                                paletteErrorMin = value;
+                            }
+                            if (value > paletteErrorMax) {
+                                paletteErrorMax = value;
+                            }
+                        }
+                        if (paletteAmbiguityValues) {
+                            const value = paletteMetrics.ambiguityRatio;
+                            paletteAmbiguityValues[pixelIndex] = value;
+                            if (value < paletteAmbiguityMin) {
+                                paletteAmbiguityMin = value;
+                            }
+                            if (value > paletteAmbiguityMax) {
+                                paletteAmbiguityMax = value;
+                            }
+                        }
+                        if (paletteModulationValues) {
+                            const value = paletteMetrics.modulationFactor;
+                            paletteModulationValues[pixelIndex] = value;
+                            if (value < paletteModulationMin) {
+                                paletteModulationMin = value;
+                            }
+                            if (value > paletteModulationMax) {
+                                paletteModulationMax = value;
+                            }
+                        }
+                    }
+                }
                 if (errorDiffusionContext) {
-                    const result = applyErrorDiffusionToPixel(
-                        pipelineSource,
-                        x,
-                        y,
-                        errorDiffusionContext,
-                        effectiveDitherStrength,
-                        reductionMode,
-                        reductionPaletteEntries,
-                        distanceColorSpace,
-                    );
-                    ditheredColor = result.ditheredColor;
-                    reducedColor = result.quantizedColor;
-                } else {
-                    const jittered = applyDitherJitter(pipelineSource, x, y, ditherType, effectiveDitherStrength, ditherSeed, proceduralDitherTile);
-                    ditheredColor = clampRgb255(jittered);
-                    reducedColor = clampRgb255(
-                        applyReduction(jittered, reductionMode, reductionPaletteEntries, distanceColorSpace)
-                    );
-                }
-
-                const offset = pixelIndex * 4;
-                if (stageMap.source) {
-                    writePixel(stageMap.source.imageData.data, offset, sourceColor);
-                }
-                if (stageMap.gamut) {
-                    writePixel(stageMap.gamut.imageData.data, offset, gamutPreviewColor);
-                }
-                if (stageMap.dither) {
-                    writePixel(stageMap.dither.imageData.data, offset, ditheredColor);
-                }
-                if (stageMap.reduced) {
-                    writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
-                }
-                if (paletteMetrics) {
-                    if (paletteErrorValues) {
-                        const value = paletteMetrics.errorDistance;
-                        paletteErrorValues[pixelIndex] = value;
-                        if (value < paletteErrorMin) {
-                            paletteErrorMin = value;
-                        }
-                        if (value > paletteErrorMax) {
-                            paletteErrorMax = value;
-                        }
-                    }
-                    if (paletteAmbiguityValues) {
-                        const value = paletteMetrics.ambiguityRatio;
-                        paletteAmbiguityValues[pixelIndex] = value;
-                        if (value < paletteAmbiguityMin) {
-                            paletteAmbiguityMin = value;
-                        }
-                        if (value > paletteAmbiguityMax) {
-                            paletteAmbiguityMax = value;
-                        }
-                    }
-                    if (paletteModulationValues) {
-                        const value = paletteMetrics.modulationFactor;
-                        paletteModulationValues[pixelIndex] = value;
-                        if (value < paletteModulationMin) {
-                            paletteModulationMin = value;
-                        }
-                        if (value > paletteModulationMax) {
-                            paletteModulationMax = value;
-                        }
-                    }
+                    advanceErrorDiffusionRow(errorDiffusionContext);
                 }
             }
-            if (errorDiffusionContext) {
-                advanceErrorDiffusionRow(errorDiffusionContext);
+
+            if (paletteErrorValues && stageMap.paletteError) {
+                writeMetricToImageData(
+                    paletteErrorValues,
+                    paletteErrorMin,
+                    paletteErrorMax,
+                    stageMap.paletteError.imageData.data,
+                    true
+                );
             }
-        }
+            if (paletteAmbiguityValues && stageMap.paletteAmbiguity) {
+                writeMetricToImageData(
+                    paletteAmbiguityValues,
+                    paletteAmbiguityMin,
+                    paletteAmbiguityMax,
+                    stageMap.paletteAmbiguity.imageData.data,
+                    true
+                );
+            }
+            if (paletteModulationValues && stageMap.paletteModulation) {
+                writeMetricToImageData(
+                    paletteModulationValues,
+                    paletteModulationMin,
+                    paletteModulationMax,
+                    stageMap.paletteModulation.imageData.data,
+                    true
+                );
+            }
 
-        if (paletteErrorValues && stageMap.paletteError) {
-            writeMetricToImageData(
-                paletteErrorValues,
-                paletteErrorMin,
-                paletteErrorMax,
-                stageMap.paletteError.imageData.data,
-                true
-            );
-        }
-        if (paletteAmbiguityValues && stageMap.paletteAmbiguity) {
-            writeMetricToImageData(
-                paletteAmbiguityValues,
-                paletteAmbiguityMin,
-                paletteAmbiguityMax,
-                stageMap.paletteAmbiguity.imageData.data,
-                true
-            );
-        }
-        if (paletteModulationValues && stageMap.paletteModulation) {
-            writeMetricToImageData(
-                paletteModulationValues,
-                paletteModulationMin,
-                paletteModulationMax,
-                stageMap.paletteModulation.imageData.data,
-                true
-            );
-        }
+            if (perceptualMatchEnabled && perceptualReferenceBuffer && perceptualTestBuffer) {
+                const blurRadiusPx = perceptualMatchOptions?.blurRadiusPx ?? DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX;
+                const perceptualResult = computePerceptualSimilarityScore({
+                    referenceRgbBuffer: perceptualReferenceBuffer,
+                    testRgbBuffer: perceptualTestBuffer,
+                    width,
+                    height,
+                    blurRadiusPx,
+                    distanceSpace: "oklab",
+                });
+                notifyPerceptualMatch(perceptualResult);
+            } else {
+                notifyPerceptualMatch(null);
+            }
 
-        activeStages.forEach((stage) => {
-            stage.ctx.putImageData(stage.imageData, 0, 0);
-        });
+            activeStages.forEach((stage) => {
+                stage.ctx.putImageData(stage.imageData, 0, 0);
+            });
+
+            if (!cancelRef.cancelled) {
+                onRenderMetrics?.({ durationMs: performance.now() - startTime });
+            }
+        };
+
+        const scheduleRender = () => {
+            if (debounceHandle) {
+                clearTimeout(debounceHandle);
+            }
+            debounceHandle = setTimeout(() => {
+                debounceHandle = null;
+                void runRender();
+            }, RENDER_DEBOUNCE_MS);
+        };
+
+        scheduleRender();
+
+        return () => {
+            cancelRef.cancelled = true;
+            if (debounceHandle) {
+                clearTimeout(debounceHandle);
+            }
+        };
     }, [
         width,
         height,
@@ -437,6 +530,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         canvasRefs.paletteError,
         canvasRefs.paletteAmbiguity,
         canvasRefs.paletteModulation,
+        perceptualMatchOptions?.blurRadiusPx,
+        perceptualMatchOptions?.onMatchComputed,
+        onRenderMetrics,
     ]);
 }
 
@@ -470,6 +566,13 @@ function writePixel(buffer: Uint8ClampedArray, offset: number, color: { r: numbe
     buffer[offset + 3] = 255;
 }
 
+function writeColorToFloatBuffer(buffer: Float32Array, pixelIndex: number, color: { r: number; g: number; b: number }) {
+    const baseIndex = pixelIndex * 3;
+    buffer[baseIndex] = color.r;
+    buffer[baseIndex + 1] = color.g;
+    buffer[baseIndex + 2] = color.b;
+}
+
 function buildDitherMaskBuffer(
     baseColorBuffer: Float32Array,
     width: number,
@@ -477,8 +580,7 @@ function buildDitherMaskBuffer(
     blurRadius: number,
     strength: number
 ): Float32Array | null {
-    // don't clamp yet; we clamp later anyway and this lets us exaggerate the effect.
-    const normalizedStrength = strength;//Math.max(0, Math.min(1, strength));
+    const normalizedStrength = strength;
     const radius = Math.max(0, Math.round(blurRadius));
     if (normalizedStrength === 0 || radius === 0) {
         return null;

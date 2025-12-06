@@ -3,6 +3,7 @@ import { GradientPreviewCanvas } from "@/components/GradientPreviewCanvas";
 import type { DitherType } from "@/utils/dithering";
 import { DITHER_DESCRIPTIONS, DITHER_LABELS } from "@/utils/dithering";
 import type { ReductionMode } from "@/types/dither";
+import type { PerceptualSimilarityResult } from "@/utils/perceptualSimilarity";
 
 interface PreviewSectionProps {
     sourceSummaryLabel: string;
@@ -40,6 +41,7 @@ interface PreviewSectionProps {
     sourceCanvasDescription: string;
     reductionMode: ReductionMode;
     reductionSwatchCount: number;
+    perceptualMatch: PerceptualSimilarityResult | null;
 }
 
 export function PreviewSection({
@@ -78,6 +80,7 @@ export function PreviewSection({
     sourceCanvasDescription,
     reductionMode,
     reductionSwatchCount,
+    perceptualMatch,
 }: PreviewSectionProps) {
     const pixelRatio = devicePixelRatio || 1;
     const scaledWidth = (width * previewScale) / pixelRatio;
@@ -85,9 +88,10 @@ export function PreviewSection({
     const minPanelWidth = Math.max(240, Math.ceil(scaledWidth + 48));
     const minPanelHeight = Math.max(220, Math.ceil(scaledHeight + 96));
     const previewGridStyle: CSSProperties = {
-        ["--preview-panel-min-width" as const]: `${minPanelWidth}px`,
-        ["--preview-panel-min-height" as const]: `${minPanelHeight}px`,
-    };
+        "--preview-panel-min-width": `${minPanelWidth}px`,
+        "--preview-panel-min-height": `${minPanelHeight}px`,
+    } as CSSProperties;
+    const reducedDescription = buildReducedDescription(reductionMode, reductionSwatchCount, perceptualMatch);
 
     return (
         <section className="dither-gradient-card preview">
@@ -136,11 +140,7 @@ export function PreviewSection({
                         <GradientPreviewCanvas
                             ref={reducedCanvasRef}
                             title="Palette Reduced"
-                            description={
-                                reductionMode === "palette"
-                                    ? `Palette (${reductionSwatchCount})`
-                                    : "Disabled"
-                            }
+                            description={reducedDescription}
                             width={width}
                             height={height}
                             previewScale={previewScale}
@@ -182,6 +182,9 @@ export function PreviewSection({
                     )}
                 </div>
             </div>
+            {perceptualMatch && (
+                <PerceptualMatchSummary match={perceptualMatch} />
+            )}
             <div className="preview-toggle-list">
                 <label>
                     <input type="checkbox" checked={showSourcePreview} onChange={(event) => onToggleSourcePreview(event.target.checked)} /> Source
@@ -230,5 +233,35 @@ export function PreviewSection({
                 </label>
             </div>
         </section>
+    );
+}
+
+function buildReducedDescription(
+    reductionMode: ReductionMode,
+    reductionSwatchCount: number,
+    perceptualMatch: PerceptualSimilarityResult | null
+) {
+    if (reductionMode !== "palette") {
+        return "Disabled";
+    }
+    const baseLabel = `Palette (${reductionSwatchCount})`;
+    if (!perceptualMatch) {
+        return baseLabel;
+    }
+    return `${baseLabel} • Match ${perceptualMatch.score.toFixed(1)}/100`;
+}
+
+function PerceptualMatchSummary({ match }: { match: PerceptualSimilarityResult }) {
+    return (
+        <div className="perceptual-match-banner">
+            <div className="perceptual-match-banner__primary">
+                <strong>Perceptual Match</strong>
+                <span>{match.score.toFixed(1)} / 100</span>
+            </div>
+            <div className="perceptual-match-banner__secondary">
+                <span>Gaussian blur sigma {match.blurRadiusPx.toFixed(2)} px</span>
+                <span>Mean delta (OKLab) {match.meanDelta.toFixed(4)}</span>
+            </div>
+        </div>
     );
 }
