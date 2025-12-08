@@ -50,14 +50,11 @@ import {
     ErrorDiffusionKernelId,
     DitherThresholdTile,
     DitherType,
-    DEFAULT_VORONOI_CELLS,
-    DEFAULT_VORONOI_JITTER,
     isErrorDiffusionDither,
     usesSeededDither,
 } from "../utils/dithering";
 import { DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX, type PerceptualSimilarityResult } from "@/utils/perceptualSimilarity";
 import { MarkdownFile } from "@/components/MarkdownFile";
-const VORONOI_CELL_OPTIONS = [2, 4, 8, 16, 32, 64];
 const MAX_SCATTER_SOURCE_POINTS = 4000;
 const DEFAULT_PALETTE_NUDGE_STRENGTH = 0.1;
 const PERCEPTUAL_BLUR_MIN_PX = 0.5;
@@ -189,8 +186,6 @@ export default function DitherGradientPage() {
     const [savedDitherStrength, setSavedDitherStrength] = useState(ditherStrength);
     const [ditherSeed, setDitherSeed] = useState<number>(1);
     const [sourceType, setSourceType] = useState<SourceType>("gradient");
-    const [voronoiCellsPerAxis, setVoronoiCellsPerAxis] = useState<number>(DEFAULT_VORONOI_CELLS);
-    const [voronoiJitter, setVoronoiJitter] = useState<number>(DEFAULT_VORONOI_JITTER);
     const [errorDiffusionKernelId, setErrorDiffusionKernelId] = useState<ErrorDiffusionKernelId>(DEFAULT_ERROR_DIFFUSION_KERNEL);
     const [reductionMode, setReductionMode] = useState<ReductionMode>("palette");
     const [distanceColorSpace, setDistanceColorSpace] = useState<ColorInterpolationMode>("oklab");
@@ -472,14 +467,8 @@ export default function DitherGradientPage() {
     const palettePreviewAvailable = paletteMaskAvailable && !ditherMaskControlsDisabled;
     const perceptualBlurPreviewAvailable = hasReductionPalette && reductionMode === "palette" && showReducedPreview;
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
-        () =>
-            buildProceduralDitherTile(ditherType, ditherSeed, {
-                voronoi: {
-                    cellsPerAxis: voronoiCellsPerAxis,
-                    jitter: voronoiJitter,
-                },
-            }),
-        [ditherType, ditherSeed, voronoiCellsPerAxis, voronoiJitter]
+        () => buildProceduralDitherTile(ditherType, ditherSeed),
+        [ditherType, ditherSeed]
     );
 
     const handleDistanceColorSpaceChange = (nextMode: ColorInterpolationMode) => {
@@ -673,7 +662,6 @@ export default function DitherGradientPage() {
         },
     });
     const seedEnabled = usesSeededDither(ditherType);
-    const isVoronoiDither = ditherType === "voronoi-cluster";
     const isErrorDiffusion = isErrorDiffusionDither(ditherType);
     const usingImageSource = sourceType === "image";
     const imageSourceReady = !!sourceImageData;
@@ -1112,12 +1100,6 @@ export default function DitherGradientPage() {
                                                 isErrorDiffusion={isErrorDiffusion}
                                                 errorDiffusionKernelId={errorDiffusionKernelId}
                                                 onErrorDiffusionKernelChange={setErrorDiffusionKernelId}
-                                                isVoronoiDither={isVoronoiDither}
-                                                voronoiCellsPerAxis={voronoiCellsPerAxis}
-                                                onVoronoiCellsChange={setVoronoiCellsPerAxis}
-                                                voronoiCellOptions={VORONOI_CELL_OPTIONS}
-                                                voronoiJitter={voronoiJitter}
-                                                onVoronoiJitterChange={setVoronoiJitter}
                                             />
                                         </div>
                                     </div>

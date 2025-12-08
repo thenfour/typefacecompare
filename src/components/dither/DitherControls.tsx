@@ -13,12 +13,6 @@ interface DitherControlsProps {
     isErrorDiffusion: boolean;
     errorDiffusionKernelId: ErrorDiffusionKernelId;
     onErrorDiffusionKernelChange: (id: ErrorDiffusionKernelId) => void;
-    isVoronoiDither: boolean;
-    voronoiCellsPerAxis: number;
-    onVoronoiCellsChange: (value: number) => void;
-    voronoiCellOptions: number[];
-    voronoiJitter: number;
-    onVoronoiJitterChange: (value: number) => void;
 }
 
 export function DitherControls({
@@ -33,12 +27,6 @@ export function DitherControls({
     isErrorDiffusion,
     errorDiffusionKernelId,
     onErrorDiffusionKernelChange,
-    isVoronoiDither,
-    voronoiCellsPerAxis,
-    onVoronoiCellsChange,
-    voronoiCellOptions,
-    voronoiJitter,
-    onVoronoiJitterChange,
 }: DitherControlsProps) {
     return (
         <>
@@ -90,31 +78,6 @@ export function DitherControls({
                         ))}
                     </select>
                 </label>
-            )}
-            {isVoronoiDither && (
-                <>
-                    <label>
-                        Voronoi Cells per Axis
-                        <select value={voronoiCellsPerAxis} onChange={(event) => onVoronoiCellsChange(Number(event.target.value))}>
-                            {voronoiCellOptions.map((option) => (
-                                <option value={option} key={option}>
-                                    {option}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <label>
-                        Voronoi Jitter ({voronoiJitter.toFixed(2)})
-                        <input
-                            type="range"
-                            min={0}
-                            max={1}
-                            step={0.05}
-                            value={voronoiJitter}
-                            onChange={(event) => onVoronoiJitterChange(Number(event.target.value))}
-                        />
-                    </label>
-                </>
             )}
         </>
     );
