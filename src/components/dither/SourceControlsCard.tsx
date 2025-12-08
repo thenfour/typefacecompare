@@ -90,20 +90,20 @@ function renderGradientControls({
     interpolationCurve,
     onInterpolationCurveChange,
 }: GradientControlsProps) {
-    const interpolationOptions: { value: ColorInterpolationMode; label: string }[] = [
-        { value: "rgb", label: "RGB" },
-        { value: "hsl", label: "HSL" },
-        { value: "hsv", label: "HSV" },
-        { value: "hwb", label: "HWB" },
-        { value: "cmy", label: "CMY" },
-        { value: "cmyk", label: "CMYK" },
-        { value: "luma-rgb", label: "Luma (RGB)" },
-        { value: "luma-lab", label: "Luma (Lab)" },
-        { value: "luma-oklab", label: "Luma (OKLab)" },
-        { value: "lab", label: "LAB" },
-        { value: "oklab", label: "OKLab" },
-        { value: "ycbcr", label: "YCbCr" },
-        { value: "oklch", label: "OKLCH" },
+    const interpolationOptions: Array<{ value: ColorInterpolationMode; label: string; hint: string }> = [
+        { value: "rgb", label: "RGB", hint: "Channel-linear mix that matches how displays blend light." },
+        { value: "hsl", label: "HSL", hint: "Keeps lightness separate so hue sweeps feel painterly." },
+        { value: "hsv", label: "HSV", hint: "Holds value steady for bright UI-style gradients." },
+        { value: "hwb", label: "HWB", hint: "Controls white/black content for pastel-friendly ramps." },
+        { value: "cmy", label: "CMY", hint: "Subtracts inks, echoing print-style transitions." },
+        { value: "cmyk", label: "CMYK", hint: "Adds a K channel so shadows stay anchored." },
+        { value: "luma-rgb", label: "Luma (RGB)", hint: "Only brightness changes; hue stays locked to corners." },
+        { value: "luma-lab", label: "Luma (Lab)", hint: "Lab lightness-only sweeps for perceptual fades." },
+        { value: "luma-oklab", label: "Luma (OKLab)", hint: "OKLab lightness-only; smooth, modern value ramps." },
+        { value: "lab", label: "LAB", hint: "Perceptual axes that preserve luminance structure." },
+        { value: "oklab", label: "OKLab", hint: "Modern perceptual mix—reliable default for gradients." },
+        { value: "ycbcr", label: "YCbCr", hint: "Video luma/chroma split for gentle hue drift." },
+        { value: "oklch", label: "OKLCH", hint: "Perceptual polar space for even hue rotations." },
     ];
 
     const placementOptions: { value: GradientAutoPlacementMode; label: string }[] = [

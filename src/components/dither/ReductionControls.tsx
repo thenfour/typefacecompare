@@ -41,19 +41,19 @@ export function ReductionControls({
                             onChange={onDistanceColorSpaceChange}
                             ariaLabel="Palette distance space"
                             options={[
-                                { value: "rgb", label: "RGB" },
-                                { value: "hsl", label: "HSL" },
-                                { value: "hsv", label: "HSV" },
-                                { value: "hwb", label: "HWB" },
-                                { value: "cmy", label: "CMY" },
-                                { value: "cmyk", label: "CMYK" },
-                                { value: "luma-rgb", label: "Luma (RGB)" },
-                                { value: "luma-lab", label: "Luma (Lab)" },
-                                { value: "luma-oklab", label: "Luma (OKLab)" },
-                                { value: "lab", label: "LAB" },
-                                { value: "oklab", label: "OKLab" },
-                                { value: "ycbcr", label: "YCbCr" },
-                                { value: "oklch", label: "OKLCH" },
+                                { value: "rgb", label: "RGB", hint: "Fast euclidean RGB—ignores perception." },
+                                { value: "hsl", label: "HSL", hint: "Hue/lightness weighting; unstable near grays." },
+                                { value: "hsv", label: "HSV", hint: "Value-heavy metric that favors vivid primaries." },
+                                { value: "hwb", label: "HWB", hint: "White/black emphasis to protect highlights." },
+                                { value: "cmy", label: "CMY", hint: "Subtracts CMY inks; mirrors print coverage." },
+                                { value: "cmyk", label: "CMYK", hint: "Adds black channel; suits print-focused palettes." },
+                                { value: "luma-rgb", label: "Luma (RGB)", hint: "Compares grayscale brightness only." },
+                                { value: "luma-lab", label: "Luma (Lab)", hint: "Lab lightness delta only—hue ignored." },
+                                { value: "luma-oklab", label: "Luma (OKLab)", hint: "OKLab lightness delta to isolate value errors." },
+                                { value: "lab", label: "LAB", hint: "CIELAB ΔE—classic perceptual metric." },
+                                { value: "oklab", label: "OKLab", hint: "Modern perceptual metric—balanced default." },
+                                { value: "ycbcr", label: "YCbCr", hint: "Video-style chroma distance; soft on hue shifts." },
+                                { value: "oklch", label: "OKLCH", hint: "Perceptual polar metric separating hue/chroma." },
                             ]}
                         />
                     </div>
