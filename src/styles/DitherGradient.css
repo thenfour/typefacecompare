@@ -396,11 +396,38 @@
     font-weight: 600;
 }
 
-.perceptual-match-banner__secondary {
+.perceptual-match-banner__delta {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.perceptual-match-banner__rows {
     display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.perceptual-match-banner__row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px dashed #cfd8ff;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.perceptual-match-banner__row-label {
+    font-weight: 600;
+    color: #111827;
+}
+
+.perceptual-match-banner__row-meta {
+    display: flex;
+    gap: 12px;
     flex-wrap: wrap;
-    gap: 10px;
     color: #4b5563;
+    font-size: 11px;
 }
 
 .corner-summary {

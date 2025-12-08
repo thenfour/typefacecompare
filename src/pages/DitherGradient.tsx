@@ -199,6 +199,7 @@ export default function DitherGradientPage() {
     const [previewScale, setPreviewScale] = useState(2);
     const [perceptualBlurRadiusPx, setPerceptualBlurRadiusPx] = useState<number>(DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX);
     const [perceptualMatch, setPerceptualMatch] = useState<PerceptualSimilarityResult | null>(null);
+    const [unditheredPerceptualMatch, setUnditheredPerceptualMatch] = useState<PerceptualSimilarityResult | null>(null);
     const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(4);
     const [ditherMaskStrength, setDitherMaskStrength] = useState(3);
     const [sourceGamma, setSourceGamma] = useState(1);
@@ -284,6 +285,7 @@ export default function DitherGradientPage() {
     const [showSourcePreview, setShowSourcePreview] = useState(true);
     const [showGamutPreview, setShowGamutPreview] = useState(false);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
+    const [showUnditheredPreview, setShowUnditheredPreview] = useState(true);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
     const [showPaletteErrorPreview, setShowPaletteErrorPreview] = useState(false);
     const [showPaletteAmbiguityPreview, setShowPaletteAmbiguityPreview] = useState(false);
@@ -297,6 +299,7 @@ export default function DitherGradientPage() {
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const gamutCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const ditherCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const unditheredCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const reducedCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const paletteErrorCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const paletteAmbiguityCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -640,6 +643,7 @@ export default function DitherGradientPage() {
         sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
+        showUnditheredPreview,
         showDitherPreview,
         showReducedPreview,
         showPaletteErrorPreview: showPaletteErrorPreview && palettePreviewAvailable,
@@ -652,6 +656,7 @@ export default function DitherGradientPage() {
         canvasRefs: {
             source: sourceCanvasRef,
             gamut: gamutCanvasRef,
+            undithered: unditheredCanvasRef,
             dither: ditherCanvasRef,
             reduced: reducedCanvasRef,
             paletteError: paletteErrorCanvasRef,
@@ -664,6 +669,7 @@ export default function DitherGradientPage() {
         perceptualMatchOptions: {
             blurRadiusPx: perceptualBlurRadiusPx,
             onMatchComputed: setPerceptualMatch,
+            onUnditheredMatchComputed: setUnditheredPerceptualMatch,
         },
     });
     const seedEnabled = usesSeededDither(ditherType);
@@ -1152,6 +1158,8 @@ export default function DitherGradientPage() {
                                 gamutPreviewAvailable={gamutPreviewAvailable}
                                 showDitherPreview={showDitherPreview}
                                 onToggleDitherPreview={setShowDitherPreview}
+                                showUnditheredPreview={showUnditheredPreview}
+                                onToggleUnditheredPreview={setShowUnditheredPreview}
                                 showReducedPreview={showReducedPreview}
                                 onToggleReducedPreview={setShowReducedPreview}
                                 showPaletteErrorPreview={showPaletteErrorPreview}
@@ -1173,6 +1181,7 @@ export default function DitherGradientPage() {
                                 sourceCanvasRef={sourceCanvasRef}
                                 gamutCanvasRef={gamutCanvasRef}
                                 ditherCanvasRef={ditherCanvasRef}
+                                unditheredCanvasRef={unditheredCanvasRef}
                                 reducedCanvasRef={reducedCanvasRef}
                                 paletteErrorCanvasRef={paletteErrorCanvasRef}
                                 paletteAmbiguityCanvasRef={paletteAmbiguityCanvasRef}
@@ -1189,6 +1198,7 @@ export default function DitherGradientPage() {
                                 reductionMode={reductionMode}
                                 reductionSwatchCount={reductionSwatches.length}
                                 perceptualMatch={perceptualMatch}
+                                unditheredPerceptualMatch={unditheredPerceptualMatch}
                             />
 
                             <section className="dither-gradient-card preview color-scatter-card">

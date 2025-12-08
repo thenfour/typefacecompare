@@ -35,6 +35,7 @@ const RENDER_DEBOUNCE_MS = 24; // Keep renders responsive while preventing tight
 export type PreviewStageKey =
     | "source"
     | "gamut"
+    | "undithered"
     | "dither"
     | "reduced"
     | "paletteError"
@@ -47,6 +48,7 @@ export type PreviewStageKey =
 export interface PreviewCanvasRefs {
     source: MutableRefObject<HTMLCanvasElement | null>;
     gamut: MutableRefObject<HTMLCanvasElement | null>;
+    undithered: MutableRefObject<HTMLCanvasElement | null>;
     dither: MutableRefObject<HTMLCanvasElement | null>;
     reduced: MutableRefObject<HTMLCanvasElement | null>;
     paletteError: MutableRefObject<HTMLCanvasElement | null>;
@@ -91,6 +93,7 @@ interface PaletteMetricsSample {
 export interface PerceptualMatchOptions {
     blurRadiusPx: number;
     onMatchComputed?: (result: PerceptualSimilarityResult | null) => void;
+    onUnditheredMatchComputed?: (result: PerceptualSimilarityResult | null) => void;
 }
 
 export interface RenderMetrics {
@@ -121,6 +124,7 @@ export interface UseDitherRendererOptions {
     sourceAdjustmentsActive: boolean;
     showSourcePreview: boolean;
     showGamutPreview: boolean;
+    showUnditheredPreview: boolean;
     showDitherPreview: boolean;
     showReducedPreview: boolean;
     showPaletteErrorPreview: boolean;
@@ -160,6 +164,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
+        showUnditheredPreview,
         showDitherPreview,
         showReducedPreview,
         showPaletteErrorPreview,
@@ -183,10 +188,16 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             perceptualMatchOptions?.onMatchComputed?.(result);
         };
 
+        const notifyUnditheredMatch = (result: PerceptualSimilarityResult | null) => {
+            if (cancelRef.cancelled) return;
+            perceptualMatchOptions?.onUnditheredMatchComputed?.(result);
+        };
+
         const clearAllCanvases = () => {
             const stageConfigs: PreviewStageConfig[] = [
                 { key: "source", enabled: true, ref: canvasRefs.source },
                 { key: "gamut", enabled: true, ref: canvasRefs.gamut },
+                { key: "undithered", enabled: true, ref: canvasRefs.undithered },
                 { key: "dither", enabled: true, ref: canvasRefs.dither },
                 { key: "reduced", enabled: true, ref: canvasRefs.reduced },
                 { key: "paletteError", enabled: true, ref: canvasRefs.paletteError },
@@ -209,10 +220,14 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
 
             const hasPaletteReduction = reductionMode === "palette" && reductionPaletteEntries.length > 0;
             const perceptualMatchEnabled = Boolean(perceptualMatchOptions && hasPaletteReduction && showReducedPreview);
+            const unditheredMatchEnabled = Boolean(
+                perceptualMatchOptions?.onUnditheredMatchComputed && hasPaletteReduction && showUnditheredPreview
+            );
 
             const previewStages: PreviewStageConfig[] = [
                 { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
                 { key: "gamut", enabled: showGamutPreview && sourceAdjustmentsActive, ref: canvasRefs.gamut },
+                { key: "undithered", enabled: showUnditheredPreview && hasPaletteReduction, ref: canvasRefs.undithered },
                 { key: "dither", enabled: showDitherPreview, ref: canvasRefs.dither },
                 { key: "reduced", enabled: showReducedPreview, ref: canvasRefs.reduced },
                 { key: "paletteError", enabled: showPaletteErrorPreview, ref: canvasRefs.paletteError },
@@ -289,8 +304,10 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             let paletteModulationMin = Infinity;
             let paletteModulationMax = -Infinity;
             const baseColorBuffer = new Float32Array(pixelCount * 3);
+            const needsReferenceBuffer = perceptualMatchEnabled || unditheredMatchEnabled;
             let perceptualReferenceBuffer: Float32Array | null = null;
             let perceptualTestBuffer: Float32Array | null = null;
+            let perceptualUnditheredBuffer: Float32Array | null = null;
             for (let y = 0; y < height; y++) {
                 const v = height === 1 ? 0 : y / (height - 1);
                 for (let x = 0; x < width; x++) {
@@ -311,9 +328,14 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 ditherMask?.blurRadius ?? 0,
                 ditherMask?.strength ?? 0
             );
-            if (perceptualMatchEnabled) {
+            if (needsReferenceBuffer) {
                 perceptualReferenceBuffer = new Float32Array(pixelCount * 3);
+            }
+            if (perceptualMatchEnabled) {
                 perceptualTestBuffer = new Float32Array(pixelCount * 3);
+            }
+            if (unditheredMatchEnabled) {
+                perceptualUnditheredBuffer = new Float32Array(pixelCount * 3);
             }
 
             const paletteMetricsParams = hasPaletteReduction ? paletteModulationParams : null;
@@ -371,6 +393,13 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     const effectiveDitherStrength = ditherStrength * maskFactor * paletteFactor;
                     let ditheredColor: { r: number; g: number; b: number };
                     let reducedColor: { r: number; g: number; b: number };
+                    const shouldCaptureUndithered = hasPaletteReduction &&
+                        (Boolean(stageMap.undithered) || Boolean(perceptualUnditheredBuffer));
+                    const unditheredColor = shouldCaptureUndithered
+                        ? clampRgb255(
+                            applyReduction(pipelineSource, reductionMode, reductionPaletteEntries, distanceColorSpace)
+                        )
+                        : null;
 
                     if (errorDiffusionContext) {
                         const result = applyErrorDiffusionToPixel(
@@ -408,6 +437,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     if (stageMap.gamut) {
                         writePixel(stageMap.gamut.imageData.data, offset, gamutPreviewColor);
                     }
+                    if (stageMap.undithered && unditheredColor) {
+                        writePixel(stageMap.undithered.imageData.data, offset, unditheredColor);
+                    }
                     if (stageMap.dither) {
                         writePixel(stageMap.dither.imageData.data, offset, ditheredColor);
                     }
@@ -419,6 +451,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     }
                     if (perceptualTestBuffer) {
                         writeColorToFloatBuffer(perceptualTestBuffer, pixelIndex, reducedColor);
+                    }
+                    if (perceptualUnditheredBuffer && unditheredColor) {
+                        writeColorToFloatBuffer(perceptualUnditheredBuffer, pixelIndex, unditheredColor);
                     }
                     if (paletteMetrics) {
                         if (paletteErrorValues) {
@@ -521,6 +556,21 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 notifyPerceptualMatch(null);
             }
 
+            if (unditheredMatchEnabled && perceptualReferenceBuffer && perceptualUnditheredBuffer) {
+                const blurRadiusPx = perceptualMatchOptions?.blurRadiusPx ?? DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX;
+                const unditheredArtifacts: PerceptualSimilarityArtifacts = computePerceptualSimilarityArtifacts({
+                    referenceRgbBuffer: perceptualReferenceBuffer,
+                    testRgbBuffer: perceptualUnditheredBuffer,
+                    width,
+                    height,
+                    blurRadiusPx,
+                    distanceSpace: "oklab",
+                });
+                notifyUnditheredMatch(unditheredArtifacts.result);
+            } else {
+                notifyUnditheredMatch(null);
+            }
+
             activeStages.forEach((stage) => {
                 stage.ctx.putImageData(stage.imageData, 0, 0);
                 if (shouldOverlaySourcePoints && stage.key === "source") {
@@ -580,6 +630,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
+        showUnditheredPreview,
         showDitherPreview,
         showReducedPreview,
         showPaletteErrorPreview,
@@ -592,6 +643,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         gamutTransform,
         canvasRefs.source,
         canvasRefs.gamut,
+        canvasRefs.undithered,
         canvasRefs.dither,
         canvasRefs.reduced,
         canvasRefs.paletteError,
@@ -602,6 +654,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         canvasRefs.perceptualBlurTest,
         perceptualMatchOptions?.blurRadiusPx,
         perceptualMatchOptions?.onMatchComputed,
+        perceptualMatchOptions?.onUnditheredMatchComputed,
         onRenderMetrics,
     ]);
 }
