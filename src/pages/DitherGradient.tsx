@@ -231,6 +231,9 @@ export default function DitherGradientPage() {
         DEFAULT_PALETTE_GRAVITY_PARAMS.chromaStrength
     );
     const [paletteGravitySoftness, setPaletteGravitySoftness] = useState(DEFAULT_PALETTE_GRAVITY_PARAMS.softness);
+    const [paletteGravityAmbiguityBoost, setPaletteGravityAmbiguityBoost] = useState(
+        DEFAULT_PALETTE_GRAVITY_PARAMS.ambiguityBoost
+    );
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -331,6 +334,7 @@ export default function DitherGradientPage() {
             softness: paletteGravitySoftness,
             lightnessStrength: paletteGravityLightnessStrength,
             chromaStrength: paletteGravityChromaStrength,
+            ambiguityBoost: paletteGravityAmbiguityBoost,
         };
         if (
             !sourceAdjustmentsEnabled ||
@@ -342,6 +346,7 @@ export default function DitherGradientPage() {
                 ...baseParams,
                 lightnessStrength: 0,
                 chromaStrength: 0,
+                ambiguityBoost: baseParams.ambiguityBoost,
             } satisfies PaletteGravityParams;
         }
         return baseParams;
@@ -349,6 +354,7 @@ export default function DitherGradientPage() {
         paletteGravitySoftness,
         paletteGravityLightnessStrength,
         paletteGravityChromaStrength,
+        paletteGravityAmbiguityBoost,
         sourceAdjustmentsEnabled,
         paletteNudgeEnabled,
         hasReductionPalette,
@@ -585,6 +591,10 @@ export default function DitherGradientPage() {
     const handlePaletteSoftnessChange = (nextValue: number) => {
         const clamped = clampValue(nextValue, 0.005, 0.25);
         setPaletteGravitySoftness(clamped);
+    };
+    const handlePaletteAmbiguityBoostChange = (nextValue: number) => {
+        const clamped = clampValue(nextValue, 0, 2);
+        setPaletteGravityAmbiguityBoost(clamped);
     };
     const handleGamutFitToggle = (nextEnabled: boolean) => {
         setGamutFitEnabled(nextEnabled);
@@ -1064,8 +1074,22 @@ export default function DitherGradientPage() {
                                                         />
                                                     </label>
                                                 </Tooltip>
+                                                <Tooltip title="Blends your strengths toward 100% as ambiguity rises. 0% keeps the base strength; crank above 100% to reach full pull even when ambiguity is subtle.">
+                                                    <label>
+                                                        Ambiguity Boost ({Math.round(paletteGravityAmbiguityBoost * 100)}%)
+                                                        <input
+                                                            type="range"
+                                                            min={0}
+                                                            max={2}
+                                                            step={0.05}
+                                                            value={paletteGravityAmbiguityBoost}
+                                                            onChange={(event) => handlePaletteAmbiguityBoostChange(event.target.valueAsNumber)}
+                                                            disabled={paletteNudgeControlsDisabled}
+                                                        />
+                                                    </label>
+                                                </Tooltip>
                                                 <p className="dither-gradient-note">
-                                                    Raise lightness or chroma strength (γ) to pull those channels toward the OKLCh-weighted palette centroid; soften τ to keep the pull gentle.
+                                                    Raise lightness or chroma strength (γ) to pull those channels toward the OKLCh-weighted palette centroid; soften τ to keep the pull gentle. Combine a low base strength with a high ambiguity boost when you only want the nudge to fire for uncertain pixels.
                                                 </p>
                                             </>
                                         )}

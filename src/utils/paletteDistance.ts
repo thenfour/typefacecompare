@@ -5,6 +5,7 @@ import type { ReductionMode } from "@/types/dither";
 const OKLCH_CHROMA_NORMALIZER = 0.4;
 const MIN_GRAVITY_SOFTNESS = 0.0025;
 const MAX_GRAVITY_SOFTNESS = 0.5;
+const MAX_AMBIGUITY_BOOST = 20;
 const DEG_TO_RAD = Math.PI / 180;
 
 type OklabVector = { L: number; a: number; b: number };
@@ -15,6 +16,13 @@ export interface ReductionPaletteEntry {
     coords: number[];
     oklab: OklabVector;
     oklch: OklchVector;
+}
+
+export type PaletteCoordinateSelector = (entry: ReductionPaletteEntry) => number[];
+
+export interface PaletteDistanceSummary {
+    nearestDistance: number;
+    secondNearestDistance: number;
 }
 
 export function applyReduction(
@@ -54,12 +62,14 @@ export interface PaletteGravityParams {
     softness: number;
     lightnessStrength: number;
     chromaStrength: number;
+    ambiguityBoost: number;
 }
 
 export const DEFAULT_PALETTE_GRAVITY_PARAMS: PaletteGravityParams = {
     softness: 0.035,
     lightnessStrength: 0.35,
     chromaStrength: 0.5,
+    ambiguityBoost: 0,
 };
 
 export function applyPaletteGravityNudge(
@@ -79,8 +89,10 @@ export function applyPaletteGravityNudge(
     if (!centroid) {
         return rgb;
     }
-    const lightnessT = clamp01(resolved.lightnessStrength);
-    const chromaT = clamp01(resolved.chromaStrength);
+    const ambiguityRatio = resolved.ambiguityBoost > 0 ? computePaletteAmbiguity(sourceLab, palette) : 0;
+    const emphasis = resolved.ambiguityBoost > 0 ? clamp01(ambiguityRatio * resolved.ambiguityBoost) : 0;
+    const lightnessT = applyAmbiguityEmphasis(resolved.lightnessStrength, emphasis);
+    const chromaT = applyAmbiguityEmphasis(resolved.chromaStrength, emphasis);
     const adjustedLab: OklabVector = {
         L: lerp(sourceLab.L, centroid.L, lightnessT),
         a: lerp(sourceLab.a, centroid.a, chromaT),
@@ -90,8 +102,18 @@ export function applyPaletteGravityNudge(
     return clampRgb255(rgbUnitTo255(unitRgb));
 }
 
+function applyAmbiguityEmphasis(baseStrength: number, emphasis: number): number {
+    if (baseStrength >= 1) {
+        return 1;
+    }
+    if (emphasis <= 0) {
+        return clamp01(baseStrength);
+    }
+    return clamp01(baseStrength + (1 - baseStrength) * emphasis);
+}
+
 function normalizePaletteGravityParams(params: PaletteGravityParams): PaletteGravityParams {
-    const { softness, lightnessStrength, chromaStrength } = params;
+    const { softness, lightnessStrength, chromaStrength, ambiguityBoost } = params;
     const clampedSoftness = Math.min(
         MAX_GRAVITY_SOFTNESS,
         Math.max(MIN_GRAVITY_SOFTNESS, Number.isFinite(softness) ? softness : MIN_GRAVITY_SOFTNESS)
@@ -100,6 +122,7 @@ function normalizePaletteGravityParams(params: PaletteGravityParams): PaletteGra
         softness: clampedSoftness,
         lightnessStrength: clamp01(lightnessStrength ?? 0),
         chromaStrength: clamp01(chromaStrength ?? 0),
+        ambiguityBoost: Math.max(0, Math.min(MAX_AMBIGUITY_BOOST, ambiguityBoost ?? 0)),
     } satisfies PaletteGravityParams;
 }
 
@@ -168,6 +191,50 @@ function computeOklabDistanceSq(a: OklabVector, b: OklabVector): number {
     const deltaA = a.a - b.a;
     const deltaB = a.b - b.b;
     return deltaL * deltaL + deltaA * deltaA + deltaB * deltaB;
+}
+
+function computePaletteAmbiguity(sourceLab: OklabVector, palette: ReductionPaletteEntry[]): number {
+    const summary = summarizePaletteDistances(
+        [sourceLab.L, sourceLab.a, sourceLab.b],
+        palette,
+        (entry) => [entry.oklab.L, entry.oklab.a, entry.oklab.b]
+    );
+    if (!summary || !Number.isFinite(summary.secondNearestDistance) || summary.secondNearestDistance <= 0) {
+        return 0;
+    }
+    const diff = Math.abs(summary.secondNearestDistance - summary.nearestDistance);
+    return summary.secondNearestDistance > 0
+        ? clamp01(1 - diff / summary.secondNearestDistance)
+        : 0;
+}
+
+export function summarizePaletteDistances(
+    sourceCoords: number[],
+    palette: ReductionPaletteEntry[],
+    coordSelector: PaletteCoordinateSelector = (entry) => entry.coords
+): PaletteDistanceSummary | null {
+    if (palette.length === 0) {
+        return null;
+    }
+    let nearest = Infinity;
+    let second = Infinity;
+    for (const entry of palette) {
+        const coords = coordSelector(entry);
+        const distSq = distanceSq(sourceCoords, coords);
+        if (distSq < nearest) {
+            second = nearest;
+            nearest = distSq;
+        } else if (distSq < second) {
+            second = distSq;
+        }
+    }
+    if (!Number.isFinite(nearest)) {
+        return null;
+    }
+    return {
+        nearestDistance: Math.sqrt(Math.max(nearest, 0)),
+        secondNearestDistance: Math.sqrt(Math.max(second, 0)),
+    } satisfies PaletteDistanceSummary;
 }
 
 function computeOklchDistanceSq(a: OklchVector, b: OklchVector): number {

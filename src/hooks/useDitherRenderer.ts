@@ -17,8 +17,8 @@ import {
     applyPaletteGravityNudge,
     applyReduction,
     clampRgb255,
-    distanceSq,
     rgbToCoords,
+    summarizePaletteDistances,
     type PaletteGravityParams,
     type ReductionPaletteEntry,
 } from "@/utils/paletteDistance";
@@ -626,6 +626,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         paletteGravity.softness,
         paletteGravity.lightnessStrength,
         paletteGravity.chromaStrength,
+        paletteGravity.ambiguityBoost,
         sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
@@ -810,28 +811,18 @@ function evaluatePaletteMetrics(
     params: PaletteModulationParams
 ): PaletteMetricsSample {
     const coords = rgbToCoords(rgb, distanceMode);
-    let nearest = Infinity;
-    let secondNearest = Infinity;
-    for (const entry of palette) {
-        const dist = distanceSq(coords, entry.coords);
-        if (dist < nearest) {
-            secondNearest = nearest;
-            nearest = dist;
-        } else if (dist < secondNearest) {
-            secondNearest = dist;
-        }
-    }
-    const errorDistance = Math.sqrt(Math.max(nearest, 0));
+    const summary = summarizePaletteDistances(coords, palette);
+    const errorDistance = summary?.nearestDistance ?? 0;
     const errorScale = Math.max(params.errorScale, 1e-6);
     const scaledError = clamp01(errorDistance / errorScale);
     const errorExponent = Math.max(params.errorExponent, 0);
     const errorFactor = errorExponent === 0 ? 1 : Math.pow(scaledError, errorExponent);
 
     let ambiguityRatio = 0;
+    const secondNearest = summary?.secondNearestDistance ?? Infinity;
     if (Number.isFinite(secondNearest) && secondNearest > 1e-6) {
-        const d1 = Math.sqrt(secondNearest);
-        const diff = Math.abs(d1 - errorDistance);
-        ambiguityRatio = d1 > 0 ? clamp01(1 - diff / d1) : 0;
+        const diff = Math.abs(secondNearest - errorDistance);
+        ambiguityRatio = secondNearest > 0 ? clamp01(1 - diff / secondNearest) : 0;
     }
     const ambExponent = Math.max(params.ambiguityExponent, 0);
     const shapedAmbiguity = ambExponent === 0 ? 1 : Math.pow(ambiguityRatio, ambExponent);
