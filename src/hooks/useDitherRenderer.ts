@@ -1,6 +1,6 @@
 import { useEffect, type MutableRefObject } from "react";
-import type { ColorInterpolationMode } from "@/utils/colorSpaces";
-import { sampleGradientField, type GradientField } from "@/utils/gradientField";
+import { vectorToRgb, type ColorInterpolationMode } from "@/utils/colorSpaces";
+import { sampleGradientField, type GradientField, type GradientFieldPoint } from "@/utils/gradientField";
 import { applyGamutTransformToColor, type GamutTransform } from "@/utils/gamutTransform";
 import {
     applyDitherJitter,
@@ -620,18 +620,32 @@ function drawGradientPointIndicators(
     ctx.save();
     ctx.lineWidth = strokeWidth;
     ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     for (const point of field.points) {
         const clampedX = clamp01(point.position.x);
         const clampedY = clamp01(point.position.y);
         const x = clampedX * (width - 1) + 0.5;
         const y = clampedY * (height - 1) + 0.5;
+        ctx.fillStyle = resolvePointFillColor(point, field.mode);
         ctx.beginPath();
         ctx.arc(x, y, indicatorRadius, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
     }
     ctx.restore();
+}
+
+function resolvePointFillColor(point: GradientFieldPoint, mode: ColorInterpolationMode): string {
+    const hex = point.hex?.trim();
+    // if (hex && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) {
+    //     return hex;
+    // }
+    const rgbUnit = vectorToRgb(point.vector, mode);
+    const rgb255 = clampRgb255({
+        r: rgbUnit.r * 255,
+        g: rgbUnit.g * 255,
+        b: rgbUnit.b * 255,
+    });
+    return `rgb(${rgb255.r}, ${rgb255.g}, ${rgb255.b})`;
 }
 
 function sampleSourceColor(

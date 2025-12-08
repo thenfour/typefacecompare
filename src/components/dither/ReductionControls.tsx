@@ -41,16 +41,16 @@ export function ReductionControls({
                             onChange={onDistanceColorSpaceChange}
                             ariaLabel="Palette distance space"
                             options={[
+                                //{ value: "hsl", label: "HSL", hint: "Not suitable - hue is less defined as S->0, and not perceptual luma" },
+                                //{ value: "hsv", label: "HSV", hint: "Not suitable (see hsl), V is even worse than L for deltaE" },
+                                { value: "luma-rgb", label: "Luma (RGB)", hint: "Viable: fast, only captures luma" },
+                                { value: "luma-lab", label: "Luma (Lab)", hint: "Good" },
+                                { value: "luma-oklab", label: "Luma (OKLab)", hint: "✅Best for luma-only: perceptually balanced." },
                                 { value: "rgb", label: "RGB", hint: "Fast but imperfect luma (tuned for devices not eyes)." },
-                                { value: "hsl", label: "HSL", hint: "Not suitable - hue is less defined as S->0, and not perceptual luma" },
-                                { value: "hsv", label: "HSV", hint: "Not suitable (see hsl), V is even worse than L for deltaE" },
-                                { value: "luma-rgb", label: "Luma (RGB)", hint: "Viable: fast" },
-                                { value: "luma-lab", label: "Luma (Lab)", hint: "Good: Perceptual curves" },
-                                { value: "luma-oklab", label: "Luma (OKLab)", hint: "✅Best: perceptually-orthogonal curves." },
-                                { value: "lab", label: "LAB", hint: "CIELAB assumes ΔE; Euclidean works but clips at gamut edges." },
-                                { value: "oklab", label: "OKLab", hint: "Designed for Euclidean ΔE—recommended general purpose." },
-                                { value: "ycbcr", label: "YCbCr", hint: "Broadcast luma/chroma; Euclidean exaggerates blue/yellow." },
-                                { value: "oklch", label: "OKLCH", hint: "Polar axes—Euclidean fails near the hue wrap, use OKLab instead." },
+                                { value: "ycbcr", label: "YCbCr", hint: "meh, works but not tuned for eye" },
+                                { value: "lab", label: "LAB", hint: "Good nearly-orthogonal" },
+                                { value: "oklab", label: "OKLab", hint: "✅Purpose-fit orthogonal space for chroma & luma" },
+                                //{ value: "oklch", label: "OKLCH", hint: "Not suitable due to space geometry." },
                             ]}
                         />
                     </div>

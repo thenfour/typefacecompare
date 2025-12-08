@@ -120,7 +120,29 @@ const PALETTE_PRESETS = [
         value: `#FF0000 // red\n#00FF00 // green\n#0000FF // blue\n-----\n#00FFFF // cyan\n#FF00FF // magenta\n#FFFF00 // yellow\n#000000 // black\n#FFFFFF // white`,
     },
     {
-        label: "RGB Halftone",
+        label: "RGB Primary Halftone",
+        value: `
+#00f
+#0f0
+#0ff
+#f00
+#f0f
+#ff0
+#fff
+-----
+#008
+#080
+#088
+#800
+#808
+#880
+#888
+-----
+0
+`
+    },
+    {
+        label: "RGB 3-level",
         value: buildRgbLevelPalette(RGB_THREE_LEVELS),
     },
     {

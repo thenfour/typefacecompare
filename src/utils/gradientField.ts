@@ -13,6 +13,7 @@ export interface GradientControlPoint {
 }
 
 export interface GradientFieldPoint {
+    hex: string;
     position: GradientPosition;
     vector: ColorVector;
 }
@@ -104,6 +105,7 @@ export function buildGradientField(
     curveAmount: number
 ): GradientField {
     const fieldPoints = points.map((point) => ({
+        hex: point.hex,
         position: clonePosition(point.position),
         vector: convertHexToVector(point.hex, mode),
     }));
