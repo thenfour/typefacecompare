@@ -94,13 +94,13 @@ function renderGradientControls({
         { value: "rgb", label: "RGB", hint: "Linear mix that matches pixel strength." },
         { value: "hsl", label: "HSL", hint: "Keeps lightness separate so hue sweeps feel painterly." },
         { value: "hsv", label: "HSV", hint: "Holds value steady for bright UI-style gradients." },
-        { value: "luma-rgb", label: "Luma (RGB)", hint: "Only brightness changes; hue stays locked to corners." },
-        { value: "luma-lab", label: "Luma (Lab)", hint: "Lab lightness-only sweeps for perceptual fades." },
-        { value: "luma-oklab", label: "Luma (OKLab)", hint: "OKLab lightness-only; smooth, modern value ramps." },
+        // { value: "luma-rgb", label: "Luma (RGB)", hint: "Only brightness changes; hue stays locked to corners." },
+        // { value: "luma-lab", label: "Luma (Lab)", hint: "Lab lightness-only sweeps for perceptual fades." },
+        // { value: "luma-oklab", label: "Luma (OKLab)", hint: "OKLab lightness-only; smooth, modern value ramps." },
         { value: "lab", label: "LAB", hint: "Perceptual axes that preserve luminance structure." },
-        { value: "oklab", label: "OKLab", hint: "Modern perceptual mix—reliable default for gradients." },
+        { value: "oklab", label: "OKLab", hint: "Good: Perceptual orthogonal space." },
         { value: "ycbcr", label: "YCbCr", hint: "Video luma/chroma split for gentle hue drift." },
-        { value: "oklch", label: "OKLCH", hint: "Perceptual polar space for even hue rotations." },
+        { value: "oklch", label: "OKLCH", hint: "Best: Perceptual polar space for even hue rotations." },
     ];
 
     const placementOptions: { value: GradientAutoPlacementMode; label: string }[] = [

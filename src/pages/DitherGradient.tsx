@@ -89,6 +89,13 @@ function buildRgbLevelPalette(levels: readonly number[], chunkSize = 8) {
 
 const PALETTE_PRESETS = [
     {
+        label: "4Corner",
+        value: `#f00
+#0f0
+#00f
+#0`,
+    },
+    {
         label: "B&W",
         value: `#0\n#f`,
     },
@@ -113,7 +120,7 @@ const PALETTE_PRESETS = [
         value: `#FF0000 // red\n#00FF00 // green\n#0000FF // blue\n-----\n#00FFFF // cyan\n#FF00FF // magenta\n#FFFF00 // yellow\n#000000 // black\n#FFFFFF // white`,
     },
     {
-        label: "RGB Levels (3)",
+        label: "RGB Halftone",
         value: buildRgbLevelPalette(RGB_THREE_LEVELS),
     },
     {
@@ -255,6 +262,7 @@ export default function DitherGradientPage() {
     const [showPerceptualDeltaPreview, setShowPerceptualDeltaPreview] = useState(false);
     const [showPerceptualBlurReferencePreview, setShowPerceptualBlurReferencePreview] = useState(false);
     const [showPerceptualBlurTestPreview, setShowPerceptualBlurTestPreview] = useState(false);
+    const [showGradientPointIndicators, setShowGradientPointIndicators] = useState(false);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -547,6 +555,12 @@ export default function DitherGradientPage() {
         showPerceptualBlurTestPreview,
     ]);
 
+    useEffect(() => {
+        if (sourceType !== "gradient" && showGradientPointIndicators) {
+            setShowGradientPointIndicators(false);
+        }
+    }, [sourceType, showGradientPointIndicators]);
+
     const paletteModulationParams = paletteMaskAvailable
         ? {
             errorScale: ditherErrorScale,
@@ -556,6 +570,7 @@ export default function DitherGradientPage() {
         }
         : null;
     const paletteModulationEnabled = sourceAdjustmentsEnabled && paletteMaskEnabled && paletteMaskAvailable;
+    const sourcePointIndicatorsAvailable = sourceType === "gradient";
 
     useDitherRenderer({
         width,
@@ -593,6 +608,7 @@ export default function DitherGradientPage() {
         showPerceptualDeltaPreview: showPerceptualDeltaPreview && perceptualBlurPreviewAvailable,
         showPerceptualBlurReferencePreview: showPerceptualBlurReferencePreview && perceptualBlurPreviewAvailable,
         showPerceptualBlurTestPreview: showPerceptualBlurTestPreview && perceptualBlurPreviewAvailable,
+        showSourcePointIndicators: sourcePointIndicatorsAvailable && showGradientPointIndicators,
         canvasRefs: {
             source: sourceCanvasRef,
             gamut: gamutCanvasRef,
@@ -1076,6 +1092,9 @@ export default function DitherGradientPage() {
                                 ditherType={ditherType}
                                 showSourcePreview={showSourcePreview}
                                 onToggleSourcePreview={setShowSourcePreview}
+                                showSourcePointIndicators={showGradientPointIndicators}
+                                onToggleSourcePointIndicators={setShowGradientPointIndicators}
+                                sourcePointIndicatorAvailable={sourcePointIndicatorsAvailable}
                                 showGamutPreview={showGamutPreview}
                                 onToggleGamutPreview={setShowGamutPreview}
                                 gamutPreviewAvailable={gamutPreviewAvailable}

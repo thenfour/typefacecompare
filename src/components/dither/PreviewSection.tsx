@@ -10,6 +10,9 @@ interface PreviewSectionProps {
     ditherType: DitherType;
     showSourcePreview: boolean;
     onToggleSourcePreview: (value: boolean) => void;
+    showSourcePointIndicators: boolean;
+    onToggleSourcePointIndicators: (value: boolean) => void;
+    sourcePointIndicatorAvailable: boolean;
     showGamutPreview: boolean;
     onToggleGamutPreview: (value: boolean) => void;
     gamutPreviewAvailable: boolean;
@@ -59,6 +62,9 @@ export function PreviewSection({
     ditherType,
     showSourcePreview,
     onToggleSourcePreview,
+    showSourcePointIndicators,
+    onToggleSourcePointIndicators,
+    sourcePointIndicatorAvailable,
     showGamutPreview,
     onToggleGamutPreview,
     gamutPreviewAvailable,
@@ -241,6 +247,15 @@ export function PreviewSection({
             <div className="preview-toggle-list">
                 <label>
                     <input type="checkbox" checked={showSourcePreview} onChange={(event) => onToggleSourcePreview(event.target.checked)} /> Source
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showSourcePointIndicators}
+                        disabled={!sourcePointIndicatorAvailable}
+                        onChange={(event) => onToggleSourcePointIndicators(event.target.checked)}
+                    />
+                    Control Points
                 </label>
                 <label>
                     <input

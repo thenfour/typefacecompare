@@ -129,6 +129,7 @@ export interface UseDitherRendererOptions {
     showPerceptualDeltaPreview: boolean;
     showPerceptualBlurReferencePreview: boolean;
     showPerceptualBlurTestPreview: boolean;
+    showSourcePointIndicators: boolean;
     canvasRefs: PreviewCanvasRefs;
     perceptualMatchOptions?: PerceptualMatchOptions;
     onRenderMetrics?: (metrics: RenderMetrics) => void;
@@ -167,6 +168,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showPerceptualDeltaPreview,
         showPerceptualBlurReferencePreview,
         showPerceptualBlurTestPreview,
+        showSourcePointIndicators,
         canvasRefs,
         perceptualMatchOptions,
         onRenderMetrics,
@@ -267,6 +269,11 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 acc[stage.key] = stage;
                 return acc;
             }, {} as Partial<Record<PreviewStageKey, ActivePreviewStage>>);
+            const shouldOverlaySourcePoints =
+                sourceType === "gradient" &&
+                showSourcePointIndicators &&
+                Boolean(stageMap.source) &&
+                gradientField.points.length > 0;
 
             const pixelCount = width * height;
             const capturePaletteErrorPreview = Boolean(stageMap.paletteError);
@@ -516,6 +523,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
 
             activeStages.forEach((stage) => {
                 stage.ctx.putImageData(stage.imageData, 0, 0);
+                if (shouldOverlaySourcePoints && stage.key === "source") {
+                    drawGradientPointIndicators(stage.ctx, gradientField, width, height);
+                }
             });
 
             if (!cancelRef.cancelled) {
@@ -578,6 +588,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showPerceptualDeltaPreview,
         showPerceptualBlurReferencePreview,
         showPerceptualBlurTestPreview,
+        showSourcePointIndicators,
         gamutTransform,
         canvasRefs.source,
         canvasRefs.gamut,
@@ -593,6 +604,34 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         perceptualMatchOptions?.onMatchComputed,
         onRenderMetrics,
     ]);
+}
+
+function drawGradientPointIndicators(
+    ctx: CanvasRenderingContext2D,
+    field: GradientField,
+    width: number,
+    height: number
+) {
+    if (!field.points.length) {
+        return;
+    }
+    const indicatorRadius = Math.max(2, Math.min(width, height) * 0.02);
+    const strokeWidth = 1;// Math.max(1, Math.min(indicatorRadius * 0.8, 3));
+    ctx.save();
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    for (const point of field.points) {
+        const clampedX = clamp01(point.position.x);
+        const clampedY = clamp01(point.position.y);
+        const x = clampedX * (width - 1) + 0.5;
+        const y = clampedY * (height - 1) + 0.5;
+        ctx.beginPath();
+        ctx.arc(x, y, indicatorRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+    }
+    ctx.restore();
 }
 
 function sampleSourceColor(
