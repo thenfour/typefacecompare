@@ -103,21 +103,9 @@ function buildScatterTrace(name: string, points: ScatterPoint[], markerOverrides
 
 function buildScatterLayout(axisLabels: [string, string, string], camera: Scene["camera"] | undefined): Partial<Layout> {
     const scene: NonNullable<Layout["scene"]> = {
-        xaxis: {
-            title: axisLabels[0],
-            gridcolor: "rgba(0,0,0,0.1)",
-            zerolinecolor: "rgba(0,0,0,0.2)",
-        },
-        yaxis: {
-            title: axisLabels[1],
-            gridcolor: "rgba(0,0,0,0.1)",
-            zerolinecolor: "rgba(0,0,0,0.2)",
-        },
-        zaxis: {
-            title: axisLabels[2],
-            gridcolor: "rgba(0,0,0,0.1)",
-            zerolinecolor: "rgba(0,0,0,0.2)",
-        },
+        xaxis: buildAxisLayout(axisLabels[0]),
+        yaxis: buildAxisLayout(axisLabels[1]),
+        zaxis: buildAxisLayout(axisLabels[2]),
         aspectmode: "cube",
         camera,
     };
@@ -126,6 +114,14 @@ function buildScatterLayout(axisLabels: [string, string, string], camera: Scene[
         scene,
         legend: { orientation: "h", y: -0.1 },
     } satisfies Partial<Layout>;
+}
+
+function buildAxisLayout(label: string): NonNullable<Scene["xaxis"]> {
+    return {
+        title: { text: label },
+        gridcolor: "rgba(0,0,0,0.1)",
+        zerolinecolor: "rgba(0,0,0,0.2)",
+    } satisfies NonNullable<Scene["xaxis"]>;
 }
 
 function extractCameraState(event: PlotRelayoutEvent): Scene["camera"] | null {
