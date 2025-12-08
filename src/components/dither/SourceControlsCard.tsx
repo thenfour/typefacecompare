@@ -91,7 +91,7 @@ function renderGradientControls({
     onInterpolationCurveChange,
 }: GradientControlsProps) {
     const interpolationOptions: Array<{ value: ColorInterpolationMode; label: string; hint: string }> = [
-        { value: "rgb", label: "RGB", hint: "Channel-linear mix that matches how displays blend light." },
+        { value: "rgb", label: "RGB", hint: "Linear mix that matches pixel strength." },
         { value: "hsl", label: "HSL", hint: "Keeps lightness separate so hue sweeps feel painterly." },
         { value: "hsv", label: "HSV", hint: "Holds value steady for bright UI-style gradients." },
         { value: "hwb", label: "HWB", hint: "Controls white/black content for pastel-friendly ramps." },

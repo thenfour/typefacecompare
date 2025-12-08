@@ -41,19 +41,19 @@ export function ReductionControls({
                             onChange={onDistanceColorSpaceChange}
                             ariaLabel="Palette distance space"
                             options={[
-                                { value: "rgb", label: "RGB", hint: "Fast euclidean RGB—ignores perception." },
-                                { value: "hsl", label: "HSL", hint: "Hue/lightness weighting; unstable near grays." },
-                                { value: "hsv", label: "HSV", hint: "Value-heavy metric that favors vivid primaries." },
-                                { value: "hwb", label: "HWB", hint: "White/black emphasis to protect highlights." },
-                                { value: "cmy", label: "CMY", hint: "Subtracts CMY inks; mirrors print coverage." },
-                                { value: "cmyk", label: "CMYK", hint: "Adds black channel; suits print-focused palettes." },
-                                { value: "luma-rgb", label: "Luma (RGB)", hint: "Compares grayscale brightness only." },
-                                { value: "luma-lab", label: "Luma (Lab)", hint: "Lab lightness delta only—hue ignored." },
-                                { value: "luma-oklab", label: "Luma (OKLab)", hint: "OKLab lightness delta to isolate value errors." },
-                                { value: "lab", label: "LAB", hint: "CIELAB ΔE—classic perceptual metric." },
-                                { value: "oklab", label: "OKLab", hint: "Modern perceptual metric—balanced default." },
-                                { value: "ycbcr", label: "YCbCr", hint: "Video-style chroma distance; soft on hue shifts." },
-                                { value: "oklch", label: "OKLCH", hint: "Perceptual polar metric separating hue/chroma." },
+                                { value: "rgb", label: "RGB", hint: "Fast but imperfect luma (tuned for devices not eyes)." },
+                                { value: "hsl", label: "HSL", hint: "Not suitable - hue is less defined as S->0, and not perceptual luma" },
+                                { value: "hsv", label: "HSV", hint: "Not suitable (see hsl), V is even worse than L for deltaE" },
+                                { value: "hwb", label: "HWB", hint: "Not suitable (see hsl), W/B are worse than L for deltaE" },
+                                { value: "cmy", label: "CMY", hint: "Linear subtractive space; still not perceptual but predictable." },
+                                { value: "cmyk", label: "CMYK", hint: "Euclidean CMYK overweights K; best when matching print plates." },
+                                { value: "luma-rgb", label: "Luma (RGB)", hint: "Viable: fast" },
+                                { value: "luma-lab", label: "Luma (Lab)", hint: "Good: Perceptual curves" },
+                                { value: "luma-oklab", label: "Luma (OKLab)", hint: "✅Best: perceptually-orthogonal curves." },
+                                { value: "lab", label: "LAB", hint: "CIELAB assumes ΔE; Euclidean works but clips at gamut edges." },
+                                { value: "oklab", label: "OKLab", hint: "Designed for Euclidean ΔE—recommended general purpose." },
+                                { value: "ycbcr", label: "YCbCr", hint: "Broadcast luma/chroma; Euclidean exaggerates blue/yellow." },
+                                { value: "oklch", label: "OKLCH", hint: "Polar axes—Euclidean fails near the hue wrap, use OKLab instead." },
                             ]}
                         />
                     </div>
