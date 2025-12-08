@@ -314,7 +314,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                         )
                         : pipelineSourceBase;
                     const sourceColor = clampRgb255(base);
-                    const gamutPreviewColor = clampRgb255(sourceAdjustmentsActive ? pipelineSource : base);
+                    const sourceAdjustedColor = clampRgb255(pipelineSource);
+                    const gamutPreviewColor = sourceAdjustmentsActive ? sourceAdjustedColor : sourceColor;
                     const maskFactor = maskBuffer ? maskBuffer[pixelIndex] : 1;
                     let paletteMetrics: PaletteMetricsSample | null = null;
                     if (shouldCollectPaletteMetrics && paletteMetricsParams) {
@@ -375,7 +376,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                         writePixel(stageMap.reduced.imageData.data, offset, reducedColor);
                     }
                     if (perceptualReferenceBuffer) {
-                        writeColorToFloatBuffer(perceptualReferenceBuffer, pixelIndex, gamutPreviewColor);
+                        writeColorToFloatBuffer(perceptualReferenceBuffer, pixelIndex, sourceAdjustedColor);
                     }
                     if (perceptualTestBuffer) {
                         writeColorToFloatBuffer(perceptualTestBuffer, pixelIndex, reducedColor);
