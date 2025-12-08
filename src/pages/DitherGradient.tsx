@@ -41,7 +41,6 @@ import {
     isIdentityMatrix3,
     jacobiEigenDecomposition,
     multiplyMatrix3,
-    multiplyMatrix3Vector,
     transposeMatrix3,
     type Matrix3,
 } from "@/utils/matrix3";
@@ -64,6 +63,12 @@ const PERCEPTUAL_BLUR_STEP_PX = 0.25;
 
 
 const RGB_THREE_LEVELS = [0, 128, 255] as const;
+const LIGHTNESS_STD_EPSILON = 1e-4;
+const MIN_LIGHTNESS_SLOPE = 0.05;
+const MAX_LIGHTNESS_SLOPE = 4;
+const CHROMA_VARIANCE_EPSILON = 1e-6;
+const MIN_CHROMA_SCALE = 0.5;
+const MAX_CHROMA_SCALE = 2.0;
 
 function buildRgbLevelPalette(levels: readonly number[], chunkSize = 8) {
     const toHex = (value: number) => value.toString(16).padStart(2, "0").toUpperCase();
@@ -432,31 +437,14 @@ export default function DitherGradientPage() {
         if (!sourceOklabStats || !paletteOklabStats) {
             return null;
         }
-        const sourceCovariance = computeCovarianceMatrix(sourceOklabStats.samples, sourceOklabStats.mean);
-        const paletteCovariance = computeCovarianceMatrix(paletteOklabStats.samples, paletteOklabStats.mean);
-        if (!sourceCovariance || !paletteCovariance) {
-            return null;
-        }
-        const sourceEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(sourceCovariance, covarianceRidgeStrength));
-        const paletteEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(paletteCovariance, covarianceRidgeStrength));
-        const sourceBasis = ensureRightHandedBasis(sourceEigen.eigenvectors);
-        const paletteBasis = ensureRightHandedBasis(paletteEigen.eigenvectors);
-        const epsilon = 1e-6;
-        const minScale = 0.5;
-        const maxScale = 2.0;
-        const scales: AxisTriple = [0, 0, 0];
-        for (let index = 0; index < 3; index++) {
-            const sourceVariance = Math.max(sourceEigen.eigenvalues[index], 0);
-            const paletteVariance = Math.max(paletteEigen.eigenvalues[index], 0);
-            const ratio = paletteVariance <= 0 ? 1 : Math.sqrt(paletteVariance / Math.max(sourceVariance, epsilon));
-            scales[index] = Math.min(maxScale, Math.max(minScale, ratio));
-        }
-        const scalingMatrix: Matrix3 = [
-            [scales[0], 0, 0],
-            [0, scales[1], 0],
-            [0, 0, scales[2]],
+        const lightnessSlope = computeLightnessSlope(sourceOklabStats, paletteOklabStats);
+        const chromaMatrix =
+            buildChromaAlignmentMatrix(sourceOklabStats, paletteOklabStats, covarianceRidgeStrength) ?? identityMatrix2();
+        const linearMatrix: Matrix3 = [
+            [lightnessSlope, 0, 0],
+            [0, chromaMatrix[0][0], chromaMatrix[0][1]],
+            [0, chromaMatrix[1][0], chromaMatrix[1][1]],
         ];
-        const linearMatrix = multiplyMatrix3(paletteBasis, multiplyMatrix3(scalingMatrix, transposeMatrix3(sourceBasis)));
         const isActive = covarianceFitStrength > 0.0001;
         return {
             mode: "affine",
@@ -467,7 +455,7 @@ export default function DitherGradientPage() {
             strength: covarianceFitStrength,
             isActive,
         } satisfies GamutTransform;
-    }, [sourceOklabStats, paletteOklabStats, covarianceFitStrength]);
+    }, [sourceOklabStats, paletteOklabStats, covarianceFitStrength, covarianceRidgeStrength]);
     const covarianceFitAvailable = Boolean(sourceOklabStats && paletteOklabStats);
     const covarianceFitControlsDisabled = !sourceAdjustmentsEnabled || !covarianceFitAvailable;
     const activeGamutTransform = useMemo(() => {
@@ -1555,5 +1543,168 @@ function computeRotationAlignmentMatrix(sourceStats: AxisStats, paletteStats: Ax
     const sourceBasis = ensureRightHandedBasis(sourceEigen);
     const paletteBasis = ensureRightHandedBasis(paletteEigen);
     return multiplyMatrix3(paletteBasis, transposeMatrix3(sourceBasis));
+}
+
+type PlaneVector = [number, number];
+type Matrix2 = [PlaneVector, PlaneVector];
+
+function computeLightnessSlope(sourceStats: AxisStats, paletteStats: AxisStats): number {
+    const sourceStd = Math.max(sourceStats.stdDev[0], LIGHTNESS_STD_EPSILON);
+    const targetStd = Math.max(paletteStats.stdDev[0], LIGHTNESS_STD_EPSILON);
+    const ratio = targetStd / sourceStd;
+    return clampValue(ratio, MIN_LIGHTNESS_SLOPE, MAX_LIGHTNESS_SLOPE);
+}
+
+function buildChromaAlignmentMatrix(sourceStats: AxisStats, paletteStats: AxisStats, ridgeEpsilon: number): Matrix2 | null {
+    const sourceCovariance = computeChromaCovarianceMatrix(sourceStats);
+    const paletteCovariance = computeChromaCovarianceMatrix(paletteStats);
+    if (!sourceCovariance || !paletteCovariance) {
+        return null;
+    }
+    const sourceEigen = eigenDecomposition2x2(regularizeMatrix2(sourceCovariance, ridgeEpsilon));
+    const paletteEigen = eigenDecomposition2x2(regularizeMatrix2(paletteCovariance, ridgeEpsilon));
+    const sourceBasis = ensureRightHandedBasis2(sourceEigen.eigenvectors);
+    const paletteBasis = ensureRightHandedBasis2(paletteEigen.eigenvectors);
+    const scales: PlaneVector = [1, 1];
+    for (let index = 0; index < 2; index++) {
+        const sourceVariance = Math.max(sourceEigen.eigenvalues[index], CHROMA_VARIANCE_EPSILON);
+        const paletteVariance = Math.max(paletteEigen.eigenvalues[index], CHROMA_VARIANCE_EPSILON);
+        const ratio = paletteVariance <= 0 ? 1 : Math.sqrt(paletteVariance / sourceVariance);
+        scales[index] = clampValue(ratio, MIN_CHROMA_SCALE, MAX_CHROMA_SCALE);
+    }
+    const scalingMatrix: Matrix2 = [
+        [scales[0], 0],
+        [0, scales[1]],
+    ];
+    return multiplyMatrix2(paletteBasis, multiplyMatrix2(scalingMatrix, transposeMatrix2(sourceBasis)));
+}
+
+function computeChromaCovarianceMatrix(stats: AxisStats): Matrix2 | null {
+    if (!stats.samples.length) {
+        return null;
+    }
+    let sumXX = 0;
+    let sumXY = 0;
+    let sumYY = 0;
+    for (const sample of stats.samples) {
+        const dx = sample[1] - stats.mean[1];
+        const dy = sample[2] - stats.mean[2];
+        sumXX += dx * dx;
+        sumXY += dx * dy;
+        sumYY += dy * dy;
+    }
+    const divisor = stats.samples.length;
+    if (divisor === 0) {
+        return null;
+    }
+    return [
+        [sumXX / divisor, sumXY / divisor],
+        [sumXY / divisor, sumYY / divisor],
+    ];
+}
+
+function identityMatrix2(): Matrix2 {
+    return [
+        [1, 0],
+        [0, 1],
+    ];
+}
+
+function transposeMatrix2(matrix: Matrix2): Matrix2 {
+    return [
+        [matrix[0][0], matrix[1][0]],
+        [matrix[0][1], matrix[1][1]],
+    ];
+}
+
+function multiplyMatrix2(a: Matrix2, b: Matrix2): Matrix2 {
+    const bt = transposeMatrix2(b);
+    return [
+        [dot2(a[0], bt[0]), dot2(a[0], bt[1])],
+        [dot2(a[1], bt[0]), dot2(a[1], bt[1])],
+    ];
+}
+
+function dot2(a: PlaneVector, b: PlaneVector): number {
+    return a[0] * b[0] + a[1] * b[1];
+}
+
+function regularizeMatrix2(matrix: Matrix2, epsilon: number): Matrix2 {
+    return [
+        [matrix[0][0] + epsilon, matrix[0][1]],
+        [matrix[1][0], matrix[1][1] + epsilon],
+    ];
+}
+
+function eigenDecomposition2x2(matrix: Matrix2): { eigenvalues: PlaneVector; eigenvectors: Matrix2 } {
+    const a = matrix[0][0];
+    const b = matrix[0][1];
+    const c = matrix[1][1];
+    const trace = a + c;
+    const diff = a - c;
+    const discriminant = Math.sqrt(Math.max(0, diff * diff + 4 * b * b));
+    const lambda1 = (trace + discriminant) / 2;
+    const lambda2 = (trace - discriminant) / 2;
+    const vectors = buildEigenvectors2x2(a, b, c, lambda1, lambda2);
+    return {
+        eigenvalues: [lambda1, lambda2],
+        eigenvectors: vectors,
+    };
+}
+
+function buildEigenvectors2x2(a: number, b: number, c: number, lambda1: number, lambda2: number): Matrix2 {
+    const hasOffDiagonal = Math.abs(b) > 1e-8;
+    let v1: PlaneVector;
+    let v2: PlaneVector;
+    if (hasOffDiagonal) {
+        v1 = normalizePlaneVector([b, lambda1 - a]);
+        v2 = normalizePlaneVector([b, lambda2 - a]);
+    } else if (a >= c) {
+        v1 = [1, 0];
+        v2 = [0, 1];
+    } else {
+        v1 = [0, 1];
+        v2 = [1, 0];
+    }
+    if (Math.abs(dot2(v1, v2)) > 0.999) {
+        v2 = [-v1[1], v1[0]];
+    }
+    const basis: Matrix2 = [
+        [v1[0], v2[0]],
+        [v1[1], v2[1]],
+    ];
+    return ensureRightHandedBasis2(basis);
+}
+
+function normalizePlaneVector(vector: PlaneVector): PlaneVector {
+    const length = Math.hypot(vector[0], vector[1]);
+    if (length < 1e-9) {
+        return [1, 0];
+    }
+    return [vector[0] / length, vector[1] / length];
+}
+
+function ensureRightHandedBasis2(matrix: Matrix2): Matrix2 {
+    const determinant = matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
+    if (determinant >= 0) {
+        return matrix;
+    }
+    return [
+        [matrix[0][0], -matrix[0][1]],
+        [matrix[1][0], -matrix[1][1]],
+    ];
+}
+
+function clampValue(value: number, min: number, max: number): number {
+    if (min > max) {
+        return value;
+    }
+    if (value < min) {
+        return min;
+    }
+    if (value > max) {
+        return max;
+    }
+    return value;
 }
 
