@@ -109,11 +109,11 @@ Ok i finally found a situation where this genuinely helps...
 
 Without palette nudging:
 
-![alt text](image.png)
+image.png
 
 With palette nudging:
 
-![alt text](image-1.png)
+image-1.png
 
 Solid flat swatches demonstrate the effect best. Here you see how a mostly unrelated color gets selected, but by nudging the color first towards the correct direction, we reduce that extreme
 stippling effect.
