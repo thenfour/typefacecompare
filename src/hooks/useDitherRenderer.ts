@@ -362,7 +362,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     };
                     const gammaAdjustedColor = shouldApplyGamma ? applyGammaCorrection(base, sourceGamma) : base;
                     const gamutAdjustedColor = shouldApplyGamut && gamutTransform
-                        ? applyGamutTransformToColor(gammaAdjustedColor, gamutTransform, distanceColorSpace)
+                        ? applyGamutTransformToColor(gammaAdjustedColor, gamutTransform)
                         : gammaAdjustedColor;
                     const pipelineSourceBase = shouldApplyGamut ? gamutAdjustedColor : gammaAdjustedColor;
                     const pipelineSource = shouldApplyPaletteNudge

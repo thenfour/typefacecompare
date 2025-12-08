@@ -41,6 +41,7 @@ import {
     isIdentityMatrix3,
     jacobiEigenDecomposition,
     multiplyMatrix3,
+    multiplyMatrix3Vector,
     transposeMatrix3,
     type Matrix3,
 } from "@/utils/matrix3";
@@ -209,6 +210,8 @@ export default function DitherGradientPage() {
     const [gamutRotationStrength, setGamutRotationStrength] = useState(0.0);
     const [gamutScaleStrength, setGamutScaleStrength] = useState<AxisTriple>([1, 1, 1]);
     const [gamutFitEnabled, setGamutFitEnabled] = useState(true);
+    const [covarianceFitEnabled, setCovarianceFitEnabled] = useState(false);
+    const [covarianceFitStrength, setCovarianceFitStrength] = useState(0.5);
     const [savedGamutStrengths, setSavedGamutStrengths] = useState<GamutStrengthSnapshot>(() => ({
         overall: gamutOverallStrength,
         translation: gamutTranslationStrength,
@@ -372,6 +375,8 @@ export default function DitherGradientPage() {
         () => computeAxisStats(paletteScatterPoints, distanceColorSpace),
         [paletteScatterPoints, distanceColorSpace]
     );
+    const sourceOklabStats = useMemo(() => computeAxisStats(sourceScatterPoints, "oklab"), [sourceScatterPoints]);
+    const paletteOklabStats = useMemo(() => computeAxisStats(paletteScatterPoints, "oklab"), [paletteScatterPoints]);
     const gamutTransform = useMemo(() => {
         if (!sourceAxisStats || !paletteAxisStats) {
             return null;
@@ -405,6 +410,8 @@ export default function DitherGradientPage() {
         const rotationActive = !isIdentityMatrix3(rotationMatrix);
         const isActive = translationActive || scalingActive || rotationActive;
         return {
+            mode: "legacy",
+            colorSpace: distanceColorSpace,
             sourceMean: sourceAxisStats.mean,
             desiredMean,
             scale,
@@ -418,8 +425,74 @@ export default function DitherGradientPage() {
         gamutTranslationStrength,
         gamutRotationStrength,
         gamutScaleStrength,
+        distanceColorSpace,
     ]);
-    const activeGamutTransform = useMemo(() => (sourceAdjustmentsEnabled && gamutFitEnabled ? gamutTransform : null), [sourceAdjustmentsEnabled, gamutFitEnabled, gamutTransform]);
+    const covarianceGamutTransform = useMemo(() => {
+        if (!sourceOklabStats || !paletteOklabStats) {
+            return null;
+        }
+        const sourceCovariance = computeCovarianceMatrix(sourceOklabStats.samples, sourceOklabStats.mean);
+        const paletteCovariance = computeCovarianceMatrix(paletteOklabStats.samples, paletteOklabStats.mean);
+        if (!sourceCovariance || !paletteCovariance) {
+            return null;
+        }
+        const sourceEigen = jacobiEigenDecomposition(sourceCovariance);
+        const paletteEigen = jacobiEigenDecomposition(paletteCovariance);
+        const sourceBasis = ensureRightHandedBasis(sourceEigen.eigenvectors);
+        const paletteBasis = ensureRightHandedBasis(paletteEigen.eigenvectors);
+        const epsilon = 1e-6;
+        const minScale = 0.5;
+        const maxScale = 2.0;
+        const scales: AxisTriple = [0, 0, 0];
+        for (let index = 0; index < 3; index++) {
+            const sourceVariance = Math.max(sourceEigen.eigenvalues[index], 0);
+            const paletteVariance = Math.max(paletteEigen.eigenvalues[index], 0);
+            const ratio = paletteVariance <= 0 ? 1 : Math.sqrt(paletteVariance / Math.max(sourceVariance, epsilon));
+            scales[index] = Math.min(maxScale, Math.max(minScale, ratio));
+        }
+        const scalingMatrix: Matrix3 = [
+            [scales[0], 0, 0],
+            [0, scales[1], 0],
+            [0, 0, scales[2]],
+        ];
+        const alignment = multiplyMatrix3(paletteBasis, multiplyMatrix3(scalingMatrix, transposeMatrix3(sourceBasis)));
+        const mappedMean = multiplyMatrix3Vector(alignment, sourceOklabStats.mean);
+        const translation: AxisTriple = [
+            paletteOklabStats.mean[0] - mappedMean[0],
+            paletteOklabStats.mean[1] - mappedMean[1],
+            paletteOklabStats.mean[2] - mappedMean[2],
+        ];
+        const isActive = covarianceFitStrength > 0.0001;
+        return {
+            mode: "affine",
+            colorSpace: "oklab" as const,
+            matrix: alignment,
+            translation,
+            strength: covarianceFitStrength,
+            isActive,
+        } satisfies GamutTransform;
+    }, [sourceOklabStats, paletteOklabStats, covarianceFitStrength]);
+    const covarianceFitAvailable = Boolean(sourceOklabStats && paletteOklabStats);
+    const covarianceFitControlsDisabled = !sourceAdjustmentsEnabled || !covarianceFitAvailable;
+    const activeGamutTransform = useMemo(() => {
+        if (!sourceAdjustmentsEnabled) {
+            return null;
+        }
+        if (covarianceFitEnabled && covarianceFitAvailable && covarianceGamutTransform?.isActive) {
+            return covarianceGamutTransform;
+        }
+        if (gamutFitEnabled && gamutTransform?.isActive) {
+            return gamutTransform;
+        }
+        return null;
+    }, [
+        sourceAdjustmentsEnabled,
+        covarianceFitEnabled,
+        covarianceFitAvailable,
+        covarianceGamutTransform,
+        gamutFitEnabled,
+        gamutTransform,
+    ]);
     const gamutScatterPoints = useMemo(() => {
         if (!activeGamutTransform || !activeGamutTransform.isActive || sourceScatterPoints.length === 0) {
             return [] as ScatterPoint[];
@@ -427,8 +500,7 @@ export default function DitherGradientPage() {
         return sourceScatterPoints.map((point) => {
             let adjusted = applyGamutTransformToColor(
                 { r: point.color[0] ?? 0, g: point.color[1] ?? 0, b: point.color[2] ?? 0 },
-                activeGamutTransform,
-                distanceColorSpace
+                activeGamutTransform
             );
             if (paletteNudgeActive) {
                 adjusted = blendColorTowardPalette(
@@ -899,6 +971,32 @@ export default function DitherGradientPage() {
                                                     />
                                                 </label>
                                             ))}
+                                        </div>
+                                        <div className="gamut-fit-controls__covariance">
+                                            <h4>
+                                                Covariance Fit
+                                                <input
+                                                    type="checkbox"
+                                                    checked={covarianceFitEnabled}
+                                                    onChange={(event) => setCovarianceFitEnabled(event.target.checked)}
+                                                    disabled={covarianceFitControlsDisabled}
+                                                />
+                                            </h4>
+                                            <label>
+                                                Strength ({Math.round(covarianceFitStrength * 100)}%)
+                                                <input
+                                                    type="range"
+                                                    min={0}
+                                                    max={1}
+                                                    step={0.01}
+                                                    value={covarianceFitStrength}
+                                                    onChange={(event) => setCovarianceFitStrength(event.target.valueAsNumber)}
+                                                    disabled={covarianceFitControlsDisabled || !covarianceFitEnabled}
+                                                />
+                                            </label>
+                                            {!covarianceFitAvailable && (
+                                                <p className="gamut-fit-controls__hint">Requires source + palette samples.</p>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="palette-nudge-controls">
