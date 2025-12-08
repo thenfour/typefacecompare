@@ -503,12 +503,21 @@ function buildGridLayout(count: number): GradientPosition[] {
     if (count <= 0) {
         return [];
     }
-    const gridSize = Math.max(1, Math.ceil(Math.sqrt(count)));
-    const step = gridSize > 1 ? 1 / (gridSize - 1) : 0;
+    const columns = Math.max(1, Math.ceil(Math.sqrt(count)));
+    const rows = Math.max(1, Math.ceil(count / columns));
+    const rowStep = rows > 1 ? 1 / (rows - 1) : 0;
     const positions: GradientPosition[] = [];
-    for (let row = 0; row < gridSize && positions.length < count; row++) {
-        for (let col = 0; col < gridSize && positions.length < count; col++) {
-            positions.push({ x: clamp01(col * step), y: clamp01(row * step) });
+    for (let row = 0; row < rows && positions.length < count; row++) {
+        const remaining = count - positions.length;
+        const cellsInRow = row === rows - 1 ? remaining : Math.min(columns, remaining);
+        if (cellsInRow <= 0) {
+            break;
+        }
+        const columnStep = cellsInRow > 1 ? 1 / (cellsInRow - 1) : 0;
+        for (let col = 0; col < cellsInRow && positions.length < count; col++) {
+            const x = cellsInRow > 1 ? col * columnStep : 0.5;
+            const y = rows > 1 ? row * rowStep : 0.5;
+            positions.push({ x: clamp01(x), y: clamp01(y) });
         }
     }
     return positions;
