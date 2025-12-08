@@ -1,6 +1,6 @@
 import type { ColorInterpolationMode, RGBColor } from "@/utils/colorSpaces";
 import { applyAxisTripleToRgb, extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
-import { blendRotationMatrix, multiplyMatrix3Vector, type Matrix3 } from "@/utils/matrix3";
+import { multiplyMatrix3Vector, type Matrix3 } from "@/utils/matrix3";
 
 export type LegacyGamutTransform = {
     mode: "legacy";
@@ -15,9 +15,9 @@ export type LegacyGamutTransform = {
 export type AffineGamutTransform = {
     mode: "affine";
     colorSpace: ColorInterpolationMode;
-    rotationMatrix: Matrix3;
-    scale: AxisTriple;
-    translation: AxisTriple;
+    sourceMean: AxisTriple;
+    targetMean: AxisTriple;
+    linearMatrix: Matrix3;
     strength: number;
     isActive: boolean;
 };
@@ -31,19 +31,23 @@ export function applyGamutTransformToColor(color: RGBColor, transform: GamutTran
     if (transform.mode === "affine") {
         const axes = extractAxisTriple(color, transform.colorSpace);
         const clampedStrength = Math.max(0, Math.min(1, transform.strength));
-        const blendedRotation = blendRotationMatrix(transform.rotationMatrix, clampedStrength);
-        const rotated = multiplyMatrix3Vector(blendedRotation, axes);
-        const scaled: AxisTriple = [
-            rotated[0] * (1 + clampedStrength * (transform.scale[0] - 1)),
-            rotated[1] * (1 + clampedStrength * (transform.scale[1] - 1)),
-            rotated[2] * (1 + clampedStrength * (transform.scale[2] - 1)),
+        const centered: AxisTriple = [
+            axes[0] - transform.sourceMean[0],
+            axes[1] - transform.sourceMean[1],
+            axes[2] - transform.sourceMean[2],
         ];
-        const translated: AxisTriple = [
-            scaled[0] + clampedStrength * transform.translation[0],
-            scaled[1] + clampedStrength * transform.translation[1],
-            scaled[2] + clampedStrength * transform.translation[2],
+        const linearResult = multiplyMatrix3Vector(transform.linearMatrix, centered);
+        const transformed: AxisTriple = [
+            transform.targetMean[0] + linearResult[0],
+            transform.targetMean[1] + linearResult[1],
+            transform.targetMean[2] + linearResult[2],
         ];
-        return applyAxisTripleToRgb(color, translated, transform.colorSpace);
+        const blended: AxisTriple = [
+            axes[0] + clampedStrength * (transformed[0] - axes[0]),
+            axes[1] + clampedStrength * (transformed[1] - axes[1]),
+            axes[2] + clampedStrength * (transformed[2] - axes[2]),
+        ];
+        return applyAxisTripleToRgb(color, blended, transform.colorSpace);
     }
     const axes = extractAxisTriple(color, transform.colorSpace);
     const centered: AxisTriple = [

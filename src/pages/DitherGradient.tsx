@@ -451,26 +451,19 @@ export default function DitherGradientPage() {
             const ratio = paletteVariance <= 0 ? 1 : Math.sqrt(paletteVariance / Math.max(sourceVariance, epsilon));
             scales[index] = Math.min(maxScale, Math.max(minScale, ratio));
         }
-        const rotationOnly = multiplyMatrix3(paletteBasis, transposeMatrix3(sourceBasis));
         const scalingMatrix: Matrix3 = [
             [scales[0], 0, 0],
             [0, scales[1], 0],
             [0, 0, scales[2]],
         ];
-        const alignment = multiplyMatrix3(paletteBasis, multiplyMatrix3(scalingMatrix, transposeMatrix3(sourceBasis)));
-        const mappedMean = multiplyMatrix3Vector(alignment, sourceOklabStats.mean);
-        const translation: AxisTriple = [
-            paletteOklabStats.mean[0] - mappedMean[0],
-            paletteOklabStats.mean[1] - mappedMean[1],
-            paletteOklabStats.mean[2] - mappedMean[2],
-        ];
+        const linearMatrix = multiplyMatrix3(paletteBasis, multiplyMatrix3(scalingMatrix, transposeMatrix3(sourceBasis)));
         const isActive = covarianceFitStrength > 0.0001;
         return {
             mode: "affine",
             colorSpace: "oklab" as const,
-            rotationMatrix: rotationOnly,
-            scale: scales,
-            translation,
+            sourceMean: sourceOklabStats.mean,
+            targetMean: paletteOklabStats.mean,
+            linearMatrix,
             strength: covarianceFitStrength,
             isActive,
         } satisfies GamutTransform;
