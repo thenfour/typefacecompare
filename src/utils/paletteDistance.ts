@@ -1,12 +1,20 @@
-import { ColorInterpolationMode, convertHexToVector, rgb255ToVector } from "./colorSpaces";
+import { AxisTriple } from "./colorAxes";
+import { ColorInterpolationMode, convertHexToVector, rgb255ToVector, rgbUnitTo255, vectorToRgb } from "./colorSpaces";
 import type { ReductionMode } from "@/types/dither";
-import { applyAxisTripleToRgb, extractAxisTriple, type AxisTriple } from "@/utils/colorAxes";
 
 const OKLCH_CHROMA_NORMALIZER = 0.4;
+const MIN_GRAVITY_SOFTNESS = 0.0025;
+const MAX_GRAVITY_SOFTNESS = 0.5;
+const DEG_TO_RAD = Math.PI / 180;
+
+type OklabVector = { L: number; a: number; b: number };
+type OklchVector = { L: number; C: number; h: number };
 
 export interface ReductionPaletteEntry {
     rgb: { r: number; g: number; b: number };
     coords: number[];
+    oklab: OklabVector;
+    oklch: OklchVector;
 }
 
 export function applyReduction(
@@ -42,93 +50,159 @@ export function quantizeToPalette(
     return { ...closest.rgb };
 }
 
-export interface PaletteMagnetParams {
-    radiusDir: number;
-    kAmb: number;
-    kNearest: number;
+export interface PaletteGravityParams {
+    softness: number;
+    lightnessStrength: number;
+    chromaStrength: number;
 }
 
-export const DEFAULT_PALETTE_MAGNET_PARAMS: PaletteMagnetParams = {
-    radiusDir: 0.5,
-    kAmb: 3,
-    kNearest: 4,
+export const DEFAULT_PALETTE_GRAVITY_PARAMS: PaletteGravityParams = {
+    softness: 0.035,
+    lightnessStrength: 0.35,
+    chromaStrength: 0.5,
 };
 
-export function blendColorTowardPalette(
+export function applyPaletteGravityNudge(
     rgb: { r: number; g: number; b: number },
     palette: ReductionPaletteEntry[],
-    distanceMode: ColorInterpolationMode,
-    baseStrength: number,
-    magnetOverrides?: Partial<PaletteMagnetParams>
+    params: PaletteGravityParams
 ) {
-    if (baseStrength <= 0 || palette.length === 0) {
+    if (palette.length === 0) {
         return rgb;
     }
-    const params: PaletteMagnetParams = {
-        ...DEFAULT_PALETTE_MAGNET_PARAMS,
-        ...magnetOverrides,
+    const resolved = normalizePaletteGravityParams(params);
+    if (resolved.lightnessStrength <= 0 && resolved.chromaStrength <= 0) {
+        return rgb;
+    }
+    const sourceLab = convertRgbToOklab(rgb);
+    const centroid = computePaletteGravityCentroid(sourceLab, palette, resolved.softness);
+    if (!centroid) {
+        return rgb;
+    }
+    const lightnessT = clamp01(resolved.lightnessStrength);
+    const chromaT = clamp01(resolved.chromaStrength);
+    const adjustedLab: OklabVector = {
+        L: lerp(sourceLab.L, centroid.L, lightnessT),
+        a: lerp(sourceLab.a, centroid.a, chromaT),
+        b: lerp(sourceLab.b, centroid.b, chromaT),
     };
-    const sourceAxes = extractAxisTriple(rgb, distanceMode);
-    const paletteAxes = palette.map((entry) => extractAxisTriple(entry.rgb, distanceMode));
-    const distances = paletteAxes.map((axes, idx) => ({ idx, d: Math.sqrt(distanceSqAxes(sourceAxes, axes)) }));
-    distances.sort((a, b) => a.d - b.d);
+    const unitRgb = vectorToRgb(adjustedLab, "oklab");
+    return clampRgb255(rgbUnitTo255(unitRgb));
+}
 
-    const nearest = distances[0];
-    if (!nearest) {
-        return rgb;
-    }
-    const second = distances[1];
-    const d1 = nearest.d;
-    const d2 = second?.d ?? Infinity;
-    let ambiguity = 0;
-    if (Number.isFinite(d2) && d2 > 1e-6) {
-        const diff = Math.abs(d2 - d1);
-        const rel = clamp01(1 - diff / d2);
-        ambiguity = Math.pow(rel, params.kAmb);
-    }
-    const magnetAmount = baseStrength * ambiguity;
-    if (magnetAmount < 1e-4) {
-        return rgb;
-    }
-    const chosen: { idx: number; d: number }[] = [];
-    for (const item of distances) {
-        if (item.d <= params.radiusDir) {
-            chosen.push(item);
-        }
-        if (chosen.length >= params.kNearest) {
-            break;
-        }
-    }
-    if (chosen.length === 0) {
-        return rgb;
-    }
-    let sumWeights = 0;
-    const targetAxes: AxisTriple = [0, 0, 0];
-    for (const { idx, d } of chosen) {
-        const falloff = params.radiusDir > 0 ? 1 - d / params.radiusDir : 0;
-        const weight = Math.max(0, falloff);
-        if (weight <= 0) {
+function normalizePaletteGravityParams(params: PaletteGravityParams): PaletteGravityParams {
+    const { softness, lightnessStrength, chromaStrength } = params;
+    const clampedSoftness = Math.min(
+        MAX_GRAVITY_SOFTNESS,
+        Math.max(MIN_GRAVITY_SOFTNESS, Number.isFinite(softness) ? softness : MIN_GRAVITY_SOFTNESS)
+    );
+    return {
+        softness: clampedSoftness,
+        lightnessStrength: clamp01(lightnessStrength ?? 0),
+        chromaStrength: clamp01(chromaStrength ?? 0),
+    } satisfies PaletteGravityParams;
+}
+
+function convertRgbToOklab(rgb: { r: number; g: number; b: number }): OklabVector {
+    const vector = rgb255ToVector(rgb, "oklab") as OklabVector;
+    return {
+        L: vector.L,
+        a: vector.a,
+        b: vector.b,
+    } satisfies OklabVector;
+}
+
+function computePaletteGravityCentroid(
+    sourceLab: OklabVector,
+    palette: ReductionPaletteEntry[],
+    softness: number
+) {
+    const sourceLch = labToLch(sourceLab);
+    const tauSq = softness * softness;
+    let totalWeight = 0;
+    const accumulator: OklabVector = { L: 0, a: 0, b: 0 };
+    for (const entry of palette) {
+        const paletteLab = entry.oklab;
+        const paletteLch = entry.oklch;
+        const distanceSq = computeOklchDistanceSq(sourceLch, paletteLch);
+        const weight = Math.exp(-distanceSq / tauSq);
+        if (weight < 1e-6) {
             continue;
         }
-        sumWeights += weight;
-        const axes = paletteAxes[idx];
-        targetAxes[0] += axes[0] * weight;
-        targetAxes[1] += axes[1] * weight;
-        targetAxes[2] += axes[2] * weight;
+        totalWeight += weight;
+        accumulator.L += paletteLab.L * weight;
+        accumulator.a += paletteLab.a * weight;
+        accumulator.b += paletteLab.b * weight;
     }
-    if (sumWeights <= 0) {
-        return rgb;
+    if (totalWeight <= 1e-6) {
+        return findNearestPaletteLab(sourceLab, palette);
     }
-    targetAxes[0] /= sumWeights;
-    targetAxes[1] /= sumWeights;
-    targetAxes[2] /= sumWeights;
-    const t = clamp01(magnetAmount);
-    const blendedAxes: AxisTriple = [
-        sourceAxes[0] + (targetAxes[0] - sourceAxes[0]) * t,
-        sourceAxes[1] + (targetAxes[1] - sourceAxes[1]) * t,
-        sourceAxes[2] + (targetAxes[2] - sourceAxes[2]) * t,
-    ];
-    return applyAxisTripleToRgb(rgb, blendedAxes, distanceMode);
+    return {
+        L: accumulator.L / totalWeight,
+        a: accumulator.a / totalWeight,
+        b: accumulator.b / totalWeight,
+    } satisfies OklabVector;
+}
+
+function findNearestPaletteLab(sourceLab: OklabVector, palette: ReductionPaletteEntry[]): OklabVector | null {
+    if (!palette.length) {
+        return null;
+    }
+    let closest: ReductionPaletteEntry | null = null;
+    let minDistance = Infinity;
+    for (const entry of palette) {
+        const distance = computeOklabDistanceSq(sourceLab, entry.oklab);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closest = entry;
+        }
+    }
+    if (!closest) {
+        return null;
+    }
+    return { ...closest.oklab };
+}
+
+function computeOklabDistanceSq(a: OklabVector, b: OklabVector): number {
+    const deltaL = a.L - b.L;
+    const deltaA = a.a - b.a;
+    const deltaB = a.b - b.b;
+    return deltaL * deltaL + deltaA * deltaA + deltaB * deltaB;
+}
+
+function computeOklchDistanceSq(a: OklchVector, b: OklchVector): number {
+    const deltaL = a.L - b.L;
+    const deltaC = a.C - b.C;
+    const avgChroma = Math.sqrt(Math.max(0, a.C * b.C));
+    const hueDelta = DEG_TO_RAD * shortestAngleDegrees(a.h, b.h);
+    const deltaH = 2 * avgChroma * Math.sin(hueDelta / 2);
+    return deltaL * deltaL + deltaC * deltaC + deltaH * deltaH;
+}
+
+function labToLch(lab: OklabVector): OklchVector {
+    const chroma = Math.sqrt(lab.a * lab.a + lab.b * lab.b);
+    const hue = Math.atan2(lab.b, lab.a) * (180 / Math.PI);
+    return {
+        L: lab.L,
+        C: chroma,
+        h: (hue + 360) % 360,
+    } satisfies OklchVector;
+}
+
+function shortestAngleDegrees(a: number, b: number) {
+    const normalizedA = ((a % 360) + 360) % 360;
+    const normalizedB = ((b % 360) + 360) % 360;
+    let delta = normalizedA - normalizedB;
+    if (delta > 180) {
+        delta -= 360;
+    } else if (delta < -180) {
+        delta += 360;
+    }
+    return delta;
+}
+
+function lerp(start: number, end: number, t: number) {
+    return start + (end - start) * clamp01(t);
 }
 
 export function rgbToCoords(rgb: { r: number; g: number; b: number }, mode: ColorInterpolationMode) {
@@ -195,12 +269,12 @@ export function distanceSq(a: number[], b: number[]) {
     return total;
 }
 
-function distanceSqAxes(a: AxisTriple, b: AxisTriple) {
-    const dx = (a[0] ?? 0) - (b[0] ?? 0);
-    const dy = (a[1] ?? 0) - (b[1] ?? 0);
-    const dz = (a[2] ?? 0) - (b[2] ?? 0);
-    return dx * dx + dy * dy + dz * dz;
-}
+// function distanceSqAxes(a: AxisTriple, b: AxisTriple) {
+//     const dx = (a[0] ?? 0) - (b[0] ?? 0);
+//     const dy = (a[1] ?? 0) - (b[1] ?? 0);
+//     const dz = (a[2] ?? 0) - (b[2] ?? 0);
+//     return dx * dx + dy * dy + dz * dz;
+// }
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 

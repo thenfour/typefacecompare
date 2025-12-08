@@ -1,7 +1,7 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parsePaletteDefinition } from "../utils/paletteDefinition";
-import { ColorInterpolationMode, rgbUnitTo255 } from "../utils/colorSpaces";
+import { ColorInterpolationMode, rgb255ToVector, rgbUnitTo255 } from "../utils/colorSpaces";
 import { hexToRgb } from "../utils/color";
 import { useDevicePixelRatio } from "../hooks/useDevicePixelRatio";
 import "../styles/DitherGradient.css";
@@ -11,10 +11,10 @@ import { useImageSource } from "@/hooks/useImageSource";
 import { useDitherRenderer } from "@/hooks/useDitherRenderer";
 import type { ReductionMode, SourceType } from "@/types/dither";
 import {
-    blendColorTowardPalette,
-    DEFAULT_PALETTE_MAGNET_PARAMS,
+    applyPaletteGravityNudge,
+    DEFAULT_PALETTE_GRAVITY_PARAMS,
     rgbToCoords,
-    type PaletteMagnetParams,
+    type PaletteGravityParams,
     type ReductionPaletteEntry,
 } from "@/utils/paletteDistance";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
@@ -56,7 +56,6 @@ import {
 import { DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX, type PerceptualSimilarityResult } from "@/utils/perceptualSimilarity";
 import { MarkdownFile } from "@/components/MarkdownFile";
 const MAX_SCATTER_SOURCE_POINTS = 4000;
-const DEFAULT_PALETTE_NUDGE_STRENGTH = 0.1;
 const PERCEPTUAL_BLUR_MIN_PX = 0.5;
 const PERCEPTUAL_BLUR_MAX_PX = 8;
 const PERCEPTUAL_BLUR_STEP_PX = 0.25;
@@ -224,12 +223,14 @@ export default function DitherGradientPage() {
         rotation: gamutRotationStrength,
         scale: [...gamutScaleStrength] as AxisTriple,
     }));
-    const [paletteNudgeStrength, setPaletteNudgeStrength] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH);
     const [paletteNudgeEnabled, setPaletteNudgeEnabled] = useState(false);
-    const [savedPaletteNudgeStrength, setSavedPaletteNudgeStrength] = useState(DEFAULT_PALETTE_NUDGE_STRENGTH);
-    const [paletteMagnetRadiusDir, setPaletteMagnetRadiusDir] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.radiusDir);
-    const [paletteMagnetAmbiguityPower, setPaletteMagnetAmbiguityPower] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kAmb);
-    const [paletteMagnetNearestCount, setPaletteMagnetNearestCount] = useState(DEFAULT_PALETTE_MAGNET_PARAMS.kNearest);
+    const [paletteGravityLightnessStrength, setPaletteGravityLightnessStrength] = useState(
+        DEFAULT_PALETTE_GRAVITY_PARAMS.lightnessStrength
+    );
+    const [paletteGravityChromaStrength, setPaletteGravityChromaStrength] = useState(
+        DEFAULT_PALETTE_GRAVITY_PARAMS.chromaStrength
+    );
+    const [paletteGravitySoftness, setPaletteGravitySoftness] = useState(DEFAULT_PALETTE_GRAVITY_PARAMS.softness);
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
@@ -325,25 +326,49 @@ export default function DitherGradientPage() {
     const parsedReductionPalette = useMemo(() => parsePaletteDefinition(reductionPaletteText), [reductionPaletteText]);
     const reductionSwatches = parsedReductionPalette.swatches;
     const hasReductionPalette = reductionSwatches.length > 0;
-    const paletteMagnetParams = useMemo<PaletteMagnetParams>(
-        () => ({
-            radiusDir: paletteMagnetRadiusDir,
-            kAmb: paletteMagnetAmbiguityPower,
-            kNearest: paletteMagnetNearestCount,
-        }),
-        [paletteMagnetRadiusDir, paletteMagnetAmbiguityPower, paletteMagnetNearestCount]
-    );
-    const effectivePaletteNudgeStrength = sourceAdjustmentsEnabled && paletteNudgeEnabled
-        ? paletteNudgeStrength
-        : 0;
-    const paletteNudgeActive = effectivePaletteNudgeStrength > 0 && hasReductionPalette && reductionMode === "palette";
+    const paletteGravityParams = useMemo<PaletteGravityParams>(() => {
+        const baseParams: PaletteGravityParams = {
+            softness: paletteGravitySoftness,
+            lightnessStrength: paletteGravityLightnessStrength,
+            chromaStrength: paletteGravityChromaStrength,
+        };
+        if (
+            !sourceAdjustmentsEnabled ||
+            !paletteNudgeEnabled ||
+            !hasReductionPalette ||
+            reductionMode !== "palette"
+        ) {
+            return {
+                ...baseParams,
+                lightnessStrength: 0,
+                chromaStrength: 0,
+            } satisfies PaletteGravityParams;
+        }
+        return baseParams;
+    }, [
+        paletteGravitySoftness,
+        paletteGravityLightnessStrength,
+        paletteGravityChromaStrength,
+        sourceAdjustmentsEnabled,
+        paletteNudgeEnabled,
+        hasReductionPalette,
+        reductionMode,
+    ]);
+    const paletteNudgeActive =
+        (paletteGravityParams.lightnessStrength > 0 || paletteGravityParams.chromaStrength > 0) &&
+        hasReductionPalette &&
+        reductionMode === "palette";
     const reductionPaletteEntries = useMemo<ReductionPaletteEntry[]>(
         () =>
             reductionSwatches.map((swatch) => {
                 const rgb255 = rgbUnitTo255(hexToRgb(swatch.hex));
+                const oklab = rgb255ToVector(rgb255, "oklab") as { L: number; a: number; b: number };
+                const oklch = rgb255ToVector(rgb255, "oklch") as { L: number; C: number; h: number };
                 return {
                     rgb: rgb255,
                     coords: rgbToCoords(rgb255, distanceColorSpace),
+                    oklab,
+                    oklch,
                 };
             }),
         [reductionSwatches, distanceColorSpace]
@@ -487,13 +512,7 @@ export default function DitherGradientPage() {
                 activeGamutTransform
             );
             if (paletteNudgeActive) {
-                adjusted = blendColorTowardPalette(
-                    adjusted,
-                    reductionPaletteEntries,
-                    distanceColorSpace,
-                    effectivePaletteNudgeStrength,
-                    paletteMagnetParams
-                );
+                adjusted = applyPaletteGravityNudge(adjusted, reductionPaletteEntries, paletteGravityParams);
             }
             return buildScatterPointFromRgb(adjusted, distanceColorSpace);
         });
@@ -502,9 +521,8 @@ export default function DitherGradientPage() {
         activeGamutTransform,
         distanceColorSpace,
         paletteNudgeActive,
-        effectivePaletteNudgeStrength,
         reductionPaletteEntries,
-        paletteMagnetParams,
+        paletteGravityParams,
     ]);
     const gammaControlsDisabled = !sourceAdjustmentsEnabled;
     const gammaActive = sourceAdjustmentsEnabled && Math.abs(sourceGamma - 1) > 0.01;
@@ -553,19 +571,20 @@ export default function DitherGradientPage() {
     const handleSourceAdjustmentsToggle = (nextEnabled: boolean) => {
         setSourceAdjustmentsEnabled(nextEnabled);
     };
-    const handlePaletteNudgeChange = (nextValue: number) => {
-        const clamped = Math.max(0, Math.min(1, nextValue));
-        setPaletteNudgeStrength(clamped);
-        setSavedPaletteNudgeStrength(clamped);
-    };
     const handlePaletteNudgeToggle = (nextEnabled: boolean) => {
         setPaletteNudgeEnabled(nextEnabled);
-        if (nextEnabled) {
-            setPaletteNudgeStrength(savedPaletteNudgeStrength);
-            return;
-        }
-        setSavedPaletteNudgeStrength(paletteNudgeStrength);
-        setPaletteNudgeStrength(0);
+    };
+    const handlePaletteLightnessStrengthChange = (nextValue: number) => {
+        const clamped = Math.max(0, Math.min(1, nextValue));
+        setPaletteGravityLightnessStrength(clamped);
+    };
+    const handlePaletteChromaStrengthChange = (nextValue: number) => {
+        const clamped = Math.max(0, Math.min(1, nextValue));
+        setPaletteGravityChromaStrength(clamped);
+    };
+    const handlePaletteSoftnessChange = (nextValue: number) => {
+        const clamped = clampValue(nextValue, 0.005, 0.25);
+        setPaletteGravitySoftness(clamped);
     };
     const handleGamutFitToggle = (nextEnabled: boolean) => {
         setGamutFitEnabled(nextEnabled);
@@ -691,8 +710,7 @@ export default function DitherGradientPage() {
         },
         paletteModulationParams,
         paletteModulationEnabled,
-        paletteNudgeStrength: effectivePaletteNudgeStrength,
-        paletteMagnetParams,
+        paletteGravity: paletteGravityParams,
         gamutTransform: activeGamutTransform,
         sourceAdjustmentsActive,
         showSourcePreview,
@@ -1009,61 +1027,46 @@ export default function DitherGradientPage() {
                                         {!paletteNudgeControlsDisabled && (
                                             <>
                                                 <label>
-                                                    Strength ({Math.round(paletteNudgeStrength * 100)}%)
+                                                    Lightness Strength ({Math.round(paletteGravityLightnessStrength * 100)}%)
                                                     <input
                                                         type="range"
                                                         min={0}
                                                         max={1}
                                                         step={0.01}
-                                                        value={paletteNudgeStrength}
-                                                        onChange={(event) => handlePaletteNudgeChange(event.target.valueAsNumber)}
+                                                        value={paletteGravityLightnessStrength}
+                                                        onChange={(event) => handlePaletteLightnessStrengthChange(event.target.valueAsNumber)}
                                                         disabled={paletteNudgeControlsDisabled}
                                                     />
                                                 </label>
-                                                <div className="palette-nudge-controls__grid">
-                                                    <Tooltip title="How far to look for palette neighbors when establishing a pull direction. Bigger values blend more swatches; smaller values stay laser-focused on the nearest entries.">
-                                                        <label>
-                                                            Direction Radius ({paletteMagnetRadiusDir.toFixed(2)})
-                                                            <input
-                                                                type="range"
-                                                                min={0.05}
-                                                                max={1}
-                                                                step={0.01}
-                                                                value={paletteMagnetRadiusDir}
-                                                                onChange={(event) => setPaletteMagnetRadiusDir(event.target.valueAsNumber)}
-                                                                disabled={paletteNudgeControlsDisabled}
-                                                            />
-                                                        </label>
-                                                    </Tooltip>
-                                                    <Tooltip title="Boosts pixels that sit between multiple palette colors. Higher values wait for truly ambiguous colors; lower values tug even when the best and second-best colors are far apart.">
-                                                        <label>
-                                                            Ambiguity Curve ({paletteMagnetAmbiguityPower.toFixed(2)})
-                                                            <input
-                                                                type="range"
-                                                                min={0}
-                                                                max={4}
-                                                                step={0.05}
-                                                                value={paletteMagnetAmbiguityPower}
-                                                                onChange={(event) => setPaletteMagnetAmbiguityPower(event.target.valueAsNumber)}
-                                                                disabled={paletteNudgeControlsDisabled}
-                                                            />
-                                                        </label>
-                                                    </Tooltip>
-                                                    <Tooltip title="Maximum number of nearby palette entries that contribute to the pull direction. Increase to average more neighbors; decrease to favor only the very closest colors.">
-                                                        <label>
-                                                            Nearest Colors ({paletteMagnetNearestCount})
-                                                            <input
-                                                                type="range"
-                                                                min={1}
-                                                                max={6}
-                                                                step={1}
-                                                                value={paletteMagnetNearestCount}
-                                                                onChange={(event) => setPaletteMagnetNearestCount(event.target.valueAsNumber)}
-                                                                disabled={paletteNudgeControlsDisabled}
-                                                            />
-                                                        </label>
-                                                    </Tooltip>
-                                                </div>
+                                                <label>
+                                                    Chroma Strength ({Math.round(paletteGravityChromaStrength * 100)}%)
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={1}
+                                                        step={0.01}
+                                                        value={paletteGravityChromaStrength}
+                                                        onChange={(event) => handlePaletteChromaStrengthChange(event.target.valueAsNumber)}
+                                                        disabled={paletteNudgeControlsDisabled}
+                                                    />
+                                                </label>
+                                                <Tooltip title="τ softens the gravity field. Tiny values hug the closest palette entries; larger values allow distant colors to influence the centroid.">
+                                                    <label>
+                                                        Softness (τ: {paletteGravitySoftness.toFixed(3)})
+                                                        <input
+                                                            type="range"
+                                                            min={0.005}
+                                                            max={0.25}
+                                                            step={0.0025}
+                                                            value={paletteGravitySoftness}
+                                                            onChange={(event) => handlePaletteSoftnessChange(event.target.valueAsNumber)}
+                                                            disabled={paletteNudgeControlsDisabled}
+                                                        />
+                                                    </label>
+                                                </Tooltip>
+                                                <p className="dither-gradient-note">
+                                                    Raise lightness or chroma strength (γ) to pull those channels toward the OKLCh-weighted palette centroid; soften τ to keep the pull gentle.
+                                                </p>
                                             </>
                                         )}
                                     </div>

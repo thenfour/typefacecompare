@@ -14,12 +14,12 @@ import {
     type ErrorDiffusionKernelId,
 } from "@/utils/dithering";
 import {
+    applyPaletteGravityNudge,
     applyReduction,
-    blendColorTowardPalette,
     clampRgb255,
     distanceSq,
     rgbToCoords,
-    type PaletteMagnetParams,
+    type PaletteGravityParams,
     type ReductionPaletteEntry,
 } from "@/utils/paletteDistance";
 import {
@@ -118,8 +118,7 @@ export interface UseDitherRendererOptions {
     ditherMask?: DitherMaskOptions;
     paletteModulationParams: PaletteModulationParams | null;
     paletteModulationEnabled: boolean;
-    paletteNudgeStrength: number;
-    paletteMagnetParams: PaletteMagnetParams;
+    paletteGravity: PaletteGravityParams;
     gamutTransform: GamutTransform | null;
     sourceAdjustmentsActive: boolean;
     showSourcePreview: boolean;
@@ -158,8 +157,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         ditherMask,
         paletteModulationParams,
         paletteModulationEnabled,
-        paletteNudgeStrength,
-        paletteMagnetParams,
+        paletteGravity,
         gamutTransform,
         sourceAdjustmentsActive,
         showSourcePreview,
@@ -349,8 +347,10 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             );
 
             const shouldApplyGamut = Boolean(gamutTransform && gamutTransform.isActive);
-            const shouldApplyPaletteNudge = paletteNudgeStrength > 0 && hasPaletteReduction;
             const shouldApplyGamma = Math.abs(sourceGamma - 1) > 0.001 && sourceAdjustmentsActive;
+            const paletteGravityActive =
+                hasPaletteReduction &&
+                (paletteGravity.lightnessStrength > 0 || paletteGravity.chromaStrength > 0);
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const pixelIndex = y * width + x;
@@ -365,13 +365,11 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                         ? applyGamutTransformToColor(gammaAdjustedColor, gamutTransform)
                         : gammaAdjustedColor;
                     const pipelineSourceBase = shouldApplyGamut ? gamutAdjustedColor : gammaAdjustedColor;
-                    const pipelineSource = shouldApplyPaletteNudge
-                        ? blendColorTowardPalette(
+                    const pipelineSource = paletteGravityActive
+                        ? applyPaletteGravityNudge(
                             pipelineSourceBase,
                             reductionPaletteEntries,
-                            distanceColorSpace,
-                            paletteNudgeStrength,
-                            paletteMagnetParams
+                            paletteGravity
                         )
                         : pipelineSourceBase;
                     const sourceColor = clampRgb255(base);
@@ -625,8 +623,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         paletteModulationParams?.ambiguityBias,
         paletteModulationParams,
         paletteModulationEnabled,
-        paletteNudgeStrength,
-        paletteMagnetParams,
+        paletteGravity.softness,
+        paletteGravity.lightnessStrength,
+        paletteGravity.chromaStrength,
         sourceAdjustmentsActive,
         showSourcePreview,
         showGamutPreview,
