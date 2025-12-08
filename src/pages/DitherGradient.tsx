@@ -436,8 +436,8 @@ export default function DitherGradientPage() {
         if (!sourceCovariance || !paletteCovariance) {
             return null;
         }
-        const sourceEigen = jacobiEigenDecomposition(sourceCovariance);
-        const paletteEigen = jacobiEigenDecomposition(paletteCovariance);
+        const sourceEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(sourceCovariance));
+        const paletteEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(paletteCovariance));
         const sourceBasis = ensureRightHandedBasis(sourceEigen.eigenvectors);
         const paletteBasis = ensureRightHandedBasis(paletteEigen.eigenvectors);
         const epsilon = 1e-6;
@@ -450,6 +450,7 @@ export default function DitherGradientPage() {
             const ratio = paletteVariance <= 0 ? 1 : Math.sqrt(paletteVariance / Math.max(sourceVariance, epsilon));
             scales[index] = Math.min(maxScale, Math.max(minScale, ratio));
         }
+        const rotationOnly = multiplyMatrix3(paletteBasis, transposeMatrix3(sourceBasis));
         const scalingMatrix: Matrix3 = [
             [scales[0], 0, 0],
             [0, scales[1], 0],
@@ -466,7 +467,8 @@ export default function DitherGradientPage() {
         return {
             mode: "affine",
             colorSpace: "oklab" as const,
-            matrix: alignment,
+            rotationMatrix: rotationOnly,
+            scale: scales,
             translation,
             strength: covarianceFitStrength,
             isActive,
@@ -1509,6 +1511,18 @@ function computeCovarianceMatrix(samples: AxisTriple[], mean: AxisTriple): Matri
     return covariance;
 }
 
+function regularizeCovarianceMatrix(matrix: Matrix3, epsilon = 1e-3): Matrix3 {
+    const regularized: Matrix3 = [
+        [...matrix[0]],
+        [...matrix[1]],
+        [...matrix[2]],
+    ];
+    regularized[0][0] += epsilon;
+    regularized[1][1] += epsilon;
+    regularized[2][2] += epsilon;
+    return regularized;
+}
+
 function ensureRightHandedBasis(basis: Matrix3): Matrix3 {
     if (determinantMatrix3(basis) >= 0) {
         return basis;
@@ -1530,8 +1544,8 @@ function computeRotationAlignmentMatrix(sourceStats: AxisStats, paletteStats: Ax
     if (!sourceCovariance || !paletteCovariance) {
         return null;
     }
-    const sourceEigen = jacobiEigenDecomposition(sourceCovariance).eigenvectors;
-    const paletteEigen = jacobiEigenDecomposition(paletteCovariance).eigenvectors;
+    const sourceEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(sourceCovariance)).eigenvectors;
+    const paletteEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(paletteCovariance)).eigenvectors;
     const sourceBasis = ensureRightHandedBasis(sourceEigen);
     const paletteBasis = ensureRightHandedBasis(paletteEigen);
     return multiplyMatrix3(paletteBasis, transposeMatrix3(sourceBasis));
