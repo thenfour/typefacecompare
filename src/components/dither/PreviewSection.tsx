@@ -5,6 +5,13 @@ import { DITHER_DESCRIPTIONS, DITHER_LABELS } from "@/utils/dithering";
 import type { ReductionMode } from "@/types/dither";
 import type { PerceptualSimilarityResult } from "@/utils/perceptualSimilarity";
 
+interface SourcePointIndicator {
+    id: string;
+    x: number;
+    y: number;
+    color: string;
+}
+
 interface PreviewSectionProps {
     sourceSummaryLabel: string;
     ditherType: DitherType;
@@ -13,6 +20,7 @@ interface PreviewSectionProps {
     showSourcePointIndicators: boolean;
     onToggleSourcePointIndicators: (value: boolean) => void;
     sourcePointIndicatorAvailable: boolean;
+    sourcePointIndicators: SourcePointIndicator[];
     showGamutPreview: boolean;
     onToggleGamutPreview: (value: boolean) => void;
     gamutPreviewAvailable: boolean;
@@ -65,6 +73,7 @@ export function PreviewSection({
     showSourcePointIndicators,
     onToggleSourcePointIndicators,
     sourcePointIndicatorAvailable,
+    sourcePointIndicators,
     showGamutPreview,
     onToggleGamutPreview,
     gamutPreviewAvailable,
@@ -138,6 +147,13 @@ export function PreviewSection({
                             height={height}
                             previewScale={previewScale}
                             devicePixelRatio={devicePixelRatio}
+                            overlay={
+                                showSourcePointIndicators &&
+                                    sourcePointIndicatorAvailable &&
+                                    sourcePointIndicators.length > 0 ? (
+                                    <ControlPointOverlay points={sourcePointIndicators} />
+                                ) : undefined
+                            }
                         />
                     )}
                     {showGamutPreview && gamutPreviewAvailable && (
@@ -344,6 +360,28 @@ function buildReducedDescription(
         return baseLabel;
     }
     return `${baseLabel} • Match ${perceptualMatch.score.toFixed(1)}/100`;
+}
+
+interface ControlPointOverlayProps {
+    points: SourcePointIndicator[];
+}
+
+function ControlPointOverlay({ points }: ControlPointOverlayProps) {
+    return (
+        <div className="preview-stage__overlay" aria-hidden="true">
+            {points.map((point) => (
+                <div
+                    key={point.id}
+                    className="preview-stage__control-point"
+                    style={{
+                        left: `${point.x * 100}%`,
+                        top: `${point.y * 100}%`,
+                        backgroundColor: point.color,
+                    }}
+                />
+            ))}
+        </div>
+    );
 }
 
 function ProgressBar({ progress, caption }: { progress: number, caption?: string }) {

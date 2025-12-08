@@ -506,23 +506,46 @@ function buildGridLayout(count: number): GradientPosition[] {
         return [];
     }
     const columns = Math.max(1, Math.ceil(Math.sqrt(count)));
-    const rows = Math.max(1, Math.ceil(count / columns));
+    const rowCounts = buildGridRowCounts(count, columns);
+    const rows = rowCounts.length;
     const rowStep = rows > 1 ? 1 / (rows - 1) : 0;
     const positions: GradientPosition[] = [];
-    for (let row = 0; row < rows && positions.length < count; row++) {
-        const remaining = count - positions.length;
-        const cellsInRow = row === rows - 1 ? remaining : Math.min(columns, remaining);
+    for (let row = 0; row < rows; row++) {
+        const cellsInRow = rowCounts[row];
         if (cellsInRow <= 0) {
-            break;
+            continue;
         }
         const columnStep = cellsInRow > 1 ? 1 / (cellsInRow - 1) : 0;
-        for (let col = 0; col < cellsInRow && positions.length < count; col++) {
+        for (let col = 0; col < cellsInRow; col++) {
             const x = cellsInRow > 1 ? col * columnStep : 0.5;
             const y = rows > 1 ? row * rowStep : 0.5;
             positions.push({ x: clamp01(x), y: clamp01(y) });
         }
     }
     return positions;
+}
+
+function buildGridRowCounts(count: number, columns: number): number[] {
+    if (count <= 0) {
+        return [];
+    }
+    if (count === 1) {
+        return [1];
+    }
+    const safeColumns = Math.max(1, columns);
+    let rowCount = Math.max(1, Math.ceil(count / safeColumns));
+    const maxRowsWithPairs = Math.max(1, Math.floor(count / 2));
+    while (rowCount > 1 && rowCount > maxRowsWithPairs) {
+        rowCount -= 1;
+    }
+    const baseRowSize = Math.floor(count / rowCount);
+    const rowsWithExtraPoint = count % rowCount;
+    const rowCounts: number[] = [];
+    for (let row = 0; row < rowCount; row++) {
+        const size = baseRowSize + (row < rowsWithExtraPoint ? 1 : 0);
+        rowCounts.push(size);
+    }
+    return rowCounts;
 }
 
 function createPerimeterCycle(): PerimeterNode[] {

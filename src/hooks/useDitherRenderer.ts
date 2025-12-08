@@ -612,26 +612,26 @@ function drawGradientPointIndicators(
     width: number,
     height: number
 ) {
-    if (!field.points.length) {
-        return;
-    }
-    const indicatorRadius = Math.max(2, Math.min(width, height) * 0.02);
-    const strokeWidth = 1;// Math.max(1, Math.min(indicatorRadius * 0.8, 3));
-    ctx.save();
-    ctx.lineWidth = strokeWidth;
-    ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
-    for (const point of field.points) {
-        const clampedX = clamp01(point.position.x);
-        const clampedY = clamp01(point.position.y);
-        const x = clampedX * (width - 1) + 0.5;
-        const y = clampedY * (height - 1) + 0.5;
-        ctx.fillStyle = resolvePointFillColor(point, field.mode);
-        ctx.beginPath();
-        ctx.arc(x, y, indicatorRadius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-    }
-    ctx.restore();
+    // if (!field.points.length) {
+    //     return;
+    // }
+    // const indicatorRadius = Math.max(2, Math.min(width, height) * 0.02);
+    // const strokeWidth = 1;// Math.max(1, Math.min(indicatorRadius * 0.8, 3));
+    // ctx.save();
+    // ctx.lineWidth = strokeWidth;
+    // ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+    // for (const point of field.points) {
+    //     const clampedX = clamp01(point.position.x);
+    //     const clampedY = clamp01(point.position.y);
+    //     const x = clampedX * (width - 1) + 0.5;
+    //     const y = clampedY * (height - 1) + 0.5;
+    //     ctx.fillStyle = resolvePointFillColor(point, field.mode);
+    //     ctx.beginPath();
+    //     ctx.arc(x, y, indicatorRadius, 0, Math.PI * 2);
+    //     ctx.fill();
+    //     ctx.stroke();
+    // }
+    // ctx.restore();
 }
 
 function resolvePointFillColor(point: GradientFieldPoint, mode: ColorInterpolationMode): string {

@@ -313,6 +313,27 @@
     border: 1px solid #e0e0e0;
 }
 
+.preview-stage__canvas-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.preview-stage__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+.preview-stage__control-point {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.45);
+    transform: translate(-50%, -50%);
+}
+
 .gradient-preview-panel {
     display: flex;
     flex-direction: column;

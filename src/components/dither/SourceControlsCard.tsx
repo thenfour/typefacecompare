@@ -113,7 +113,6 @@ function renderGradientControls({
         <div className="source-card__gradient-panel">
             <div className="source-card__meta">{swatchCountLabel}</div>
             <div className="source-card__interpolation">
-                <span>Interpolation Space</span>
                 <OptionButtonGroup
                     value={interpolationMode}
                     onChange={onInterpolationModeChange}

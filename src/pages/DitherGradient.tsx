@@ -170,6 +170,13 @@ type GamutStrengthSnapshot = {
     scale: AxisTriple;
 };
 
+type SourcePointIndicator = {
+    id: string;
+    x: number;
+    y: number;
+    color: string;
+};
+
 export default function DitherGradientPage() {
     const [gradientPaletteText, setGradientPaletteText] = useState<string>(PALETTE_PRESETS[0].value);
     const [reductionPaletteText, setReductionPaletteText] = useState<string>(PALETTE_PRESETS[1].value);
@@ -592,7 +599,18 @@ export default function DitherGradientPage() {
         }
         : null;
     const paletteModulationEnabled = sourceAdjustmentsEnabled && paletteMaskEnabled && paletteMaskAvailable;
-    const sourcePointIndicatorsAvailable = sourceType === "gradient";
+    const sourcePointIndicators = useMemo(() => {
+        if (sourceType !== "gradient") {
+            return [] as SourcePointIndicator[];
+        }
+        return gradientField.points.map((point, index) => ({
+            id: `gradient-point-${index}`,
+            x: clamp01(point.position.x),
+            y: clamp01(point.position.y),
+            color: point.hex,
+        }));
+    }, [sourceType, gradientField]);
+    const sourcePointIndicatorsAvailable = sourcePointIndicators.length > 0;
 
     useDitherRenderer({
         width,
@@ -763,7 +781,7 @@ export default function DitherGradientPage() {
                             />
 
                             <PaletteEditorCard
-                                title="Reduction Palette"
+                                title="Target Palette"
                                 swatchCountLabel={`${reductionSwatches.length} swatch${reductionSwatches.length === 1 ? "" : "es"}`}
                                 presets={PALETTE_PRESETS}
                                 onSelectPreset={setReductionPaletteText}
@@ -798,6 +816,25 @@ export default function DitherGradientPage() {
                                     </label>
                                 </header>
                                 <div className="controls-panel__fields">
+                                    <div className="gamma-correction-controls">
+                                        <h4>Gamma Correction</h4>
+                                        <label>
+                                            Gamma (γ: {sourceGamma.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0.2}
+                                                max={3}
+                                                step={0.05}
+                                                value={sourceGamma}
+                                                onChange={(event) => setSourceGamma(event.target.valueAsNumber)}
+                                                disabled={gammaControlsDisabled}
+                                            />
+                                        </label>
+                                        <p className="dither-gradient-note">
+                                            Lower values brighten, higher values darken before other adjustments.
+                                        </p>
+                                    </div>
+
                                     <div className="gamut-fit-controls">
                                         <h4>
                                             Gamut Fit
@@ -933,24 +970,15 @@ export default function DitherGradientPage() {
                                             </>
                                         )}
                                     </div>
-                                    <div className="gamma-correction-controls">
-                                        <h4>Gamma Correction</h4>
-                                        <label>
-                                            Gamma (γ: {sourceGamma.toFixed(2)})
-                                            <input
-                                                type="range"
-                                                min={0.2}
-                                                max={3}
-                                                step={0.05}
-                                                value={sourceGamma}
-                                                onChange={(event) => setSourceGamma(event.target.valueAsNumber)}
-                                                disabled={gammaControlsDisabled}
-                                            />
-                                        </label>
-                                        <p className="dither-gradient-note">
-                                            Lower values brighten, higher values darken before other adjustments.
-                                        </p>
-                                    </div>
+                                </div>
+                            </section>
+
+
+                            <section className="dither-gradient-card settings">
+                                <header>
+                                    <strong>Dither strength modulation</strong>
+                                </header>
+                                <div>
                                     <div className="dither-mask-controls">
                                         <h4>Dither Masking</h4>
                                         <label>
@@ -977,72 +1005,73 @@ export default function DitherGradientPage() {
                                                 disabled={ditherMaskControlsDisabled}
                                             />
                                         </label>
-                                        <div className="palette-mask-section">
-                                            <label className="palette-mask-toggle">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={paletteMaskEnabled && paletteMaskAvailable}
-                                                    onChange={(event) => setPaletteMaskEnabled(event.target.checked)}
-                                                    disabled={paletteMaskToggleDisabled}
-                                                />
-                                                Palette Error/Ambiguity Weighting
-                                            </label>
-                                            {!paletteMaskAvailable && (
-                                                <p className="dither-gradient-note">Provide a reduction palette to enable palette-based weighting.</p>
-                                            )}
-                                            <label>
-                                                Error Scale ({ditherErrorScale.toFixed(0)})
-                                                <input
-                                                    type="range"
-                                                    min={5}
-                                                    max={150}
-                                                    step={1}
-                                                    value={ditherErrorScale}
-                                                    onChange={(event) => setDitherErrorScale(event.target.valueAsNumber)}
-                                                    disabled={paletteMaskControlsDisabled}
-                                                />
-                                            </label>
-                                            <label>
-                                                Error Exponent (kErr: {ditherErrorExponent.toFixed(2)})
-                                                <input
-                                                    type="range"
-                                                    min={0.1}
-                                                    max={4}
-                                                    step={0.05}
-                                                    value={ditherErrorExponent}
-                                                    onChange={(event) => setDitherErrorExponent(event.target.valueAsNumber)}
-                                                    disabled={paletteMaskControlsDisabled}
-                                                />
-                                            </label>
-                                            <label>
-                                                Ambiguity Exponent (kAmb: {ditherAmbiguityExponent.toFixed(2)})
-                                                <input
-                                                    type="range"
-                                                    min={0.1}
-                                                    max={4}
-                                                    step={0.05}
-                                                    value={ditherAmbiguityExponent}
-                                                    onChange={(event) => setDitherAmbiguityExponent(event.target.valueAsNumber)}
-                                                    disabled={paletteMaskControlsDisabled}
-                                                />
-                                            </label>
-                                            <label>
-                                                Ambiguity Bias ({Math.round(ditherAmbiguityBias * 100)}% base)
-                                                <input
-                                                    type="range"
-                                                    min={0}
-                                                    max={1}
-                                                    step={0.05}
-                                                    value={ditherAmbiguityBias}
-                                                    onChange={(event) => setDitherAmbiguityBias(event.target.valueAsNumber)}
-                                                    disabled={paletteMaskControlsDisabled}
-                                                />
-                                            </label>
-                                            <p className="dither-gradient-note">
-                                                Error boosts dithering where palette distances spike; ambiguity raises strength when two colors tie.
-                                            </p>
-                                        </div>
                                     </div>
+                                    <div className="palette-mask-section">
+                                        <label className="palette-mask-toggle">
+                                            <input
+                                                type="checkbox"
+                                                checked={paletteMaskEnabled && paletteMaskAvailable}
+                                                onChange={(event) => setPaletteMaskEnabled(event.target.checked)}
+                                                disabled={paletteMaskToggleDisabled}
+                                            />
+                                            Palette Error/Ambiguity Weighting
+                                        </label>
+                                        {!paletteMaskAvailable && (
+                                            <p className="dither-gradient-note">Provide a reduction palette to enable palette-based weighting.</p>
+                                        )}
+                                        <label>
+                                            Error Scale ({ditherErrorScale.toFixed(0)})
+                                            <input
+                                                type="range"
+                                                min={5}
+                                                max={150}
+                                                step={1}
+                                                value={ditherErrorScale}
+                                                onChange={(event) => setDitherErrorScale(event.target.valueAsNumber)}
+                                                disabled={paletteMaskControlsDisabled}
+                                            />
+                                        </label>
+                                        <label>
+                                            Error Exponent (kErr: {ditherErrorExponent.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0.1}
+                                                max={4}
+                                                step={0.05}
+                                                value={ditherErrorExponent}
+                                                onChange={(event) => setDitherErrorExponent(event.target.valueAsNumber)}
+                                                disabled={paletteMaskControlsDisabled}
+                                            />
+                                        </label>
+                                        <label>
+                                            Ambiguity Exponent (kAmb: {ditherAmbiguityExponent.toFixed(2)})
+                                            <input
+                                                type="range"
+                                                min={0.1}
+                                                max={4}
+                                                step={0.05}
+                                                value={ditherAmbiguityExponent}
+                                                onChange={(event) => setDitherAmbiguityExponent(event.target.valueAsNumber)}
+                                                disabled={paletteMaskControlsDisabled}
+                                            />
+                                        </label>
+                                        <label>
+                                            Ambiguity Bias ({Math.round(ditherAmbiguityBias * 100)}% base)
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={1}
+                                                step={0.05}
+                                                value={ditherAmbiguityBias}
+                                                onChange={(event) => setDitherAmbiguityBias(event.target.valueAsNumber)}
+                                                disabled={paletteMaskControlsDisabled}
+                                            />
+                                        </label>
+                                        <p className="dither-gradient-note">
+                                            Error boosts dithering where palette distances spike; ambiguity raises strength when two colors tie.
+                                        </p>
+                                    </div>
+
                                 </div>
                             </section>
 
@@ -1117,6 +1146,7 @@ export default function DitherGradientPage() {
                                 showSourcePointIndicators={showGradientPointIndicators}
                                 onToggleSourcePointIndicators={setShowGradientPointIndicators}
                                 sourcePointIndicatorAvailable={sourcePointIndicatorsAvailable}
+                                sourcePointIndicators={sourcePointIndicators}
                                 showGamutPreview={showGamutPreview}
                                 onToggleGamutPreview={setShowGamutPreview}
                                 gamutPreviewAvailable={gamutPreviewAvailable}
@@ -1237,6 +1267,13 @@ function sampleImageScatterPoints(imageData: ImageData | null, maxPoints: number
         );
     }
     return result;
+}
+
+function clamp01(value: number | null | undefined) {
+    if (typeof value !== "number" || Number.isNaN(value)) {
+        return 0;
+    }
+    return Math.min(1, Math.max(0, value));
 }
 
 function sampleGradientScatterPoints(

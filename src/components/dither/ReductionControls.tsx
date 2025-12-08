@@ -54,6 +54,9 @@ export function ReductionControls({
                             ]}
                         />
                     </div>
+                    <div>
+                        <small style={{ color: "#555" }}>* Color spaces with non-orthogonal axes are not viable for deltaE (HSL, HSV, OKLCH...).</small>
+                    </div>
                 </>
             )}
         </>
