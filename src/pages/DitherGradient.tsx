@@ -291,7 +291,7 @@ export default function DitherGradientPage() {
     const [showPerceptualDeltaPreview, setShowPerceptualDeltaPreview] = useState(false);
     const [showPerceptualBlurReferencePreview, setShowPerceptualBlurReferencePreview] = useState(false);
     const [showPerceptualBlurTestPreview, setShowPerceptualBlurTestPreview] = useState(false);
-    const [showGradientPointIndicators, setShowGradientPointIndicators] = useState(false);
+    const [showGradientPointIndicators, setShowGradientPointIndicators] = useState(true);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
