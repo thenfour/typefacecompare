@@ -280,7 +280,7 @@ export default function DitherGradientPage() {
     const [showSourcePreview, setShowSourcePreview] = useState(true);
     const [showGamutPreview, setShowGamutPreview] = useState(false);
     const [showDitherPreview, setShowDitherPreview] = useState(false);
-    const [showUnditheredPreview, setShowUnditheredPreview] = useState(true);
+    const [showUnditheredPreview, setShowUnditheredPreview] = useState(false);
     const [showReducedPreview, setShowReducedPreview] = useState(true);
     const [showPaletteErrorPreview, setShowPaletteErrorPreview] = useState(false);
     const [showPaletteAmbiguityPreview, setShowPaletteAmbiguityPreview] = useState(false);
@@ -582,14 +582,23 @@ export default function DitherGradientPage() {
         }
     }, [sourceType, showGradientPointIndicators]);
 
-    const paletteModulationParams = paletteMaskAvailable
-        ? {
+    const paletteModulationParams = useMemo(() => {
+        if (!paletteMaskAvailable) {
+            return null;
+        }
+        return {
             errorScale: ditherErrorScale,
             errorExponent: ditherErrorExponent,
             ambiguityExponent: ditherAmbiguityExponent,
             ambiguityBias: ditherAmbiguityBias,
-        }
-        : null;
+        };
+    }, [
+        paletteMaskAvailable,
+        ditherErrorScale,
+        ditherErrorExponent,
+        ditherAmbiguityExponent,
+        ditherAmbiguityBias,
+    ]);
     const paletteModulationEnabled = sourceAdjustmentsEnabled && paletteMaskEnabled && paletteMaskAvailable;
     const sourcePointIndicators = useMemo(() => {
         if (sourceType !== "gradient") {
