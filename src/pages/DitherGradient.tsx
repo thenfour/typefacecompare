@@ -212,6 +212,7 @@ export default function DitherGradientPage() {
     const [gamutFitEnabled, setGamutFitEnabled] = useState(true);
     const [covarianceFitEnabled, setCovarianceFitEnabled] = useState(false);
     const [covarianceFitStrength, setCovarianceFitStrength] = useState(0.5);
+    const [covarianceRidgeStrength, setCovarianceRidgeStrength] = useState(0.0025);
     const [savedGamutStrengths, setSavedGamutStrengths] = useState<GamutStrengthSnapshot>(() => ({
         overall: gamutOverallStrength,
         translation: gamutTranslationStrength,
@@ -402,7 +403,7 @@ export default function DitherGradientPage() {
             scale[index] = 1 + axisStrength * (ratio - 1);
         }
         const scalingActive = gamutScaleStrength.some((value) => Math.abs(value * gamutOverallStrength) > 0.0001);
-        const baseRotationMatrix = computeRotationAlignmentMatrix(sourceAxisStats, paletteAxisStats);
+        const baseRotationMatrix = computeRotationAlignmentMatrix(sourceAxisStats, paletteAxisStats, covarianceRidgeStrength);
         const effectiveRotationStrength = gamutRotationStrength * gamutOverallStrength;
         const rotationMatrix = baseRotationMatrix
             ? blendRotationMatrix(baseRotationMatrix, effectiveRotationStrength)
@@ -436,8 +437,8 @@ export default function DitherGradientPage() {
         if (!sourceCovariance || !paletteCovariance) {
             return null;
         }
-        const sourceEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(sourceCovariance));
-        const paletteEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(paletteCovariance));
+        const sourceEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(sourceCovariance, covarianceRidgeStrength));
+        const paletteEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(paletteCovariance, covarianceRidgeStrength));
         const sourceBasis = ensureRightHandedBasis(sourceEigen.eigenvectors);
         const paletteBasis = ensureRightHandedBasis(paletteEigen.eigenvectors);
         const epsilon = 1e-6;
@@ -996,6 +997,18 @@ export default function DitherGradientPage() {
                                                     disabled={covarianceFitControlsDisabled || !covarianceFitEnabled}
                                                 />
                                             </label>
+                                            <label>
+                                                Ridge Noise ({(covarianceRidgeStrength * 1000).toFixed(1)}×10⁻³)
+                                                <input
+                                                    type="range"
+                                                    min={0}
+                                                    max={0.02}
+                                                    step={0.0005}
+                                                    value={covarianceRidgeStrength}
+                                                    onChange={(event) => setCovarianceRidgeStrength(event.target.valueAsNumber)}
+                                                    disabled={covarianceFitControlsDisabled || !covarianceFitEnabled}
+                                                />
+                                            </label>
                                             {!covarianceFitAvailable && (
                                                 <p className="gamut-fit-controls__hint">Requires source + palette samples.</p>
                                             )}
@@ -1511,7 +1524,7 @@ function computeCovarianceMatrix(samples: AxisTriple[], mean: AxisTriple): Matri
     return covariance;
 }
 
-function regularizeCovarianceMatrix(matrix: Matrix3, epsilon = 1e-3): Matrix3 {
+function regularizeCovarianceMatrix(matrix: Matrix3, epsilon: number): Matrix3 {
     const regularized: Matrix3 = [
         [...matrix[0]],
         [...matrix[1]],
@@ -1538,14 +1551,14 @@ function ensureRightHandedBasis(basis: Matrix3): Matrix3 {
     return adjusted;
 }
 
-function computeRotationAlignmentMatrix(sourceStats: AxisStats, paletteStats: AxisStats): Matrix3 | null {
+function computeRotationAlignmentMatrix(sourceStats: AxisStats, paletteStats: AxisStats, ridgeEpsilon: number): Matrix3 | null {
     const sourceCovariance = computeCovarianceMatrix(sourceStats.samples, sourceStats.mean);
     const paletteCovariance = computeCovarianceMatrix(paletteStats.samples, paletteStats.mean);
     if (!sourceCovariance || !paletteCovariance) {
         return null;
     }
-    const sourceEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(sourceCovariance)).eigenvectors;
-    const paletteEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(paletteCovariance)).eigenvectors;
+    const sourceEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(sourceCovariance, ridgeEpsilon)).eigenvectors;
+    const paletteEigen = jacobiEigenDecomposition(regularizeCovarianceMatrix(paletteCovariance, ridgeEpsilon)).eigenvectors;
     const sourceBasis = ensureRightHandedBasis(sourceEigen);
     const paletteBasis = ensureRightHandedBasis(paletteEigen);
     return multiplyMatrix3(paletteBasis, transposeMatrix3(sourceBasis));
