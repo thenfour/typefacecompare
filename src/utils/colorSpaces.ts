@@ -4,9 +4,6 @@ export type ColorInterpolationMode =
     | "rgb"
     | "hsl"
     | "hsv"
-    | "hwb"
-    | "cmy"
-    | "cmyk"
     | "luma-rgb"
     | "luma-lab"
     | "luma-oklab"
@@ -23,9 +20,6 @@ export interface RGBColor {
 
 interface HSLVector { h: number; s: number; l: number; }
 interface HSVVector { h: number; s: number; v: number; }
-interface HWBVector { h: number; w: number; b: number; }
-interface CMYVector { c: number; m: number; y: number; }
-interface CMYKVector { c: number; m: number; y: number; k: number; }
 interface LabVector { l: number; a: number; b: number; }
 interface YCbCrVector { y: number; cb: number; cr: number; }
 interface OklabVector { L: number; a: number; b: number; }
@@ -36,9 +30,6 @@ export type ColorVector =
     | RGB
     | HSLVector
     | HSVVector
-    | HWBVector
-    | CMYVector
-    | CMYKVector
     | LumaVector
     | LabVector
     | YCbCrVector
@@ -124,27 +115,12 @@ function mixVectors(a: ColorVector, b: ColorVector, t: number, mode: ColorInterp
             return mixPolarHsl(a as HSLVector, b as HSLVector, lerp);
         case "hsv":
             return mixPolarHsv(a as HSVVector, b as HSVVector, lerp);
-        case "hwb":
-            return mixPolarHwb(a as HWBVector, b as HWBVector, lerp);
-        case "cmy":
-            return {
-                c: lerp((a as CMYVector).c, (b as CMYVector).c),
-                m: lerp((a as CMYVector).m, (b as CMYVector).m),
-                y: lerp((a as CMYVector).y, (b as CMYVector).y)
-            } satisfies CMYVector;
         case "luma-rgb":
         case "luma-lab":
         case "luma-oklab":
             return {
                 l: lerp((a as LumaVector).l, (b as LumaVector).l)
             } satisfies LumaVector;
-        case "cmyk":
-            return {
-                c: lerp((a as CMYKVector).c, (b as CMYKVector).c),
-                m: lerp((a as CMYKVector).m, (b as CMYKVector).m),
-                y: lerp((a as CMYKVector).y, (b as CMYKVector).y),
-                k: lerp((a as CMYKVector).k, (b as CMYKVector).k)
-            } satisfies CMYKVector;
         case "lab":
             return {
                 l: lerp((a as LabVector).l, (b as LabVector).l),
@@ -196,21 +172,6 @@ function mixPolarHsv(a: HSVVector, b: HSVVector, lerp: (start: number, end: numb
     } satisfies HSVVector;
 }
 
-function mixPolarHwb(a: HWBVector, b: HWBVector, lerp: (start: number, end: number) => number): HWBVector {
-    const chromaA = Math.max(0, 1 - a.w - a.b);
-    const chromaB = Math.max(0, 1 - b.w - b.b);
-    const [ax, ay] = polarToCartesian(chromaA, a.h);
-    const [bx, by] = polarToCartesian(chromaB, b.h);
-    const mx = lerp(ax, bx);
-    const my = lerp(ay, by);
-    const { angleDegrees } = cartesianToPolar(mx, my);
-    return {
-        h: angleDegrees,
-        w: lerp(a.w, b.w),
-        b: lerp(a.b, b.b)
-    } satisfies HWBVector;
-}
-
 function mixPolarOklch(a: OklchVector, b: OklchVector, lerp: (start: number, end: number) => number): OklchVector {
     const [ax, ay] = polarToCartesian(a.C, a.h);
     const [bx, by] = polarToCartesian(b.C, b.h);
@@ -254,12 +215,6 @@ function rgbToVector(rgb: RGB, mode: ColorInterpolationMode): ColorVector {
             return rgbToHsl(rgb);
         case "hsv":
             return rgbToHsv(rgb);
-        case "hwb":
-            return rgbToHwb(rgb);
-        case "cmy":
-            return rgbToCmy(rgb);
-        case "cmyk":
-            return rgbToCmyk(rgb);
         case "luma-rgb":
             return rgbToLumaRgb(rgb);
         case "luma-lab":
@@ -287,12 +242,6 @@ export function vectorToRgb(vector: ColorVector, mode: ColorInterpolationMode): 
             return clampRgb(hslToRgb(vector as HSLVector));
         case "hsv":
             return clampRgb(hsvToRgb(vector as HSVVector));
-        case "hwb":
-            return clampRgb(hwbToRgb(vector as HWBVector));
-        case "cmy":
-            return clampRgb(cmyToRgb(vector as CMYVector));
-        case "cmyk":
-            return clampRgb(cmykToRgb(vector as CMYKVector));
         case "luma-rgb":
         case "luma-lab":
         case "luma-oklab":
@@ -445,65 +394,6 @@ function hsvToRgb(hsv: HSVVector): RGB {
     } satisfies RGB;
 }
 
-function rgbToHwb(rgb: RGB): HWBVector {
-    const { h } = rgbToHsl(rgb);
-    const whiteness = Math.min(rgb.r, rgb.g, rgb.b);
-    const blackness = 1 - Math.max(rgb.r, rgb.g, rgb.b);
-    return {
-        h,
-        w: clamp01(whiteness),
-        b: clamp01(blackness)
-    } satisfies HWBVector;
-}
-
-function hwbToRgb(hwb: HWBVector): RGB {
-    let h = ((hwb.h % 360) + 360) % 360;
-    let w = clamp01(hwb.w);
-    let b = clamp01(hwb.b);
-    const sum = w + b;
-    if (sum > 1) {
-        w /= sum;
-        b /= sum;
-    }
-    const pure = pureHueToRgb(h);
-    const factor = 1 - w - b;
-    return {
-        r: clamp01(pure.r * factor + w),
-        g: clamp01(pure.g * factor + w),
-        b: clamp01(pure.b * factor + w)
-    } satisfies RGB;
-}
-
-function pureHueToRgb(hueDegrees: number): RGB {
-    const hue = ((hueDegrees % 360) + 360) % 360;
-    const c = 1;
-    const hp = hue / 60;
-    const x = c * (1 - Math.abs((hp % 2) - 1));
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    if (hp >= 0 && hp < 1) {
-        r = c;
-        g = x;
-    } else if (hp >= 1 && hp < 2) {
-        r = x;
-        g = c;
-    } else if (hp >= 2 && hp < 3) {
-        g = c;
-        b = x;
-    } else if (hp >= 3 && hp < 4) {
-        g = x;
-        b = c;
-    } else if (hp >= 4 && hp < 5) {
-        r = x;
-        b = c;
-    } else {
-        r = c;
-        b = x;
-    }
-    return { r, g, b } satisfies RGB;
-}
-
 function polarToCartesian(radius: number, degrees: number) {
     const radians = (((degrees ?? 0) % 360) + 360) % 360 * (Math.PI / 180);
     return [radius * Math.cos(radians), radius * Math.sin(radians)];
@@ -513,23 +403,6 @@ function cartesianToPolar(x: number, y: number) {
     const radius = Math.sqrt(x * x + y * y);
     const angleDegrees = (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360;
     return { radius, angleDegrees };
-}
-
-// CMYK helpers
-function rgbToCmy(rgb: RGB): CMYVector {
-    return {
-        c: 1 - clamp01(rgb.r),
-        m: 1 - clamp01(rgb.g),
-        y: 1 - clamp01(rgb.b)
-    } satisfies CMYVector;
-}
-
-function cmyToRgb(cmy: CMYVector): RGB {
-    return {
-        r: clamp01(1 - cmy.c),
-        g: clamp01(1 - cmy.m),
-        b: clamp01(1 - cmy.y)
-    } satisfies RGB;
 }
 
 function rgbToLumaRgb(rgb: RGB): LumaVector {
@@ -550,31 +423,6 @@ function rgbToLumaOklab(rgb: RGB): LumaVector {
 function lumaToRgb(vec: LumaVector): RGB {
     const value = clamp01(vec.l);
     return { r: value, g: value, b: value } satisfies RGB;
-}
-
-function rgbToCmyk(rgb: RGB): CMYKVector {
-    const c = 1 - rgb.r;
-    const m = 1 - rgb.g;
-    const y = 1 - rgb.b;
-    const k = Math.min(c, m, y);
-
-    if (k === 1) {
-        return { c: 0, m: 0, y: 0, k: 1 };
-    }
-
-    return {
-        c: (c - k) / (1 - k),
-        m: (m - k) / (1 - k),
-        y: (y - k) / (1 - k),
-        k
-    };
-}
-
-function cmykToRgb(cmyk: CMYKVector): RGB {
-    const r = (1 - cmyk.c) * (1 - cmyk.k);
-    const g = (1 - cmyk.m) * (1 - cmyk.k);
-    const b = (1 - cmyk.y) * (1 - cmyk.k);
-    return { r: clamp01(r), g: clamp01(g), b: clamp01(b) };
 }
 
 // YCbCr helpers (BT.601)
