@@ -282,12 +282,10 @@ export function PreviewSection({
                     )}
                 </div>
             </div>
-            {(perceptualMatch || unditheredPerceptualMatch) && (
-                <PerceptualMatchSummary
-                    ditheredMatch={perceptualMatch}
-                    unditheredMatch={unditheredPerceptualMatch}
-                />
-            )}
+            <PerceptualMatchSummary
+                ditheredMatch={perceptualMatch}
+                unditheredMatch={unditheredPerceptualMatch}
+            />
             <div className="preview-toggle-list">
                 <label>
                     <input type="checkbox" checked={showSourcePreview} onChange={(event) => onToggleSourcePreview(event.target.checked)} /> Source
@@ -460,36 +458,40 @@ function PerceptualMatchSummary({
         { key: "dithered", label: "With Dither", match: ditheredMatch },
         { key: "undithered", label: "No Dither", match: unditheredMatch },
     ].filter((entry) => entry.match) as { key: string; label: string; match: PerceptualSimilarityResult }[];
-    if (!entries.length) {
-        return null;
-    }
+    const hasScores = entries.length > 0;
     const scoreDelta = ditheredMatch && unditheredMatch ? ditheredMatch.score - unditheredMatch.score : null;
     return (
         <div className="perceptual-match-banner">
             <div className="perceptual-match-banner__primary">
                 <strong>Perceptual Match</strong>
-                {scoreDelta !== null && (
+                {hasScores && scoreDelta !== null && (
                     <span className="perceptual-match-banner__delta">
                         {scoreDelta >= 0 ? "+" : ""}
                         {scoreDelta.toFixed(2)} pts vs no dither
                     </span>
                 )}
             </div>
-            <div className="perceptual-match-banner__rows">
-                {entries.map((entry) => (
-                    <div key={entry.key} className="perceptual-match-banner__row">
-                        <div className="perceptual-match-banner__row-label">{entry.label}</div>
-                        <ProgressBar
-                            progress={entry.match.score}
-                            caption={`${entry.match.score.toFixed(2)} / 100`}
-                        />
-                        <div className="perceptual-match-banner__row-meta">
-                            <span>Blur sigma {entry.match.blurRadiusPx.toFixed(2)} px</span>
-                            <span>Mean delta {entry.match.meanDelta.toFixed(4)}</span>
+            {hasScores ? (
+                <div className="perceptual-match-banner__rows">
+                    {entries.map((entry) => (
+                        <div key={entry.key} className="perceptual-match-banner__row">
+                            <div className="perceptual-match-banner__row-label">{entry.label}</div>
+                            <ProgressBar
+                                progress={entry.match.score}
+                                caption={`${entry.match.score.toFixed(2)} / 100`}
+                            />
+                            <div className="perceptual-match-banner__row-meta">
+                                <span>Blur sigma {entry.match.blurRadiusPx.toFixed(2)} px</span>
+                                <span>Mean delta {entry.match.meanDelta.toFixed(4)}</span>
+                            </div>
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="perceptual-match-banner__empty">
+                    Provide a palette reduction to compute similarity against the source.
+                </p>
+            )}
         </div>
     );
 }

@@ -219,9 +219,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             const startTime = performance.now();
 
             const hasPaletteReduction = reductionMode === "palette" && reductionPaletteEntries.length > 0;
-            const perceptualMatchEnabled = Boolean(perceptualMatchOptions && hasPaletteReduction && showReducedPreview);
+            const perceptualMatchEnabled = Boolean(perceptualMatchOptions && hasPaletteReduction);
             const unditheredMatchEnabled = Boolean(
-                perceptualMatchOptions?.onUnditheredMatchComputed && hasPaletteReduction && showUnditheredPreview
+                perceptualMatchOptions?.onUnditheredMatchComputed && hasPaletteReduction
             );
 
             const previewStages: PreviewStageConfig[] = [

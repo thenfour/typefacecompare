@@ -100,7 +100,7 @@ function renderGradientControls({
         { value: "lab", label: "LAB", hint: "Perceptual axes that preserve luminance structure." },
         { value: "oklab", label: "OKLab", hint: "Good: Perceptual orthogonal space." },
         { value: "ycbcr", label: "YCbCr", hint: "Video luma/chroma split for gentle hue drift." },
-        { value: "oklch", label: "OKLCH", hint: "Best: Perceptual polar space for even hue rotations." },
+        { value: "oklch", label: "OKLCH", hint: "✅Best: Perceptual polar space." },
     ];
 
     const placementOptions: { value: GradientAutoPlacementMode; label: string }[] = [
