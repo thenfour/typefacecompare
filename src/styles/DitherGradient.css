@@ -48,7 +48,7 @@
 
 .dither-gradient-settings-grid {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     gap: 24px;
 }
 
@@ -562,4 +562,19 @@
     align-items: center;
     gap: 8px;
     font-size: 12px;
+}
+
+.dither-controlblock {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dither-controlblock label {
+    font-size: 14px;
+    display: flex;
+}
+
+.dither-controlblock label>div {
+    min-width: 250px;
 }

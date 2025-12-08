@@ -16,26 +16,32 @@ export interface PerceptualSimilarityResult {
     blurRadiusPx: number;
 }
 
+export interface PerceptualSimilarityArtifacts {
+    result: PerceptualSimilarityResult | null;
+    blurredReferenceBuffer: Float32Array | null;
+    blurredTestBuffer: Float32Array | null;
+}
+
 const CHANNELS_PER_PIXEL = 3;
 const MIN_GAUSSIAN_SIGMA = 0.25;
 const DEFAULT_DISTANCE_SPACE: ColorInterpolationMode = "oklab";
 const OKLAB_DISTANCE_REFERENCE = 0.05; // Roughly a just-noticeable difference for smooth content.
-export const DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX = 2;
+export const DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX = 1.25;
 
 interface GaussianKernel {
     radius: number;
     weights: Float32Array;
 }
 
-export function computePerceptualSimilarityScore(options: PerceptualSimilarityInput): PerceptualSimilarityResult | null {
+export function computePerceptualSimilarityArtifacts(options: PerceptualSimilarityInput): PerceptualSimilarityArtifacts {
     const { referenceRgbBuffer, testRgbBuffer, width, height, distanceSpace = DEFAULT_DISTANCE_SPACE } = options;
     const blurRadiusPx = Math.max(0, options.blurRadiusPx);
     const expectedLength = width * height * CHANNELS_PER_PIXEL;
     if (referenceRgbBuffer.length !== expectedLength || testRgbBuffer.length !== expectedLength) {
-        return null;
+        return buildEmptyArtifacts();
     }
     if (width <= 0 || height <= 0) {
-        return null;
+        return buildEmptyArtifacts();
     }
 
     const kernel = buildGaussianKernel(blurRadiusPx);
@@ -43,11 +49,27 @@ export function computePerceptualSimilarityScore(options: PerceptualSimilarityIn
     const blurredTest = applyGaussianBlurRgbBuffer(testRgbBuffer, width, height, kernel);
     const { meanDelta, maxDelta } = measurePerceptualDelta(blurredReference, blurredTest, distanceSpace);
     return {
-        score: convertDeltaToScore(meanDelta),
-        meanDelta,
-        maxDelta,
-        blurRadiusPx,
-    } satisfies PerceptualSimilarityResult;
+        result: {
+            score: convertDeltaToScore(meanDelta),
+            meanDelta,
+            maxDelta,
+            blurRadiusPx,
+        },
+        blurredReferenceBuffer: blurredReference,
+        blurredTestBuffer: blurredTest,
+    } satisfies PerceptualSimilarityArtifacts;
+}
+
+export function computePerceptualSimilarityScore(options: PerceptualSimilarityInput): PerceptualSimilarityResult | null {
+    return computePerceptualSimilarityArtifacts(options).result;
+}
+
+function buildEmptyArtifacts(): PerceptualSimilarityArtifacts {
+    return {
+        result: null,
+        blurredReferenceBuffer: null,
+        blurredTestBuffer: null,
+    } satisfies PerceptualSimilarityArtifacts;
 }
 
 function buildGaussianKernel(sigmaPx: number): GaussianKernel {

@@ -252,6 +252,9 @@ export default function DitherGradientPage() {
     const [showPaletteErrorPreview, setShowPaletteErrorPreview] = useState(false);
     const [showPaletteAmbiguityPreview, setShowPaletteAmbiguityPreview] = useState(false);
     const [showPaletteModulationPreview, setShowPaletteModulationPreview] = useState(false);
+    const [showPerceptualDeltaPreview, setShowPerceptualDeltaPreview] = useState(false);
+    const [showPerceptualBlurReferencePreview, setShowPerceptualBlurReferencePreview] = useState(false);
+    const [showPerceptualBlurTestPreview, setShowPerceptualBlurTestPreview] = useState(false);
     const devicePixelRatio = useDevicePixelRatio();
 
     const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -261,6 +264,9 @@ export default function DitherGradientPage() {
     const paletteErrorCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const paletteAmbiguityCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const paletteModulationCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const perceptualDeltaCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const perceptualBlurReferenceCanvasRef = useRef<HTMLCanvasElement | null>(null);
+    const perceptualBlurTestCanvasRef = useRef<HTMLCanvasElement | null>(null);
     const parsedGradientPalette = useMemo(() => parsePaletteDefinition(gradientPaletteText), [gradientPaletteText]);
     const gradientSwatches = parsedGradientPalette.swatches;
     const gradientControlPoints = useMemo(
@@ -424,6 +430,7 @@ export default function DitherGradientPage() {
     const paletteMaskToggleDisabled = ditherMaskControlsDisabled || !paletteMaskAvailable;
     const paletteMaskControlsDisabled = paletteMaskToggleDisabled || !paletteMaskEnabled;
     const palettePreviewAvailable = paletteMaskAvailable && !ditherMaskControlsDisabled;
+    const perceptualBlurPreviewAvailable = hasReductionPalette && reductionMode === "palette" && showReducedPreview;
     const proceduralDitherTile: DitherThresholdTile | null = useMemo(
         () =>
             buildProceduralDitherTile(ditherType, ditherSeed, {
@@ -520,6 +527,26 @@ export default function DitherGradientPage() {
         }
     }, [palettePreviewAvailable, showPaletteErrorPreview, showPaletteAmbiguityPreview, showPaletteModulationPreview]);
 
+    useEffect(() => {
+        if (perceptualBlurPreviewAvailable) {
+            return;
+        }
+        if (showPerceptualDeltaPreview) {
+            setShowPerceptualDeltaPreview(false);
+        }
+        if (showPerceptualBlurReferencePreview) {
+            setShowPerceptualBlurReferencePreview(false);
+        }
+        if (showPerceptualBlurTestPreview) {
+            setShowPerceptualBlurTestPreview(false);
+        }
+    }, [
+        perceptualBlurPreviewAvailable,
+        showPerceptualDeltaPreview,
+        showPerceptualBlurReferencePreview,
+        showPerceptualBlurTestPreview,
+    ]);
+
     const paletteModulationParams = paletteMaskAvailable
         ? {
             errorScale: ditherErrorScale,
@@ -563,6 +590,9 @@ export default function DitherGradientPage() {
         showPaletteErrorPreview: showPaletteErrorPreview && palettePreviewAvailable,
         showPaletteAmbiguityPreview: showPaletteAmbiguityPreview && palettePreviewAvailable,
         showPaletteModulationPreview: showPaletteModulationPreview && palettePreviewAvailable,
+        showPerceptualDeltaPreview: showPerceptualDeltaPreview && perceptualBlurPreviewAvailable,
+        showPerceptualBlurReferencePreview: showPerceptualBlurReferencePreview && perceptualBlurPreviewAvailable,
+        showPerceptualBlurTestPreview: showPerceptualBlurTestPreview && perceptualBlurPreviewAvailable,
         canvasRefs: {
             source: sourceCanvasRef,
             gamut: gamutCanvasRef,
@@ -571,6 +601,9 @@ export default function DitherGradientPage() {
             paletteError: paletteErrorCanvasRef,
             paletteAmbiguity: paletteAmbiguityCanvasRef,
             paletteModulation: paletteModulationCanvasRef,
+            perceptualDelta: perceptualDeltaCanvasRef,
+            perceptualBlurReference: perceptualBlurReferenceCanvasRef,
+            perceptualBlurTest: perceptualBlurTestCanvasRef,
         },
         perceptualMatchOptions: {
             blurRadiusPx: perceptualBlurRadiusPx,
@@ -600,6 +633,56 @@ export default function DitherGradientPage() {
                 <div className="dither-gradient-body">
                     <div className="dither-gradient-column dither-gradient-column--settings">
                         <div className="dither-gradient-settings-grid dither-gradient-stack">
+
+
+                            <section className="dither-gradient-card settings">
+                                <header>
+                                    <strong>Canvas & Preview</strong>
+                                </header>
+                                <div className="dither-controlblock">
+                                    <label>
+                                        <div>Canvas Width ({width}px)</div>
+                                        <input
+                                            type="range"
+                                            min={CANVAS_SIZE_MIN}
+                                            max={CANVAS_SIZE_MAX}
+                                            step={CANVAS_SIZE_STEP}
+                                            value={width}
+                                            onChange={(event) => setWidth(event.target.valueAsNumber)}
+                                        />
+                                    </label>
+                                    <label>
+                                        <div>Canvas Height ({height}px)</div>
+                                        <input
+                                            type="range"
+                                            min={CANVAS_SIZE_MIN}
+                                            max={CANVAS_SIZE_MAX}
+                                            step={CANVAS_SIZE_STEP}
+                                            value={height}
+                                            onChange={(event) => setHeight(event.target.valueAsNumber)}
+                                        />
+                                    </label>
+                                    <label>
+                                        <div>Preview Scale ({previewScale}×)</div>
+                                        <input type="range" min={1} max={4} step={1} value={previewScale} onChange={(event) => setPreviewScale(event.target.valueAsNumber)} />
+                                    </label>
+                                    <label>
+                                        <div>Perceptual Blur Radius ({perceptualBlurRadiusPx.toFixed(2)} px)</div>
+                                        <input
+                                            type="range"
+                                            min={PERCEPTUAL_BLUR_MIN_PX}
+                                            max={PERCEPTUAL_BLUR_MAX_PX}
+                                            step={PERCEPTUAL_BLUR_STEP_PX}
+                                            value={perceptualBlurRadiusPx}
+                                            onChange={(event) => setPerceptualBlurRadiusPx(event.target.valueAsNumber)}
+                                        />
+                                    </label>
+                                </div>
+                            </section>
+
+
+
+
                             <SourceControlsCard
                                 sourceType={sourceType}
                                 onSourceTypeChange={setSourceType}
@@ -925,6 +1008,7 @@ export default function DitherGradientPage() {
                                 </div>
                             </section>
 
+
                             <section className="dither-gradient-card settings">
                                 <header>
                                     <strong>Controls</strong>
@@ -980,51 +1064,6 @@ export default function DitherGradientPage() {
                                             />
                                         </div>
                                     </div>
-
-                                    <div className="controls-panel">
-                                        <div className="controls-panel__header">
-                                            <h3>Canvas & Preview</h3>
-                                        </div>
-                                        <div className="controls-panel__fields">
-                                            <label>
-                                                Canvas Width ({width}px)
-                                                <input
-                                                    type="range"
-                                                    min={CANVAS_SIZE_MIN}
-                                                    max={CANVAS_SIZE_MAX}
-                                                    step={CANVAS_SIZE_STEP}
-                                                    value={width}
-                                                    onChange={(event) => setWidth(event.target.valueAsNumber)}
-                                                />
-                                            </label>
-                                            <label>
-                                                Canvas Height ({height}px)
-                                                <input
-                                                    type="range"
-                                                    min={CANVAS_SIZE_MIN}
-                                                    max={CANVAS_SIZE_MAX}
-                                                    step={CANVAS_SIZE_STEP}
-                                                    value={height}
-                                                    onChange={(event) => setHeight(event.target.valueAsNumber)}
-                                                />
-                                            </label>
-                                            <label>
-                                                Preview Scale ({previewScale}×)
-                                                <input type="range" min={1} max={4} step={1} value={previewScale} onChange={(event) => setPreviewScale(event.target.valueAsNumber)} />
-                                            </label>
-                                            <label>
-                                                Perceptual Blur Radius ({perceptualBlurRadiusPx.toFixed(2)} px)
-                                                <input
-                                                    type="range"
-                                                    min={PERCEPTUAL_BLUR_MIN_PX}
-                                                    max={PERCEPTUAL_BLUR_MAX_PX}
-                                                    step={PERCEPTUAL_BLUR_STEP_PX}
-                                                    value={perceptualBlurRadiusPx}
-                                                    onChange={(event) => setPerceptualBlurRadiusPx(event.target.valueAsNumber)}
-                                                />
-                                            </label>
-                                        </div>
-                                    </div>
                                 </div>
                             </section>
                         </div>
@@ -1053,6 +1092,13 @@ export default function DitherGradientPage() {
                                 showPaletteModulationPreview={showPaletteModulationPreview}
                                 onTogglePaletteModulationPreview={setShowPaletteModulationPreview}
                                 paletteModulationPreviewAvailable={palettePreviewAvailable}
+                                showPerceptualDeltaPreview={showPerceptualDeltaPreview}
+                                onTogglePerceptualDeltaPreview={setShowPerceptualDeltaPreview}
+                                showPerceptualBlurReferencePreview={showPerceptualBlurReferencePreview}
+                                onTogglePerceptualBlurReferencePreview={setShowPerceptualBlurReferencePreview}
+                                showPerceptualBlurTestPreview={showPerceptualBlurTestPreview}
+                                onTogglePerceptualBlurTestPreview={setShowPerceptualBlurTestPreview}
+                                perceptualBlurPreviewAvailable={perceptualBlurPreviewAvailable}
                                 sourceCanvasRef={sourceCanvasRef}
                                 gamutCanvasRef={gamutCanvasRef}
                                 ditherCanvasRef={ditherCanvasRef}
@@ -1060,6 +1106,9 @@ export default function DitherGradientPage() {
                                 paletteErrorCanvasRef={paletteErrorCanvasRef}
                                 paletteAmbiguityCanvasRef={paletteAmbiguityCanvasRef}
                                 paletteModulationCanvasRef={paletteModulationCanvasRef}
+                                perceptualDeltaCanvasRef={perceptualDeltaCanvasRef}
+                                perceptualBlurReferenceCanvasRef={perceptualBlurReferenceCanvasRef}
+                                perceptualBlurTestCanvasRef={perceptualBlurTestCanvasRef}
                                 width={width}
                                 height={height}
                                 previewScale={previewScale}

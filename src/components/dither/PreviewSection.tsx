@@ -26,6 +26,13 @@ interface PreviewSectionProps {
     showPaletteModulationPreview: boolean;
     onTogglePaletteModulationPreview: (value: boolean) => void;
     paletteModulationPreviewAvailable: boolean;
+    showPerceptualDeltaPreview: boolean;
+    onTogglePerceptualDeltaPreview: (value: boolean) => void;
+    showPerceptualBlurReferencePreview: boolean;
+    onTogglePerceptualBlurReferencePreview: (value: boolean) => void;
+    showPerceptualBlurTestPreview: boolean;
+    onTogglePerceptualBlurTestPreview: (value: boolean) => void;
+    perceptualBlurPreviewAvailable: boolean;
     sourceCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     gamutCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     ditherCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
@@ -33,6 +40,9 @@ interface PreviewSectionProps {
     paletteErrorCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     paletteAmbiguityCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     paletteModulationCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    perceptualDeltaCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    perceptualBlurReferenceCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
+    perceptualBlurTestCanvasRef: MutableRefObject<HTMLCanvasElement | null>;
     width: number;
     height: number;
     previewScale: number;
@@ -65,6 +75,13 @@ export function PreviewSection({
     showPaletteModulationPreview,
     onTogglePaletteModulationPreview,
     paletteModulationPreviewAvailable,
+    showPerceptualDeltaPreview,
+    onTogglePerceptualDeltaPreview,
+    showPerceptualBlurReferencePreview,
+    onTogglePerceptualBlurReferencePreview,
+    showPerceptualBlurTestPreview,
+    onTogglePerceptualBlurTestPreview,
+    perceptualBlurPreviewAvailable,
     sourceCanvasRef,
     gamutCanvasRef,
     ditherCanvasRef,
@@ -72,6 +89,9 @@ export function PreviewSection({
     paletteErrorCanvasRef,
     paletteAmbiguityCanvasRef,
     paletteModulationCanvasRef,
+    perceptualDeltaCanvasRef,
+    perceptualBlurReferenceCanvasRef,
+    perceptualBlurTestCanvasRef,
     width,
     height,
     previewScale,
@@ -180,6 +200,39 @@ export function PreviewSection({
                             devicePixelRatio={devicePixelRatio}
                         />
                     )}
+                    {showPerceptualDeltaPreview && perceptualBlurPreviewAvailable && (
+                        <GradientPreviewCanvas
+                            ref={perceptualDeltaCanvasRef}
+                            title="Similarity Blur Δ"
+                            description="Per-channel delta of blurred buffers"
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showPerceptualBlurReferencePreview && perceptualBlurPreviewAvailable && (
+                        <GradientPreviewCanvas
+                            ref={perceptualBlurReferenceCanvasRef}
+                            title="Similarity Blur A"
+                            description="Source-adjusted buffer after blur"
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
+                    {showPerceptualBlurTestPreview && perceptualBlurPreviewAvailable && (
+                        <GradientPreviewCanvas
+                            ref={perceptualBlurTestCanvasRef}
+                            title="Similarity Blur B"
+                            description="Reduced buffer after blur"
+                            width={width}
+                            height={height}
+                            previewScale={previewScale}
+                            devicePixelRatio={devicePixelRatio}
+                        />
+                    )}
                 </div>
             </div>
             {perceptualMatch && (
@@ -231,6 +284,33 @@ export function PreviewSection({
                     />
                     Palette Modulation
                 </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showPerceptualDeltaPreview && perceptualBlurPreviewAvailable}
+                        disabled={!perceptualBlurPreviewAvailable}
+                        onChange={(event) => onTogglePerceptualDeltaPreview(event.target.checked)}
+                    />
+                    Similarity Blur Δ
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showPerceptualBlurReferencePreview && perceptualBlurPreviewAvailable}
+                        disabled={!perceptualBlurPreviewAvailable}
+                        onChange={(event) => onTogglePerceptualBlurReferencePreview(event.target.checked)}
+                    />
+                    Similarity Blur A
+                </label>
+                <label>
+                    <input
+                        type="checkbox"
+                        checked={showPerceptualBlurTestPreview && perceptualBlurPreviewAvailable}
+                        disabled={!perceptualBlurPreviewAvailable}
+                        onChange={(event) => onTogglePerceptualBlurTestPreview(event.target.checked)}
+                    />
+                    Similarity Blur B
+                </label>
             </div>
         </section>
     );
@@ -251,12 +331,25 @@ function buildReducedDescription(
     return `${baseLabel} • Match ${perceptualMatch.score.toFixed(1)}/100`;
 }
 
+function ProgressBar({ progress, caption }: { progress: number, caption?: string }) {
+    const clampedProgress = Math.min(100, Math.max(0, progress));
+    const barStyle: CSSProperties = {
+        width: `${clampedProgress}%`,
+    };
+    return (
+        <div className="progress-bar">
+            <div className="progress-bar__fill" style={barStyle} />
+            {caption && <div className="progress-bar__caption">{caption}</div>}
+        </div>
+    );
+}
+
 function PerceptualMatchSummary({ match }: { match: PerceptualSimilarityResult }) {
     return (
         <div className="perceptual-match-banner">
             <div className="perceptual-match-banner__primary">
                 <strong>Perceptual Match</strong>
-                <span>{match.score.toFixed(1)} / 100</span>
+                <ProgressBar progress={match.score} caption={`${match.score.toFixed(2)} / 100`} />
             </div>
             <div className="perceptual-match-banner__secondary">
                 <span>Gaussian blur sigma {match.blurRadiusPx.toFixed(2)} px</span>

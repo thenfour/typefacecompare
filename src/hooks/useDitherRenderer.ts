@@ -22,7 +22,12 @@ import {
     type PaletteMagnetParams,
     type ReductionPaletteEntry,
 } from "@/utils/paletteDistance";
-import { DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX, computePerceptualSimilarityScore, type PerceptualSimilarityResult } from "@/utils/perceptualSimilarity";
+import {
+    DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX,
+    computePerceptualSimilarityArtifacts,
+    type PerceptualSimilarityArtifacts,
+    type PerceptualSimilarityResult,
+} from "@/utils/perceptualSimilarity";
 import type { ReductionMode, SourceType } from "@/types/dither";
 
 const RENDER_DEBOUNCE_MS = 24; // Keep renders responsive while preventing tight update loops.
@@ -34,7 +39,10 @@ export type PreviewStageKey =
     | "reduced"
     | "paletteError"
     | "paletteAmbiguity"
-    | "paletteModulation";
+    | "paletteModulation"
+    | "perceptualDelta"
+    | "perceptualBlurReference"
+    | "perceptualBlurTest";
 
 export interface PreviewCanvasRefs {
     source: MutableRefObject<HTMLCanvasElement | null>;
@@ -44,6 +52,9 @@ export interface PreviewCanvasRefs {
     paletteError: MutableRefObject<HTMLCanvasElement | null>;
     paletteAmbiguity: MutableRefObject<HTMLCanvasElement | null>;
     paletteModulation: MutableRefObject<HTMLCanvasElement | null>;
+    perceptualDelta: MutableRefObject<HTMLCanvasElement | null>;
+    perceptualBlurReference: MutableRefObject<HTMLCanvasElement | null>;
+    perceptualBlurTest: MutableRefObject<HTMLCanvasElement | null>;
 }
 
 interface PreviewStageConfig {
@@ -115,6 +126,9 @@ export interface UseDitherRendererOptions {
     showPaletteErrorPreview: boolean;
     showPaletteAmbiguityPreview: boolean;
     showPaletteModulationPreview: boolean;
+    showPerceptualDeltaPreview: boolean;
+    showPerceptualBlurReferencePreview: boolean;
+    showPerceptualBlurTestPreview: boolean;
     canvasRefs: PreviewCanvasRefs;
     perceptualMatchOptions?: PerceptualMatchOptions;
     onRenderMetrics?: (metrics: RenderMetrics) => void;
@@ -150,6 +164,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showPaletteErrorPreview,
         showPaletteAmbiguityPreview,
         showPaletteModulationPreview,
+        showPerceptualDeltaPreview,
+        showPerceptualBlurReferencePreview,
+        showPerceptualBlurTestPreview,
         canvasRefs,
         perceptualMatchOptions,
         onRenderMetrics,
@@ -173,6 +190,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 { key: "paletteError", enabled: true, ref: canvasRefs.paletteError },
                 { key: "paletteAmbiguity", enabled: true, ref: canvasRefs.paletteAmbiguity },
                 { key: "paletteModulation", enabled: true, ref: canvasRefs.paletteModulation },
+                { key: "perceptualDelta", enabled: true, ref: canvasRefs.perceptualDelta },
+                { key: "perceptualBlurReference", enabled: true, ref: canvasRefs.perceptualBlurReference },
+                { key: "perceptualBlurTest", enabled: true, ref: canvasRefs.perceptualBlurTest },
             ];
             stageConfigs.forEach((stage) => {
                 const canvas = stage.ref.current;
@@ -185,6 +205,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         const runRender = async () => {
             const startTime = performance.now();
 
+            const hasPaletteReduction = reductionMode === "palette" && reductionPaletteEntries.length > 0;
+            const perceptualMatchEnabled = Boolean(perceptualMatchOptions && hasPaletteReduction && showReducedPreview);
+
             const previewStages: PreviewStageConfig[] = [
                 { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
                 { key: "gamut", enabled: showGamutPreview && sourceAdjustmentsActive, ref: canvasRefs.gamut },
@@ -193,6 +216,17 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 { key: "paletteError", enabled: showPaletteErrorPreview, ref: canvasRefs.paletteError },
                 { key: "paletteAmbiguity", enabled: showPaletteAmbiguityPreview, ref: canvasRefs.paletteAmbiguity },
                 { key: "paletteModulation", enabled: showPaletteModulationPreview, ref: canvasRefs.paletteModulation },
+                { key: "perceptualDelta", enabled: showPerceptualDeltaPreview && perceptualMatchEnabled, ref: canvasRefs.perceptualDelta },
+                {
+                    key: "perceptualBlurReference",
+                    enabled: showPerceptualBlurReferencePreview && perceptualMatchEnabled,
+                    ref: canvasRefs.perceptualBlurReference,
+                },
+                {
+                    key: "perceptualBlurTest",
+                    enabled: showPerceptualBlurTestPreview && perceptualMatchEnabled,
+                    ref: canvasRefs.perceptualBlurTest,
+                },
             ];
 
             const isErrorDiffusion = isErrorDiffusionDither(ditherType);
@@ -270,8 +304,6 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 ditherMask?.blurRadius ?? 0,
                 ditherMask?.strength ?? 0
             );
-            const hasPaletteReduction = reductionMode === "palette" && reductionPaletteEntries.length > 0;
-            const perceptualMatchEnabled = Boolean(perceptualMatchOptions && hasPaletteReduction && showReducedPreview);
             if (perceptualMatchEnabled) {
                 perceptualReferenceBuffer = new Float32Array(pixelCount * 3);
                 perceptualTestBuffer = new Float32Array(pixelCount * 3);
@@ -449,7 +481,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
 
             if (perceptualMatchEnabled && perceptualReferenceBuffer && perceptualTestBuffer) {
                 const blurRadiusPx = perceptualMatchOptions?.blurRadiusPx ?? DEFAULT_PERCEPTUAL_BLUR_RADIUS_PX;
-                const perceptualResult = computePerceptualSimilarityScore({
+                const artifacts: PerceptualSimilarityArtifacts = computePerceptualSimilarityArtifacts({
                     referenceRgbBuffer: perceptualReferenceBuffer,
                     testRgbBuffer: perceptualTestBuffer,
                     width,
@@ -457,7 +489,27 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     blurRadiusPx,
                     distanceSpace: "oklab",
                 });
-                notifyPerceptualMatch(perceptualResult);
+                notifyPerceptualMatch(artifacts.result);
+                if (stageMap.perceptualBlurReference && artifacts.blurredReferenceBuffer) {
+                    writeFloatRgbBufferToImageData(
+                        artifacts.blurredReferenceBuffer,
+                        stageMap.perceptualBlurReference.imageData.data
+                    );
+                }
+                if (stageMap.perceptualBlurTest && artifacts.blurredTestBuffer) {
+                    writeFloatRgbBufferToImageData(artifacts.blurredTestBuffer, stageMap.perceptualBlurTest.imageData.data);
+                }
+                if (
+                    stageMap.perceptualDelta &&
+                    artifacts.blurredReferenceBuffer &&
+                    artifacts.blurredTestBuffer
+                ) {
+                    writeFloatRgbDeltaToImageData(
+                        artifacts.blurredReferenceBuffer,
+                        artifacts.blurredTestBuffer,
+                        stageMap.perceptualDelta.imageData.data
+                    );
+                }
             } else {
                 notifyPerceptualMatch(null);
             }
@@ -523,6 +575,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         showPaletteErrorPreview,
         showPaletteAmbiguityPreview,
         showPaletteModulationPreview,
+        showPerceptualDeltaPreview,
+        showPerceptualBlurReferencePreview,
+        showPerceptualBlurTestPreview,
         gamutTransform,
         canvasRefs.source,
         canvasRefs.gamut,
@@ -531,6 +586,9 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         canvasRefs.paletteError,
         canvasRefs.paletteAmbiguity,
         canvasRefs.paletteModulation,
+        canvasRefs.perceptualDelta,
+        canvasRefs.perceptualBlurReference,
+        canvasRefs.perceptualBlurTest,
         perceptualMatchOptions?.blurRadiusPx,
         perceptualMatchOptions?.onMatchComputed,
         onRenderMetrics,
@@ -572,6 +630,40 @@ function writeColorToFloatBuffer(buffer: Float32Array, pixelIndex: number, color
     buffer[baseIndex] = color.r;
     buffer[baseIndex + 1] = color.g;
     buffer[baseIndex + 2] = color.b;
+}
+
+function writeFloatRgbBufferToImageData(buffer: Float32Array, imageData: Uint8ClampedArray) {
+    const pixelCount = Math.min(buffer.length / 3, imageData.length / 4);
+    for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++) {
+        const baseIndex = pixelIndex * 3;
+        const color = {
+            r: buffer[baseIndex] ?? 0,
+            g: buffer[baseIndex + 1] ?? 0,
+            b: buffer[baseIndex + 2] ?? 0,
+        };
+        writePixel(imageData, pixelIndex * 4, clampRgb255(color));
+    }
+}
+
+function writeFloatRgbDeltaToImageData(
+    referenceBuffer: Float32Array,
+    testBuffer: Float32Array,
+    imageData: Uint8ClampedArray
+) {
+    const pixelCount = Math.min(
+        referenceBuffer.length / 3,
+        testBuffer.length / 3,
+        imageData.length / 4
+    );
+    for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++) {
+        const baseIndex = pixelIndex * 3;
+        const deltaColor = {
+            r: Math.abs((referenceBuffer[baseIndex] ?? 0) - (testBuffer[baseIndex] ?? 0)),
+            g: Math.abs((referenceBuffer[baseIndex + 1] ?? 0) - (testBuffer[baseIndex + 1] ?? 0)),
+            b: Math.abs((referenceBuffer[baseIndex + 2] ?? 0) - (testBuffer[baseIndex + 2] ?? 0)),
+        };
+        writePixel(imageData, pixelIndex * 4, clampRgb255(deltaColor));
+    }
 }
 
 function buildDitherMaskBuffer(
