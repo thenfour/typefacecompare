@@ -632,3 +632,95 @@
 .dither-controlblock label>div {
     min-width: 250px;
 }
+
+.palette-usage-card__empty {
+    margin: 0;
+    font-size: 13px;
+    color: #555;
+}
+
+.palette-usage-summary__metrics {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.palette-usage-summary__metric {
+    flex: 1 1 180px;
+    border: 1px solid #d6e0f5;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: linear-gradient(120deg, #f4f7fb 0%, #eef2fb 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: #1f2933;
+}
+
+.palette-usage-summary__metric strong {
+    font-size: 18px;
+    color: #0f172a;
+}
+
+.palette-usage-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.palette-usage-row {
+    display: grid;
+    grid-template-columns: 32px 48px 1fr;
+    gap: 12px;
+    align-items: center;
+}
+
+.palette-usage-row__swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.palette-usage-row__label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.palette-usage-row__bars {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.palette-usage-bar {
+    position: relative;
+    height: 10px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.palette-usage-bar__result {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    left: 0;
+    background: #0f4c81;
+    border-radius: 999px;
+}
+
+.palette-usage-row__numbers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 11px;
+    color: #4b5563;
+}
+
+.palette-usage-row__delta {
+    font-weight: 600;
+    color: #0f4c81;
+}

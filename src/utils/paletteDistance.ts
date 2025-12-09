@@ -1,4 +1,3 @@
-import { AxisTriple } from "./colorAxes";
 import { ColorInterpolationMode, convertHexToVector, rgb255ToVector, rgbUnitTo255, vectorToRgb } from "./colorSpaces";
 import type { ReductionMode } from "@/types/dither";
 
@@ -23,6 +22,8 @@ export type PaletteCoordinateSelector = (entry: ReductionPaletteEntry) => number
 export interface PaletteDistanceSummary {
     nearestDistance: number;
     secondNearestDistance: number;
+    nearestIndex: number;
+    secondNearestIndex: number;
 }
 
 export function applyReduction(
@@ -218,23 +219,56 @@ export function summarizePaletteDistances(
     }
     let nearest = Infinity;
     let second = Infinity;
-    for (const entry of palette) {
+    let nearestIndex = -1;
+    let secondIndex = -1;
+    palette.forEach((entry, index) => {
         const coords = coordSelector(entry);
         const distSq = distanceSq(sourceCoords, coords);
         if (distSq < nearest) {
             second = nearest;
+            secondIndex = nearestIndex;
             nearest = distSq;
+            nearestIndex = index;
         } else if (distSq < second) {
             second = distSq;
+            secondIndex = index;
         }
-    }
+    });
     if (!Number.isFinite(nearest)) {
         return null;
     }
     return {
         nearestDistance: Math.sqrt(Math.max(nearest, 0)),
         secondNearestDistance: Math.sqrt(Math.max(second, 0)),
+        nearestIndex,
+        secondNearestIndex: secondIndex,
     } satisfies PaletteDistanceSummary;
+}
+
+export function findNearestPaletteIndex(
+    rgb: { r: number; g: number; b: number },
+    palette: ReductionPaletteEntry[],
+    distanceMode: ColorInterpolationMode
+): number {
+    if (palette.length === 0) {
+        return -1;
+    }
+    const coords = rgbToCoords(rgb, distanceMode);
+    const summary = summarizePaletteDistances(coords, palette);
+    return summary?.nearestIndex ?? -1;
+}
+
+export function matchPaletteEntryIndexByRgb(
+    rgb: { r: number; g: number; b: number },
+    palette: ReductionPaletteEntry[]
+): number {
+    for (let index = 0; index < palette.length; index++) {
+        const entry = palette[index];
+        if (entry.rgb.r === rgb.r && entry.rgb.g === rgb.g && entry.rgb.b === rgb.b) {
+            return index;
+        }
+    }
+    return -1;
 }
 
 function computeOklchDistanceSq(a: OklchVector, b: OklchVector): number {

@@ -8,7 +8,7 @@ import "../styles/DitherGradient.css";
 import "../styles/PaletteDefinition.css";
 import { fetchDitherSourceExamples, type ExampleImage } from "@/data/ditherSourceExamples";
 import { useImageSource } from "@/hooks/useImageSource";
-import { useDitherRenderer } from "@/hooks/useDitherRenderer";
+import { useDitherRenderer, type PaletteUsageStats } from "@/hooks/useDitherRenderer";
 import type { ReductionMode, SourceType } from "@/types/dither";
 import {
     applyPaletteGravityNudge,
@@ -22,6 +22,7 @@ import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
 import { ReductionControls } from "@/components/dither/ReductionControls";
 import { PreviewSection } from "@/components/dither/PreviewSection";
+import { PaletteUsageSummary } from "@/components/dither/PaletteUsageSummary";
 import { Tooltip } from "@/components/Tooltip";
 import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
 import { type AxisTriple } from "@/utils/colorAxes";
@@ -237,6 +238,7 @@ export default function DitherGradientPage() {
     const [exampleImages, setExampleImages] = useState<ExampleImage[]>([]);
     const [areExamplesLoading, setAreExamplesLoading] = useState(true);
     const [exampleImagesError, setExampleImagesError] = useState<string | null>(null);
+    const [paletteUsageStats, setPaletteUsageStats] = useState<PaletteUsageStats | null>(null);
     const handleActivateImageSource = useCallback(() => setSourceType("image"), [setSourceType]);
     const handleAutoResizeCanvas = useCallback(
         ({ width: suggestedWidth, height: suggestedHeight }: CanvasSize) => {
@@ -684,6 +686,7 @@ export default function DitherGradientPage() {
         ditherAmbiguityBias,
     ]);
     const paletteModulationEnabled = sourceAdjustmentsEnabled && paletteMaskEnabled && paletteMaskAvailable;
+    const paletteUsageSummaryStats = hasReductionPalette && reductionMode === "palette" ? paletteUsageStats : null;
     const sourcePointIndicators = useMemo(() => {
         if (sourceType !== "gradient") {
             return [] as SourcePointIndicator[];
@@ -752,6 +755,7 @@ export default function DitherGradientPage() {
             onMatchComputed: setPerceptualMatch,
             onUnditheredMatchComputed: setUnditheredPerceptualMatch,
         },
+        onPaletteUsageComputed: setPaletteUsageStats,
     });
     const seedEnabled = usesSeededDither(ditherType);
     const isErrorDiffusion = isErrorDiffusionDither(ditherType);
@@ -1331,6 +1335,11 @@ export default function DitherGradientPage() {
                                     Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} samples are plotted in the current reduction color space ({distanceColorSpace.toUpperCase()}).
                                 </p>
                             </section>
+
+                            <PaletteUsageSummary
+                                stats={paletteUsageSummaryStats}
+                                paletteEntries={reductionPaletteEntries}
+                            />
 
                             <section className="dither-gradient-card documentation-card">
                                 <MarkdownFile path="/docs/dithering.md" />

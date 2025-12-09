@@ -17,6 +17,7 @@ import {
     applyPaletteGravityNudge,
     applyReduction,
     clampRgb255,
+    matchPaletteEntryIndexByRgb,
     rgbToCoords,
     summarizePaletteDistances,
     type PaletteGravityParams,
@@ -100,6 +101,21 @@ export interface RenderMetrics {
     durationMs: number;
 }
 
+export interface PaletteUsageEntryStats {
+    paletteIndex: number;
+    resultCount: number;
+    resultShare: number;
+}
+
+export interface PaletteUsageStats {
+    totalPixels: number;
+    entries: PaletteUsageEntryStats[];
+    usedCount: number;
+    coverageRatio: number;
+    uniformityScore: number;
+    dominantShare: number;
+}
+
 export interface UseDitherRendererOptions {
     width: number;
     height: number;
@@ -136,6 +152,7 @@ export interface UseDitherRendererOptions {
     canvasRefs: PreviewCanvasRefs;
     perceptualMatchOptions?: PerceptualMatchOptions;
     onRenderMetrics?: (metrics: RenderMetrics) => void;
+    onPaletteUsageComputed?: (stats: PaletteUsageStats | null) => void;
 }
 
 export function useDitherRenderer(options: UseDitherRendererOptions) {
@@ -175,6 +192,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         canvasRefs,
         perceptualMatchOptions,
         onRenderMetrics,
+        onPaletteUsageComputed,
     } = options;
 
     useEffect(() => {
@@ -189,6 +207,11 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         const notifyUnditheredMatch = (result: PerceptualSimilarityResult | null) => {
             if (cancelRef.cancelled) return;
             perceptualMatchOptions?.onUnditheredMatchComputed?.(result);
+        };
+
+        const notifyPaletteUsage = (stats: PaletteUsageStats | null) => {
+            if (cancelRef.cancelled) return;
+            onPaletteUsageComputed?.(stats);
         };
 
         const clearAllCanvases = () => {
@@ -221,6 +244,10 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             const unditheredMatchEnabled = Boolean(
                 perceptualMatchOptions?.onUnditheredMatchComputed && hasPaletteReduction
             );
+            const capturePaletteUsage = Boolean(hasPaletteReduction && onPaletteUsageComputed);
+            if (!hasPaletteReduction) {
+                notifyPaletteUsage(null);
+            }
 
             const previewStages: PreviewStageConfig[] = [
                 { key: "source", enabled: showSourcePreview, ref: canvasRefs.source },
@@ -253,6 +280,8 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             if ((requiresGradientData && gradientField.points.length === 0) || (requiresImageData && !sourceImageData)) {
                 clearAllCanvases();
                 notifyPerceptualMatch(null);
+                notifyUnditheredMatch(null);
+                notifyPaletteUsage(null);
                 return;
             }
 
@@ -273,8 +302,11 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 })
                 .filter((stage): stage is ActivePreviewStage => stage !== null);
 
-            if (activeStages.length === 0) {
+            const requiresOffscreenComputation = capturePaletteUsage || perceptualMatchEnabled || unditheredMatchEnabled;
+            if (activeStages.length === 0 && !requiresOffscreenComputation) {
                 notifyPerceptualMatch(null);
+                notifyUnditheredMatch(null);
+                notifyPaletteUsage(null);
                 return;
             }
 
@@ -295,6 +327,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
             const paletteErrorValues = capturePaletteErrorPreview ? new Float32Array(pixelCount) : null;
             const paletteAmbiguityValues = capturePaletteAmbiguityPreview ? new Float32Array(pixelCount) : null;
             const paletteModulationValues = capturePaletteModulationPreview ? new Float32Array(pixelCount) : null;
+            const resultUsageCounts = capturePaletteUsage ? new Uint32Array(reductionPaletteEntries.length) : null;
             let paletteErrorMin = Infinity;
             let paletteErrorMax = -Infinity;
             let paletteAmbiguityMin = Infinity;
@@ -429,6 +462,12 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                     }
 
                     const offset = pixelIndex * 4;
+                    if (resultUsageCounts) {
+                        const paletteIndex = matchPaletteEntryIndexByRgb(reducedColor, reductionPaletteEntries);
+                        if (paletteIndex >= 0) {
+                            resultUsageCounts[paletteIndex] += 1;
+                        }
+                    }
                     if (stageMap.source) {
                         writePixel(stageMap.source.imageData.data, offset, sourceColor);
                     }
@@ -576,6 +615,11 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
                 }
             });
 
+            if (capturePaletteUsage && resultUsageCounts) {
+                const stats = buildPaletteUsageStats(resultUsageCounts, pixelCount);
+                notifyPaletteUsage(stats);
+            }
+
             if (!cancelRef.cancelled) {
                 onRenderMetrics?.({ durationMs: performance.now() - startTime });
             }
@@ -656,6 +700,7 @@ export function useDitherRenderer(options: UseDitherRendererOptions) {
         perceptualMatchOptions?.onMatchComputed,
         perceptualMatchOptions?.onUnditheredMatchComputed,
         onRenderMetrics,
+        onPaletteUsageComputed,
     ]);
 }
 
@@ -834,6 +879,44 @@ function evaluatePaletteMetrics(
         ambiguityRatio,
         modulationFactor,
     } satisfies PaletteMetricsSample;
+}
+
+function buildPaletteUsageStats(resultCounts: Uint32Array, totalPixels: number): PaletteUsageStats {
+    const bucketCount = resultCounts.length;
+    const entries: PaletteUsageEntryStats[] = [];
+    const safeTotal = totalPixels > 0 ? totalPixels : 1;
+    let usedCount = 0;
+    let entropy = 0;
+    let dominantShare = 0;
+    for (let index = 0; index < bucketCount; index++) {
+        const resultCount = resultCounts[index] ?? 0;
+        const resultShare = resultCount / safeTotal;
+        if (resultCount > 0) {
+            usedCount += 1;
+            if (resultShare > 0) {
+                entropy += -resultShare * Math.log2(resultShare);
+                if (resultShare > dominantShare) {
+                    dominantShare = resultShare;
+                }
+            }
+        }
+        entries.push({
+            paletteIndex: index,
+            resultCount,
+            resultShare,
+        });
+    }
+    const coverageRatio = bucketCount > 0 ? usedCount / bucketCount : 0;
+    const maxEntropy = usedCount > 1 ? Math.log2(usedCount) : 0;
+    const uniformityScore = maxEntropy > 0 ? clamp01(entropy / maxEntropy) : 0;
+    return {
+        totalPixels,
+        entries,
+        usedCount,
+        coverageRatio,
+        uniformityScore,
+        dominantShare,
+    } satisfies PaletteUsageStats;
 }
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
