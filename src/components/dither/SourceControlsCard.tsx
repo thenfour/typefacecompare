@@ -34,6 +34,7 @@ interface SourceControlsCardProps {
     sourceSummary: string;
     gradientControls: GradientControlsProps;
     imageControls: ImageSourceControlsProps;
+    renderStandalone?: boolean;
 }
 
 export function SourceControlsCard({
@@ -42,13 +43,10 @@ export function SourceControlsCard({
     sourceSummary,
     gradientControls,
     imageControls,
+    renderStandalone = true,
 }: SourceControlsCardProps) {
-    return (
-        <section className="dither-gradient-card source-card">
-            <header>
-                <strong>Source</strong>
-                <span>{sourceSummary}</span>
-            </header>
+    const content = (
+        <>
             <div className="source-card__mode-toggle" role="tablist" aria-label="Source type">
                 <button
                     type="button"
@@ -67,7 +65,23 @@ export function SourceControlsCard({
                     Image
                 </button>
             </div>
-            {sourceType === "gradient" ? renderGradientControls(gradientControls) : <ImageSourceControls {...imageControls} />}
+            {sourceType === "gradient"
+                ? renderGradientControls(gradientControls)
+                : <ImageSourceControls {...imageControls} />}
+        </>
+    );
+
+    if (!renderStandalone) {
+        return <div className="source-card">{content}</div>;
+    }
+
+    return (
+        <section className="dither-gradient-card source-card">
+            <header>
+                <strong>Source</strong>
+                <span>{sourceSummary}</span>
+            </header>
+            {content}
         </section>
     );
 }

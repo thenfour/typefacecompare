@@ -17,11 +17,12 @@ import {
     type PaletteGravityParams,
     type ReductionPaletteEntry,
 } from "@/utils/paletteDistance";
+import { AccordionSection } from "@/components/AccordionSection";
 import { PaletteEditorCard } from "@/components/dither/PaletteEditorCard";
 import { SourceControlsCard } from "@/components/dither/SourceControlsCard";
 import { DitherControls } from "@/components/dither/DitherControls";
 import { ReductionControls } from "@/components/dither/ReductionControls";
-import { PreviewSection } from "@/components/dither/PreviewSection";
+import { PreviewSection, describePreviewSubtitle } from "@/components/dither/PreviewSection";
 import { PaletteUsageSummary } from "@/components/dither/PaletteUsageSummary";
 import { Tooltip } from "@/components/Tooltip";
 import { ColorSpaceScatterPlot, type ScatterPoint } from "@/components/dither/ColorSpaceScatterPlot";
@@ -58,6 +59,7 @@ import {
     ErrorDiffusionKernelId,
     DitherThresholdTile,
     DitherType,
+    DITHER_LABELS,
     isErrorDiffusionDither,
     usesSeededDither,
 } from "../utils/dithering";
@@ -163,6 +165,54 @@ const PALETTE_PRESETS = [
     {
         label: "SWEETIE 16",
         value: `#1A1423\n#372549\n#774C60\n#B75D69\n#EACDC2\n#F4EBC3\n#F6F7D7\n#F1B5A4\n-----\n#E43A19\n#9E0031\n#4C2A85\n#67597A\n#424B54\n#2A2D34\n#1A1A1D\n#0F0A0A`,
+    },
+    {
+        label: "Fading 16",
+        value: `
+// Lospec: Fading 16 | by SurrealEmber
+#DDCF99
+#CCA87B
+#B97A60
+#9C524E
+-----
+#774251
+#4B3D44
+#4E5463
+#5B7D73
+-----
+#8E9F7D
+#645355
+#8C7C79
+#A99C8D
+-----
+#7D7B62
+#AAA25D
+#846D59
+#A88A5E        `
+    },
+    {
+        label: "Flowers 16",
+        value: `
+// Lospec: Flowers | by Gormie
+#613832
+#8B5851
+#BF8F75
+#FFDEB2
+-----
+#FFA5A5
+#FF8DB5
+#B87CA4
+#856082
+-----
+#5A4A60
+#73628B
+#887FCE
+#8CC1D4
+-----
+#8BF0C4
+#78BAB4
+#527378
+#2F4447        `,
     },
 ] as const;
 
@@ -768,6 +818,25 @@ export default function DitherGradientPage() {
     const sourceCanvasDescription = usingImageSource
         ? imageSource?.label ?? "Imported bitmap"
         : "Interpolated";
+    const previewSubtitle = describePreviewSubtitle(sourceSummaryLabel, ditherType);
+    const canvasSubtitle = `${width}×${height}px • ${previewScale}× zoom`;
+    const paletteSwatchLabel = `${reductionSwatches.length} swatch${reductionSwatches.length === 1 ? "" : "es"}`;
+    const paletteSubtitle = hasReductionPalette ? paletteSwatchLabel : "Palette reduction disabled";
+    const colorScatterSubtitle = `${distanceColorSpace.toUpperCase()} axes`;
+    const paletteUsageSubtitle = (() => {
+        if (!hasReductionPalette || reductionMode !== "palette") {
+            return "Define a palette to inspect usage";
+        }
+        if (!paletteUsageSummaryStats) {
+            return "Waiting for reduction render";
+        }
+        return `${paletteUsageSummaryStats.usedCount}/${reductionPaletteEntries.length} colors used`;
+    })();
+    const sourceAdjustmentsSubtitle = sourceAdjustmentsEnabled ? "Enabled" : "Bypassed";
+    const ditherMaskSubtitle = paletteMaskEnabled && paletteMaskAvailable
+        ? "Palette weighting enabled"
+        : "Palette weighting off";
+    const controlsSubtitle = `${ditheringEnabled ? DITHER_LABELS[ditherType] : "Dithering disabled"} • ${reductionMode === "palette" ? paletteSwatchLabel : "Full color"}`;
 
     return (
         <>
@@ -781,10 +850,7 @@ export default function DitherGradientPage() {
                         <div className="dither-gradient-settings-grid dither-gradient-stack">
 
 
-                            <section className="dither-gradient-card settings">
-                                <header>
-                                    <strong>Canvas & Preview</strong>
-                                </header>
+                            <AccordionSection title="Canvas & Preview" subtitle={canvasSubtitle}>
                                 <div className="dither-controlblock">
                                     <label>
                                         <div>Canvas Width ({width}px)</div>
@@ -824,83 +890,92 @@ export default function DitherGradientPage() {
                                         />
                                     </label>
                                 </div>
-                            </section>
+                            </AccordionSection>
 
 
 
 
-                            <SourceControlsCard
-                                sourceType={sourceType}
-                                onSourceTypeChange={setSourceType}
-                                sourceSummary={sourceSummaryLabel}
-                                gradientControls={{
-                                    swatchCountLabel: `${gradientSwatches.length} swatch${gradientSwatches.length === 1 ? "" : "es"}`,
-                                    presets: PALETTE_PRESETS,
-                                    onSelectPreset: setGradientPaletteText,
-                                    lospecTargetLabel: "gradient palette",
-                                    value: gradientPaletteText,
-                                    onChangeValue: setGradientPaletteText,
-                                    swatches: gradientSwatches,
-                                    rows: parsedGradientPalette.rows,
-                                    footer:
-                                        gradientSwatches.length === 0 ? (
-                                            <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
-                                        ) : null,
-                                    interpolationMode,
-                                    onInterpolationModeChange: setInterpolationMode,
-                                    autoPlacementMode: gradientAutoPlacementMode,
-                                    onAutoPlacementModeChange: setGradientAutoPlacementMode,
-                                    interpolationCurve: gradientInterpolationCurve,
-                                    onInterpolationCurveChange: setGradientInterpolationCurve,
-                                }}
-                                imageControls={{
-                                    imageUrlInput,
-                                    onImageUrlChange: setImageUrlInput,
-                                    onImportImage: importImageFromUrl,
-                                    exampleImages,
-                                    exampleImagesLoading: areExamplesLoading,
-                                    exampleImagesError,
-                                    onImportExampleImage: importExampleImage,
-                                    isImportingImage,
-                                    imageScaleMode,
-                                    onImageScaleModeChange: setImageScaleMode,
-                                    imageSource,
-                                    imageImportError,
-                                    imageSourceReady,
-                                }}
-                            />
+                            <AccordionSection title="Source" subtitle={sourceSummaryLabel}>
+                                <SourceControlsCard
+                                    sourceType={sourceType}
+                                    onSourceTypeChange={setSourceType}
+                                    sourceSummary={sourceSummaryLabel}
+                                    renderStandalone={false}
+                                    gradientControls={{
+                                        swatchCountLabel: `${gradientSwatches.length} swatch${gradientSwatches.length === 1 ? "" : "es"}`,
+                                        presets: PALETTE_PRESETS,
+                                        onSelectPreset: setGradientPaletteText,
+                                        lospecTargetLabel: "gradient palette",
+                                        value: gradientPaletteText,
+                                        onChangeValue: setGradientPaletteText,
+                                        swatches: gradientSwatches,
+                                        rows: parsedGradientPalette.rows,
+                                        footer:
+                                            gradientSwatches.length === 0 ? (
+                                                <p className="dither-gradient-warning">Add at least one valid color to generate a gradient.</p>
+                                            ) : null,
+                                        interpolationMode,
+                                        onInterpolationModeChange: setInterpolationMode,
+                                        autoPlacementMode: gradientAutoPlacementMode,
+                                        onAutoPlacementModeChange: setGradientAutoPlacementMode,
+                                        interpolationCurve: gradientInterpolationCurve,
+                                        onInterpolationCurveChange: setGradientInterpolationCurve,
+                                    }}
+                                    imageControls={{
+                                        imageUrlInput,
+                                        onImageUrlChange: setImageUrlInput,
+                                        onImportImage: importImageFromUrl,
+                                        exampleImages,
+                                        exampleImagesLoading: areExamplesLoading,
+                                        exampleImagesError,
+                                        onImportExampleImage: importExampleImage,
+                                        isImportingImage,
+                                        imageScaleMode,
+                                        onImageScaleModeChange: setImageScaleMode,
+                                        imageSource,
+                                        imageImportError,
+                                        imageSourceReady,
+                                    }}
+                                />
+                            </AccordionSection>
 
-                            <PaletteEditorCard
-                                title="Target Palette"
-                                swatchCountLabel={`${reductionSwatches.length} swatch${reductionSwatches.length === 1 ? "" : "es"}`}
-                                presets={PALETTE_PRESETS}
-                                onSelectPreset={setReductionPaletteText}
-                                lospecTargetLabel="reduction palette"
-                                value={reductionPaletteText}
-                                onChangeValue={setReductionPaletteText}
-                                swatches={reductionSwatches}
-                                rows={parsedReductionPalette.rows}
-                                placeholder="Leave empty to disable palette reduction"
-                                footer={
-                                    reductionMode === "palette" && reductionSwatches.length === 0 ? (
-                                        <p className="dither-gradient-warning">
-                                            Provide at least one valid color before enabling palette reduction.
-                                        </p>
-                                    ) : null
-                                }
-                            />
+                            <AccordionSection title="Target Palette" subtitle={paletteSubtitle}>
+                                <PaletteEditorCard
+                                    title="Target Palette"
+                                    swatchCountLabel={paletteSwatchLabel}
+                                    presets={PALETTE_PRESETS}
+                                    onSelectPreset={setReductionPaletteText}
+                                    lospecTargetLabel="reduction palette"
+                                    value={reductionPaletteText}
+                                    onChangeValue={setReductionPaletteText}
+                                    swatches={reductionSwatches}
+                                    rows={parsedReductionPalette.rows}
+                                    placeholder="Leave empty to disable palette reduction"
+                                    footer={
+                                        reductionMode === "palette" && reductionSwatches.length === 0 ? (
+                                            <p className="dither-gradient-warning">
+                                                Provide at least one valid color before enabling palette reduction.
+                                            </p>
+                                        ) : null
+                                    }
+                                    renderStandalone={false}
+                                />
+                            </AccordionSection>
 
-                            <section className="dither-gradient-card source-adjustments-card">
-                                <header>
+                            <AccordionSection
+                                title="Source Adjustments"
+                                subtitle={sourceAdjustmentsSubtitle}
+                                actions={(
                                     <label className="source-adjustments-toggle">
-                                        <strong>Source Adjustments</strong>
+                                        <span>{sourceAdjustmentsEnabled ? "On" : "Off"}</span>
                                         <input
                                             type="checkbox"
                                             checked={sourceAdjustmentsEnabled}
                                             onChange={(event) => handleSourceAdjustmentsToggle(event.target.checked)}
                                         />
                                     </label>
-                                </header>
+                                )}
+                            >
                                 <div className="controls-panel__fields">
                                     <div className="gamma-correction-controls">
                                         <h4>Gamma Adjust</h4>
@@ -1096,115 +1171,106 @@ export default function DitherGradientPage() {
                                         )}
                                     </div>
                                 </div>
-                            </section>
+                            </AccordionSection>
 
 
-                            <section className="dither-gradient-card settings">
-                                <header>
-                                    <strong>Dither strength modulation</strong>
-                                </header>
-                                <div>
-                                    <div className="dither-mask-controls">
-                                        <h4>Attenuation around edges</h4>
-                                        <label>
-                                            Blur Radius ({ditherMaskBlurRadius}px)
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={10}
-                                                step={1}
-                                                value={ditherMaskBlurRadius}
-                                                onChange={(event) => setDitherMaskBlurRadius(event.target.valueAsNumber)}
-                                                disabled={ditherMaskControlsDisabled}
-                                            />
-                                        </label>
-                                        <label>
-                                            Effect Strength ({Math.round(ditherMaskStrength * 100)}%)
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={10}
-                                                step={0.05}
-                                                value={ditherMaskStrength}
-                                                onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
-                                                disabled={ditherMaskControlsDisabled}
-                                            />
-                                        </label>
-                                    </div>
-                                    <div className="palette-mask-section">
-                                        <label className="palette-mask-toggle">
-                                            <h4>Palette Error/Ambiguity Weighting</h4>
-                                            <input
-                                                type="checkbox"
-                                                checked={paletteMaskEnabled && paletteMaskAvailable}
-                                                onChange={(event) => setPaletteMaskEnabled(event.target.checked)}
-                                                disabled={paletteMaskToggleDisabled}
-                                            />
-                                        </label>
-                                        {!paletteMaskAvailable && (
-                                            <p className="dither-gradient-note">Provide a reduction palette to enable palette-based weighting.</p>
-                                        )}
-                                        <label>
-                                            Error Scale ({ditherErrorScale.toFixed(0)})
-                                            <input
-                                                type="range"
-                                                min={5}
-                                                max={150}
-                                                step={1}
-                                                value={ditherErrorScale}
-                                                onChange={(event) => setDitherErrorScale(event.target.valueAsNumber)}
-                                                disabled={paletteMaskControlsDisabled}
-                                            />
-                                        </label>
-                                        <label>
-                                            Error Exponent (kErr: {ditherErrorExponent.toFixed(2)})
-                                            <input
-                                                type="range"
-                                                min={0.1}
-                                                max={4}
-                                                step={0.05}
-                                                value={ditherErrorExponent}
-                                                onChange={(event) => setDitherErrorExponent(event.target.valueAsNumber)}
-                                                disabled={paletteMaskControlsDisabled}
-                                            />
-                                        </label>
-                                        <label>
-                                            Ambiguity Exponent (kAmb: {ditherAmbiguityExponent.toFixed(2)})
-                                            <input
-                                                type="range"
-                                                min={0.1}
-                                                max={4}
-                                                step={0.05}
-                                                value={ditherAmbiguityExponent}
-                                                onChange={(event) => setDitherAmbiguityExponent(event.target.valueAsNumber)}
-                                                disabled={paletteMaskControlsDisabled}
-                                            />
-                                        </label>
-                                        <label>
-                                            Ambiguity Bias ({Math.round(ditherAmbiguityBias * 100)}% base)
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={1}
-                                                step={0.05}
-                                                value={ditherAmbiguityBias}
-                                                onChange={(event) => setDitherAmbiguityBias(event.target.valueAsNumber)}
-                                                disabled={paletteMaskControlsDisabled}
-                                            />
-                                        </label>
-                                        <p className="dither-gradient-note">
-                                            Error boosts dithering where palette distances spike; ambiguity raises strength when two colors tie.
-                                        </p>
-                                    </div>
-
+                            <AccordionSection title="Dither Strength Modulation" subtitle={ditherMaskSubtitle}>
+                                <div className="dither-mask-controls">
+                                    <h4>Attenuation around edges</h4>
+                                    <label>
+                                        Blur Radius ({ditherMaskBlurRadius}px)
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={10}
+                                            step={1}
+                                            value={ditherMaskBlurRadius}
+                                            onChange={(event) => setDitherMaskBlurRadius(event.target.valueAsNumber)}
+                                            disabled={ditherMaskControlsDisabled}
+                                        />
+                                    </label>
+                                    <label>
+                                        Effect Strength ({Math.round(ditherMaskStrength * 100)}%)
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={10}
+                                            step={0.05}
+                                            value={ditherMaskStrength}
+                                            onChange={(event) => setDitherMaskStrength(event.target.valueAsNumber)}
+                                            disabled={ditherMaskControlsDisabled}
+                                        />
+                                    </label>
                                 </div>
-                            </section>
+                                <div className="palette-mask-section">
+                                    <label className="palette-mask-toggle">
+                                        <h4>Palette Error/Ambiguity Weighting</h4>
+                                        <input
+                                            type="checkbox"
+                                            checked={paletteMaskEnabled && paletteMaskAvailable}
+                                            onChange={(event) => setPaletteMaskEnabled(event.target.checked)}
+                                            disabled={paletteMaskToggleDisabled}
+                                        />
+                                    </label>
+                                    {!paletteMaskAvailable && (
+                                        <p className="dither-gradient-note">Provide a reduction palette to enable palette-based weighting.</p>
+                                    )}
+                                    <label>
+                                        Error Scale ({ditherErrorScale.toFixed(0)})
+                                        <input
+                                            type="range"
+                                            min={5}
+                                            max={150}
+                                            step={1}
+                                            value={ditherErrorScale}
+                                            onChange={(event) => setDitherErrorScale(event.target.valueAsNumber)}
+                                            disabled={paletteMaskControlsDisabled}
+                                        />
+                                    </label>
+                                    <label>
+                                        Error Exponent (kErr: {ditherErrorExponent.toFixed(2)})
+                                        <input
+                                            type="range"
+                                            min={0.1}
+                                            max={4}
+                                            step={0.05}
+                                            value={ditherErrorExponent}
+                                            onChange={(event) => setDitherErrorExponent(event.target.valueAsNumber)}
+                                            disabled={paletteMaskControlsDisabled}
+                                        />
+                                    </label>
+                                    <label>
+                                        Ambiguity Exponent (kAmb: {ditherAmbiguityExponent.toFixed(2)})
+                                        <input
+                                            type="range"
+                                            min={0.1}
+                                            max={4}
+                                            step={0.05}
+                                            value={ditherAmbiguityExponent}
+                                            onChange={(event) => setDitherAmbiguityExponent(event.target.valueAsNumber)}
+                                            disabled={paletteMaskControlsDisabled}
+                                        />
+                                    </label>
+                                    <label>
+                                        Ambiguity Bias ({Math.round(ditherAmbiguityBias * 100)}% base)
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={1}
+                                            step={0.05}
+                                            value={ditherAmbiguityBias}
+                                            onChange={(event) => setDitherAmbiguityBias(event.target.valueAsNumber)}
+                                            disabled={paletteMaskControlsDisabled}
+                                        />
+                                    </label>
+                                    <p className="dither-gradient-note">
+                                        Error boosts dithering where palette distances spike; ambiguity raises strength when two colors tie.
+                                    </p>
+                                </div>
+                            </AccordionSection>
 
 
-                            <section className="dither-gradient-card settings">
-                                <header>
-                                    <strong>Controls</strong>
-                                </header>
+                            <AccordionSection title="Controls" subtitle={controlsSubtitle}>
                                 <div className="controls-section-grid">
                                     <div className="controls-panel controls-panel--wide">
                                         <div className="controls-panel__header">
@@ -1251,74 +1317,73 @@ export default function DitherGradientPage() {
                                         </div>
                                     </div>
                                 </div>
-                            </section>
+                            </AccordionSection>
                         </div>
                     </div>
 
                     <div className="dither-gradient-column dither-gradient-column--previews">
                         <div className="dither-gradient-preview-stack dither-gradient-stack">
-                            <PreviewSection
-                                sourceSummaryLabel={sourceSummaryLabel}
-                                ditherType={ditherType}
-                                showSourcePreview={showSourcePreview}
-                                onToggleSourcePreview={setShowSourcePreview}
-                                showSourcePointIndicators={showGradientPointIndicators}
-                                onToggleSourcePointIndicators={setShowGradientPointIndicators}
-                                sourcePointIndicatorAvailable={sourcePointIndicatorsAvailable}
-                                sourcePointIndicators={sourcePointIndicators}
-                                showGamutPreview={showGamutPreview}
-                                onToggleGamutPreview={setShowGamutPreview}
-                                gamutPreviewAvailable={gamutPreviewAvailable}
-                                showDitherPreview={showDitherPreview}
-                                onToggleDitherPreview={setShowDitherPreview}
-                                showUnditheredPreview={showUnditheredPreview}
-                                onToggleUnditheredPreview={setShowUnditheredPreview}
-                                showReducedPreview={showReducedPreview}
-                                onToggleReducedPreview={setShowReducedPreview}
-                                showPaletteErrorPreview={showPaletteErrorPreview}
-                                onTogglePaletteErrorPreview={setShowPaletteErrorPreview}
-                                paletteErrorPreviewAvailable={palettePreviewAvailable}
-                                showPaletteAmbiguityPreview={showPaletteAmbiguityPreview}
-                                onTogglePaletteAmbiguityPreview={setShowPaletteAmbiguityPreview}
-                                paletteAmbiguityPreviewAvailable={palettePreviewAvailable}
-                                showPaletteModulationPreview={showPaletteModulationPreview}
-                                onTogglePaletteModulationPreview={setShowPaletteModulationPreview}
-                                paletteModulationPreviewAvailable={palettePreviewAvailable}
-                                showPerceptualDeltaPreview={showPerceptualDeltaPreview}
-                                onTogglePerceptualDeltaPreview={setShowPerceptualDeltaPreview}
-                                showPerceptualBlurReferencePreview={showPerceptualBlurReferencePreview}
-                                onTogglePerceptualBlurReferencePreview={setShowPerceptualBlurReferencePreview}
-                                showPerceptualBlurTestPreview={showPerceptualBlurTestPreview}
-                                onTogglePerceptualBlurTestPreview={setShowPerceptualBlurTestPreview}
-                                perceptualBlurPreviewAvailable={perceptualBlurPreviewAvailable}
-                                sourceCanvasRef={sourceCanvasRef}
-                                gamutCanvasRef={gamutCanvasRef}
-                                ditherCanvasRef={ditherCanvasRef}
-                                unditheredCanvasRef={unditheredCanvasRef}
-                                reducedCanvasRef={reducedCanvasRef}
-                                paletteErrorCanvasRef={paletteErrorCanvasRef}
-                                paletteAmbiguityCanvasRef={paletteAmbiguityCanvasRef}
-                                paletteModulationCanvasRef={paletteModulationCanvasRef}
-                                perceptualDeltaCanvasRef={perceptualDeltaCanvasRef}
-                                perceptualBlurReferenceCanvasRef={perceptualBlurReferenceCanvasRef}
-                                perceptualBlurTestCanvasRef={perceptualBlurTestCanvasRef}
-                                width={width}
-                                height={height}
-                                previewScale={previewScale}
-                                devicePixelRatio={devicePixelRatio}
-                                sourceCanvasTitle={sourceCanvasTitle}
-                                sourceCanvasDescription={sourceCanvasDescription}
-                                reductionMode={reductionMode}
-                                reductionSwatchCount={reductionSwatches.length}
-                                perceptualMatch={perceptualMatch}
-                                unditheredPerceptualMatch={unditheredPerceptualMatch}
-                            />
+                            <AccordionSection title="Gradient Preview" subtitle={previewSubtitle}>
+                                <PreviewSection
+                                    ditherType={ditherType}
+                                    showSourcePreview={showSourcePreview}
+                                    onToggleSourcePreview={setShowSourcePreview}
+                                    showSourcePointIndicators={showGradientPointIndicators}
+                                    onToggleSourcePointIndicators={setShowGradientPointIndicators}
+                                    sourcePointIndicatorAvailable={sourcePointIndicatorsAvailable}
+                                    sourcePointIndicators={sourcePointIndicators}
+                                    showGamutPreview={showGamutPreview}
+                                    onToggleGamutPreview={setShowGamutPreview}
+                                    gamutPreviewAvailable={gamutPreviewAvailable}
+                                    showDitherPreview={showDitherPreview}
+                                    onToggleDitherPreview={setShowDitherPreview}
+                                    showUnditheredPreview={showUnditheredPreview}
+                                    onToggleUnditheredPreview={setShowUnditheredPreview}
+                                    showReducedPreview={showReducedPreview}
+                                    onToggleReducedPreview={setShowReducedPreview}
+                                    showPaletteErrorPreview={showPaletteErrorPreview}
+                                    onTogglePaletteErrorPreview={setShowPaletteErrorPreview}
+                                    paletteErrorPreviewAvailable={palettePreviewAvailable}
+                                    showPaletteAmbiguityPreview={showPaletteAmbiguityPreview}
+                                    onTogglePaletteAmbiguityPreview={setShowPaletteAmbiguityPreview}
+                                    paletteAmbiguityPreviewAvailable={palettePreviewAvailable}
+                                    showPaletteModulationPreview={showPaletteModulationPreview}
+                                    onTogglePaletteModulationPreview={setShowPaletteModulationPreview}
+                                    paletteModulationPreviewAvailable={palettePreviewAvailable}
+                                    showPerceptualDeltaPreview={showPerceptualDeltaPreview}
+                                    onTogglePerceptualDeltaPreview={setShowPerceptualDeltaPreview}
+                                    showPerceptualBlurReferencePreview={showPerceptualBlurReferencePreview}
+                                    onTogglePerceptualBlurReferencePreview={setShowPerceptualBlurReferencePreview}
+                                    showPerceptualBlurTestPreview={showPerceptualBlurTestPreview}
+                                    onTogglePerceptualBlurTestPreview={setShowPerceptualBlurTestPreview}
+                                    perceptualBlurPreviewAvailable={perceptualBlurPreviewAvailable}
+                                    sourceCanvasRef={sourceCanvasRef}
+                                    gamutCanvasRef={gamutCanvasRef}
+                                    ditherCanvasRef={ditherCanvasRef}
+                                    unditheredCanvasRef={unditheredCanvasRef}
+                                    reducedCanvasRef={reducedCanvasRef}
+                                    paletteErrorCanvasRef={paletteErrorCanvasRef}
+                                    paletteAmbiguityCanvasRef={paletteAmbiguityCanvasRef}
+                                    paletteModulationCanvasRef={paletteModulationCanvasRef}
+                                    perceptualDeltaCanvasRef={perceptualDeltaCanvasRef}
+                                    perceptualBlurReferenceCanvasRef={perceptualBlurReferenceCanvasRef}
+                                    perceptualBlurTestCanvasRef={perceptualBlurTestCanvasRef}
+                                    width={width}
+                                    height={height}
+                                    previewScale={previewScale}
+                                    devicePixelRatio={devicePixelRatio}
+                                    sourceCanvasTitle={sourceCanvasTitle}
+                                    sourceCanvasDescription={sourceCanvasDescription}
+                                    reductionMode={reductionMode}
+                                    reductionSwatchCount={reductionSwatches.length}
+                                    perceptualMatch={perceptualMatch}
+                                    unditheredPerceptualMatch={unditheredPerceptualMatch}
+                                    renderStandalone={false}
+                                    headingSubtitle={previewSubtitle}
+                                />
+                            </AccordionSection>
 
-                            <section className="dither-gradient-card preview color-scatter-card">
-                                <header>
-                                    <strong>Color Space Scatter</strong>
-                                    <span>{distanceColorSpace.toUpperCase()} sample distribution</span>
-                                </header>
+                            <AccordionSection title="Color Space Scatter" subtitle={colorScatterSubtitle}>
                                 {sourceScatterPoints.length === 0 && paletteScatterPoints.length === 0 ? (
                                     <div className="color-scatter-container--empty">Import an image or define a reduction palette to preview color samples.</div>
                                 ) : (
@@ -1334,12 +1399,15 @@ export default function DitherGradientPage() {
                                 <p className="dither-gradient-note">
                                     Up to {MAX_SCATTER_SOURCE_POINTS.toLocaleString()} samples are plotted in the current reduction color space ({distanceColorSpace.toUpperCase()}).
                                 </p>
-                            </section>
+                            </AccordionSection>
 
-                            <PaletteUsageSummary
-                                stats={paletteUsageSummaryStats}
-                                paletteEntries={reductionPaletteEntries}
-                            />
+                            <AccordionSection title="Palette Utilization" subtitle={paletteUsageSubtitle}>
+                                <PaletteUsageSummary
+                                    stats={paletteUsageSummaryStats}
+                                    paletteEntries={reductionPaletteEntries}
+                                    renderStandalone={false}
+                                />
+                            </AccordionSection>
 
                             <section className="dither-gradient-card documentation-card">
                                 <MarkdownFile path="/docs/dithering.md" />

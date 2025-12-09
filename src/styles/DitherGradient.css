@@ -77,6 +77,82 @@
     gap: 12px;
 }
 
+.accordion-section {
+    padding: 0;
+}
+
+
+.accordion-section__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px;
+}
+
+.accordion-section__trigger {
+    border: none;
+    background: none;
+    outline: none;
+    padding: 16px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    width: 100%;
+    text-align: left;
+}
+
+.accordion-section__labels {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    text-align: left;
+}
+
+.accordion-section__labels strong {
+    font-size: 15px;
+    color: #111;
+}
+
+.accordion-section__labels span {
+    font-size: 12px;
+    color: #555;
+}
+
+.accordion-section__actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px 0;
+}
+
+.accordion-section__chevron {
+    width: 14px;
+    height: 14px;
+    border-right: 2px solid #555;
+    border-bottom: 2px solid #555;
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+}
+
+.accordion-section[data-collapsed="true"] .accordion-section__chevron {
+    transform: rotate(-135deg);
+}
+
+.accordion-section__body {
+    padding: 0 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    border-top: 1px solid #ececec;
+}
+
 .dither-gradient-card header {
     display: flex;
     align-items: baseline;
@@ -90,7 +166,8 @@
     color: #111;
 }
 
-.dither-gradient-card.palette textarea {
+.dither-gradient-card.palette textarea,
+.palette-editor__inputs textarea {
     min-height: 220px;
     border: 1px solid #c8c8c8;
     border-radius: 6px;
@@ -98,6 +175,31 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-size: 13px;
     resize: vertical;
+}
+
+.source-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.palette-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.palette-editor__inputs {
+    display: flex;
+    gap: 12px;
+}
+
+.palette-editor__inputs textarea {
+    flex: 1;
+}
+
+.palette-editor__inputs .palette-definition-viewer {
+    flex: 0 0 auto;
 }
 
 .dither-gradient-hint {

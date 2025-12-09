@@ -13,7 +13,6 @@ interface SourcePointIndicator {
 }
 
 interface PreviewSectionProps {
-    sourceSummaryLabel: string;
     ditherType: DitherType;
     showSourcePreview: boolean;
     onToggleSourcePreview: (value: boolean) => void;
@@ -67,10 +66,11 @@ interface PreviewSectionProps {
     reductionSwatchCount: number;
     perceptualMatch: PerceptualSimilarityResult | null;
     unditheredPerceptualMatch: PerceptualSimilarityResult | null;
+    renderStandalone?: boolean;
+    headingSubtitle?: string;
 }
 
 export function PreviewSection({
-    sourceSummaryLabel,
     ditherType,
     showSourcePreview,
     onToggleSourcePreview,
@@ -124,6 +124,8 @@ export function PreviewSection({
     reductionSwatchCount,
     perceptualMatch,
     unditheredPerceptualMatch,
+    renderStandalone = true,
+    headingSubtitle,
 }: PreviewSectionProps) {
     const pixelRatio = devicePixelRatio || 1;
     const scaledWidth = (width * previewScale) / pixelRatio;
@@ -141,15 +143,9 @@ export function PreviewSection({
         unditheredPerceptualMatch
     );
     const unditheredPreviewAvailable = reductionMode === "palette" && reductionSwatchCount > 0;
-
-    return (
-        <section className="dither-gradient-card preview">
-            <header>
-                <strong>Gradient Preview</strong>
-                <span>
-                    {sourceSummaryLabel} • {ditherType === "none" ? "No dithering" : DITHER_LABELS[ditherType]}
-                </span>
-            </header>
+    const headerSubtitle = headingSubtitle ?? describePreviewSubtitle("Source", ditherType);
+    const sectionBody = (
+        <>
             <div className="preview-canvas-grid-wrapper">
                 <div className="preview-canvas-grid" style={previewGridStyle}>
                     {showSourcePreview && (
@@ -378,8 +374,25 @@ export function PreviewSection({
                     Similarity Blur B
                 </label>
             </div>
+        </>
+    );
+    if (!renderStandalone) {
+        return sectionBody;
+    }
+
+    return (
+        <section className="dither-gradient-card preview">
+            <header>
+                <strong>Gradient Preview</strong>
+                <span>{headerSubtitle}</span>
+            </header>
+            {sectionBody}
         </section>
     );
+}
+
+export function describePreviewSubtitle(sourceSummaryLabel: string, ditherType: DitherType): string {
+    return `${sourceSummaryLabel} • ${ditherType === "none" ? "No dithering" : DITHER_LABELS[ditherType]}`;
 }
 
 function buildReducedDescription(

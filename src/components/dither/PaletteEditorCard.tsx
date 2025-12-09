@@ -17,6 +17,7 @@ interface PaletteEditorCardProps {
     swatches: PaletteSwatchDefinition[];
     rows: PaletteRow[];
     footer?: ReactNode;
+    renderStandalone?: boolean;
 }
 
 export function PaletteEditorCard({
@@ -32,19 +33,13 @@ export function PaletteEditorCard({
     swatches,
     rows,
     footer,
+    renderStandalone = true,
 }: PaletteEditorCardProps) {
-    return (
-        <section className="dither-gradient-card palette">
-            <header>
-                <strong>
-                    {title}
-                    {subtitle ? ` ${subtitle}` : ""}
-                </strong>
-                <span>{swatchCountLabel}</span>
-            </header>
+    const content = (
+        <div className="palette-editor">
             <PalettePresetButtons presets={presets} onSelect={onSelectPreset} />
             <LospecPaletteImporter targetLabel={lospecTargetLabel} onApplyPalette={onChangeValue} />
-            <div style={{ display: "flex" }}>
+            <div className="palette-editor__inputs">
                 <textarea
                     value={value}
                     onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onChangeValue(event.target.value)}
@@ -54,6 +49,23 @@ export function PaletteEditorCard({
                 <PaletteDefinitionViewer swatches={swatches} rows={rows} />
             </div>
             {footer}
+        </div>
+    );
+
+    if (!renderStandalone) {
+        return content;
+    }
+
+    return (
+        <section className="dither-gradient-card palette">
+            <header>
+                <strong>
+                    {title}
+                    {subtitle ? ` ${subtitle}` : ""}
+                </strong>
+                <span>{swatchCountLabel}</span>
+            </header>
+            {content}
         </section>
     );
 }

@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Data, Layout, Scene } from "plotly.js";
+import type { PlotParams } from "react-plotly.js";
 
 export type ScatterPoint = {
     coords: [number, number, number];
     color: [number, number, number];
 };
 
-const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
+const Plot = dynamic<PlotParams>(() => import("react-plotly.js"), { ssr: false });
 
 type PlotRelayoutEvent = Record<string, unknown> & {
     "scene.camera"?: Scene["camera"];
@@ -23,7 +24,7 @@ interface ColorSpaceScatterPlotProps {
 export function ColorSpaceScatterPlot({ sourcePoints, gamutPoints = [], palettePoints, axisLabels }: ColorSpaceScatterPlotProps) {
     const [cameraState, setCameraState] = useState<Scene["camera"]>();
 
-    const plotData = useMemo(() => buildScatterSeries(sourcePoints, gamutPoints, palettePoints), [
+    const plotData = useMemo<PlotParams["data"]>(() => buildScatterSeries(sourcePoints, gamutPoints, palettePoints), [
         sourcePoints,
         gamutPoints,
         palettePoints,
@@ -49,6 +50,16 @@ export function ColorSpaceScatterPlot({ sourcePoints, gamutPoints = [], paletteP
         />
     );
 }
+
+type MarkerOverrides = Partial<{
+    size: number;
+    opacity: number;
+    color: string | string[];
+    line: {
+        color?: string;
+        width?: number;
+    };
+}>;
 
 function buildScatterSeries(sourcePoints: ScatterPoint[], gamutPoints: ScatterPoint[], palettePoints: ScatterPoint[]) {
     const data: Partial<Data>[] = [];
@@ -83,10 +94,10 @@ function buildScatterSeries(sourcePoints: ScatterPoint[], gamutPoints: ScatterPo
             })
         );
     }
-    return data;
+    return data as PlotParams["data"];
 }
 
-function buildScatterTrace(name: string, points: ScatterPoint[], markerOverrides: Partial<Data["marker"]>): Partial<Data> {
+function buildScatterTrace(name: string, points: ScatterPoint[], markerOverrides: MarkerOverrides): Partial<Data> {
     return {
         type: "scatter3d",
         mode: "markers",

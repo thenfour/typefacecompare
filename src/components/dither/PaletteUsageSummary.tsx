@@ -4,24 +4,20 @@ import type { ReductionPaletteEntry } from "@/utils/paletteDistance";
 interface PaletteUsageSummaryProps {
     stats: PaletteUsageStats | null;
     paletteEntries: ReductionPaletteEntry[];
+    renderStandalone?: boolean;
 }
 
 const NO_DATA_MESSAGE = "Define a palette to inspect how the reduced image actually uses each entry.";
 
-export function PaletteUsageSummary({ stats, paletteEntries }: PaletteUsageSummaryProps) {
+export function PaletteUsageSummary({ stats, paletteEntries, renderStandalone = true }: PaletteUsageSummaryProps) {
     const hasPalette = paletteEntries.length > 0;
     const hasData = Boolean(stats && hasPalette);
     const entries = hasData && stats ? stats.entries : [];
     const uniformityPercent = stats ? Math.round(stats.uniformityScore * 100) : 0;
     const coveragePercent = stats ? Math.round(stats.coverageRatio * 100) : 0;
     const dominantPercent = stats ? Math.round(stats.dominantShare * 100) : 0;
-
-    return (
-        <section className="dither-gradient-card stats-card palette-usage-card">
-            <header>
-                <strong>Palette Utilization</strong>
-                <span>How evenly the reduced result leans on each swatch</span>
-            </header>
+    const body = (
+        <div className="palette-usage-card">
             {!hasData && (
                 <p className="palette-usage-card__empty">{NO_DATA_MESSAGE}</p>
             )}
@@ -76,6 +72,20 @@ export function PaletteUsageSummary({ stats, paletteEntries }: PaletteUsageSumma
                     </div>
                 </>
             )}
+        </div>
+    );
+
+    if (!renderStandalone) {
+        return body;
+    }
+
+    return (
+        <section className="dither-gradient-card stats-card">
+            <header>
+                <strong>Palette Utilization</strong>
+                <span>How evenly the reduced result leans on each swatch</span>
+            </header>
+            {body}
         </section>
     );
 }

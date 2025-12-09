@@ -1,11 +1,21 @@
-import { KeyboardEvent, MutableRefObject, ReactElement, ReactNode, Ref, cloneElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FocusEvent, KeyboardEvent, MouseEvent, MutableRefObject, ReactElement, ReactNode, Ref, cloneElement, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export type TooltipPlacement = "top" | "bottom" | "left" | "right";
 
+type TooltipChildProps = {
+    ref?: Ref<Element>;
+    onMouseEnter?: (event: MouseEvent<Element>) => void;
+    onMouseLeave?: (event: MouseEvent<Element>) => void;
+    onFocus?: (event: FocusEvent<Element>) => void;
+    onBlur?: (event: FocusEvent<Element>) => void;
+    onKeyDown?: (event: KeyboardEvent<Element>) => void;
+    "aria-describedby"?: string;
+};
+
 export interface TooltipProps {
     title: ReactNode;
-    children: ReactElement;
+    children: ReactElement<TooltipChildProps & Record<string, unknown>>;
     placement?: TooltipPlacement;
     enterDelay?: number;
     leaveDelay?: number;
@@ -51,6 +61,11 @@ const setRef = <T,>(ref: Ref<T> | undefined, value: T | null) => {
     catch {
         // ignore
     }
+};
+
+const getElementRef = (element: ReactElement): Ref<Element> | undefined => {
+    const candidate = element as ReactElement & { ref?: Ref<Element> | null };
+    return candidate.ref ?? undefined;
 };
 
 const mergeHandlers = <E,>(theirHandler?: (event: E) => void, ourHandler?: (event: E) => void) => {
@@ -225,22 +240,24 @@ export const Tooltip = ({
             return children;
         }
 
+        const childProps = children.props;
+
         return cloneElement(children, {
             ref: (node: Element | null) => {
                 anchorRef.current = node;
-                setRef(children.ref, node);
+                setRef(getElementRef(children), node);
             },
-            onMouseEnter: disableHoverListener ? children.props.onMouseEnter : mergeHandlers(children.props.onMouseEnter, handleOpen),
-            onMouseLeave: disableHoverListener ? children.props.onMouseLeave : mergeHandlers(children.props.onMouseLeave, handleClose),
-            onFocus: disableFocusListener ? children.props.onFocus : mergeHandlers(children.props.onFocus, handleOpen),
-            onBlur: disableFocusListener ? children.props.onBlur : mergeHandlers(children.props.onBlur, handleClose),
-            onKeyDown: mergeHandlers(children.props.onKeyDown, (event: KeyboardEvent) => {
+            onMouseEnter: disableHoverListener ? childProps.onMouseEnter : mergeHandlers(childProps.onMouseEnter, handleOpen),
+            onMouseLeave: disableHoverListener ? childProps.onMouseLeave : mergeHandlers(childProps.onMouseLeave, handleClose),
+            onFocus: disableFocusListener ? childProps.onFocus : mergeHandlers(childProps.onFocus, handleOpen),
+            onBlur: disableFocusListener ? childProps.onBlur : mergeHandlers(childProps.onBlur, handleClose),
+            onKeyDown: mergeHandlers(childProps.onKeyDown, (event: KeyboardEvent<Element>) => {
                 if (event.key === "Escape") {
                     handleClose();
                 }
             }),
             "aria-describedby": open && contentAvailable ? tooltipId : undefined
-        });
+        } satisfies Partial<TooltipChildProps & Record<string, unknown>>);
     }, [children, contentAvailable, disableFocusListener, disableHoverListener, handleClose, handleOpen, open, tooltipId]);
 
     if (!contentAvailable) {
