@@ -480,10 +480,6 @@ function PerceptualMatchSummary({
                                 progress={entry.match.score}
                                 caption={`${entry.match.score.toFixed(2)} / 100`}
                             />
-                            <div className="perceptual-match-banner__row-meta">
-                                <span>Blur sigma {entry.match.blurRadiusPx.toFixed(2)} px</span>
-                                <span>Mean delta {entry.match.meanDelta.toFixed(4)}</span>
-                            </div>
                         </div>
                     ))}
                 </div>
