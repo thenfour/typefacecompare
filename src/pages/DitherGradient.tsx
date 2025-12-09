@@ -203,7 +203,7 @@ export default function DitherGradientPage() {
     const [ditherMaskBlurRadius, setDitherMaskBlurRadius] = useState(4);
     const [ditherMaskStrength, setDitherMaskStrength] = useState(3);
     const [sourceGamma, setSourceGamma] = useState(1);
-    const [paletteMaskEnabled, setPaletteMaskEnabled] = useState(true);
+    const [paletteMaskEnabled, setPaletteMaskEnabled] = useState(false);
     const [ditherErrorScale, setDitherErrorScale] = useState(5);
     const [ditherErrorExponent, setDitherErrorExponent] = useState(0.1);
     const [ditherAmbiguityExponent, setDitherAmbiguityExponent] = useState(0.1);
@@ -213,8 +213,8 @@ export default function DitherGradientPage() {
     const [gamutTranslationStrength, setGamutTranslationStrength] = useState(1);
     const [gamutRotationStrength, setGamutRotationStrength] = useState(0.0);
     const [gamutScaleStrength, setGamutScaleStrength] = useState<AxisTriple>([1, 1, 1]);
-    const [gamutFitEnabled, setGamutFitEnabled] = useState(true);
-    const [covarianceFitEnabled, setCovarianceFitEnabled] = useState(false);
+    const [gamutFitEnabled, setGamutFitEnabled] = useState(false);
+    const [covarianceFitEnabled, setCovarianceFitEnabled] = useState(true);
     const [covarianceFitStrength, setCovarianceFitStrength] = useState(0.5);
     const [covarianceRidgeStrength, setCovarianceRidgeStrength] = useState(0.0025);
     const [savedGamutStrengths, setSavedGamutStrengths] = useState<GamutStrengthSnapshot>(() => ({
