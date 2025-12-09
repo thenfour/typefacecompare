@@ -170,11 +170,32 @@ The is effective in allowing higher dither strength without the image getting ov
 
 # TODO
 
-- figure out why many color models don't play nicely at all with distance functions when i'd expect them to. Gamut plot feels wrong as well.
-- dither strength dynamically depending on distance to palette entries.
-- in general explore auto dither strength. better scaling for this effect. re-explore the idea holistically using the techinques explored.
-- optimization towards perception delta max.
-    - add delta preview images
-    - next to params allow a sweep across the param range, showing images for N variations over that param range. Maybe even a 2D grid (4x4, 5x5?). show graphs of perceptual delta.
+## tone mapping / hdr concepts / locality source image adaptation before dithering.
+
+### global luma curve version
+
+I think this could have real value. Basically the curves tool in photoshop but a nonlinear curve, calculated
+to maximize operability with the palette. We want histogram density of the source to match the density of the target.
+
+- calc histogram of image with some fixed reasonable bin count (256 to match normal 8-bit-per-channel)
+- calc similar histogram of target palette, but probably not naively 1 entry = 1 bin. may need to smooth it out to make the curve math work best (gaussian...); idea is to make a probability density (normalized)
+- build CDF arrays size = bin count. idea is a cumulative distribution function F(l) = probability of being less than l. just a running sum (defines a curve)
+  - after normalization both arrays
+  - f(0) = 0
+  - f(1) = 1
+  - non-decreasing
+- build map LUT from source L to target L. for each source bin i, take its CDF value `u = F_src[i]` and find `j` where `F_target[j]` is closest to `u`. Set luma to `j` (or blend)
+
+### localized luma curves
+
+doing this might get 
+
+## dither strength dynamically depending on distance to palette entries.
+
+though i think strength modulation is not a huge gain. the dither methods are designed specifically to bake this in.
+
+## allow a sweep across param ranges
+
+showing images for N variations over that param range. Maybe even a 2D grid (4x4, 5x5?). show graphs of perceptual delta.
     
 
